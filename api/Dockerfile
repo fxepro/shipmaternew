@@ -25,10 +25,14 @@ EXPOSE 8080
 
 # Cache config+routes, run migrations, seed reference data, then serve.
 # Shell form so ${PORT:-8080} expands correctly.
+# --schema-path points at a file that doesn't exist on purpose: Laravel then skips
+# loading database/schema/pgsql-schema.sql (which needs the psql client, not in this
+# image) and runs every migration instead. Verified to produce the identical schema.
 CMD php artisan config:clear \
     && php artisan config:cache \
     && php artisan route:cache \
-    && php artisan migrate --force \
+    && php artisan storage:link --force \
+    && php artisan migrate --force --schema-path=database/schema/none.sql \
     && php artisan db:seed --class=ServiceTypeSeeder --force \
     && php artisan db:seed --class=CertificationSeeder --force \
     && php artisan db:seed --class=OrganizationMigrationSeeder --force \

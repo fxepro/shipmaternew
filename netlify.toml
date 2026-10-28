@@ -1,9 +1,32 @@
+# Shipmater frontend (Next.js) on Netlify.
+# The Laravel API + Postgres run on Railway — see DEPLOY.md.
+#
+# Netlify's Next.js runtime is auto-detected for Next 13.5+ (SSR, route handlers,
+# image optimisation) — no plugin entry needed.
+
 [build]
   command = "npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+  # Browser calls same-origin /api/*; app/api/[...path]/route.ts forwards them to
+  # Railway at request time using API_PROXY_URL. Not a secret.
+  NEXT_PUBLIC_API_PROXY = "true"
 
-# Netlify's Essential Next.js plugin handles SSR, ISR, image optimization.
-# It is auto-injected for Next.js 14+ — no manual plugin entry needed.
+# Set these in Netlify → Site configuration → Environment variables (not here):
+#   API_PROXY_URL              https://<api-service>.up.railway.app   (with https://, no trailing slash, no /api)
+#   NEXT_PUBLIC_APP_HOST       app.shipmater.com
+#   NEXT_PUBLIC_MAPTILER_KEY   MapTiler key
+#   NEXT_PUBLIC_STRIPE_PK      Stripe publishable key (pk_test_… until launch)
+#   NEXT_PUBLIC_REVERB_APP_KEY / NEXT_PUBLIC_REVERB_HOST / NEXT_PUBLIC_REVERB_PORT   (only if Reverb is deployed)
+# NEXT_PUBLIC_* values are baked in at build time — redeploy after changing them.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), geolocation=(self), microphone=()"
