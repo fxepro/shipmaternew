@@ -4,8 +4,20 @@
     {
       "name": "shipmater-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "shipmater-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:api"
+      ],
+      "port": 8888
     }
   ]
 }
