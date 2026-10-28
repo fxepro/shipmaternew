@@ -69,15 +69,15 @@ const WORKFLOW = [
 ];
 
 const CAPABILITIES = [
-  { icon: Layers,    title: 'Service type matching', desc: 'Dry van, reefer, flatbed, medical, white glove, hazmat, auto transport, and more — carriers only see loads they are equipped to haul.' },
+  { icon: Layers,    title: 'Service type matching', desc: 'Dry van, reefer, flatbed, hotshot, hazmat, auto transport, heavy haul and more — carriers only see loads they are equipped to haul.' },
   { icon: MapPin,    title: 'Saved locations',       desc: 'Organisation-wide address book for warehouses, docks, clinics, and job sites. Pre-fill pickup on every new shipment.' },
   { icon: Users,     title: 'Team permissions',      desc: 'Dispatchers post and manage jobs. Managers review activity. Admins control billing, compliance docs, and org settings.' },
   { icon: Building2, title: 'Internal references',   desc: 'PO numbers, cost centres, and job codes attached to every shipment for accounting and audit trails.' },
 ];
 
 const SERVICE_TYPES = [
-  'General freight', 'Refrigerated', 'Flatbed & heavy haul', 'Medical courier',
-  'White glove', 'Hazmat', 'Auto transport', 'Last mile',
+  'General freight', 'Refrigerated', 'Flatbed & heavy haul', 'Dry van',
+  'Hotshot / expedited', 'Hazmat', 'Auto transport', 'Oversize / wide load',
 ];
 
 export default function ShippersShippingPage() {

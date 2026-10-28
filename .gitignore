@@ -26,3 +26,20 @@ Thumbs.db
 
 docs
 /docs
+
+# Env files (examples are committed)
+.env*
+!.env.example
+api/.env*
+!api/.env.example
+
+# Local credentials — never commit
+demo/keys.txt
+
+# Personal / immigration documents — keep local
+USCIS/
+
+# Local dev logs
+*.log
+dev.err.log
+dev.out.log

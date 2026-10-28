@@ -37,7 +37,7 @@ const EMPTY_FORM: PostForm = {
   cover_image_url: '', tags: '', status: 'draft',
 };
 
-const CATEGORIES = ['Freight', 'Medical Courier', 'Compliance', 'Platform', 'Carrier Tips', 'Shipper Guide', 'Industry News'];
+const CATEGORIES = ['Freight', 'Dispatch', 'Compliance', 'Platform', 'Carrier Tips', 'Shipper Guide', 'Industry News'];
 
 const INPUT = 'w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-cream)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20';
 

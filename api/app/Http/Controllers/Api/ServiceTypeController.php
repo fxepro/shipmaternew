@@ -39,7 +39,7 @@ class ServiceTypeController extends Controller
         ]);
     }
 
-    // GET /api/v1/service-types/rules?types[]=general_freight&types[]=medical_courier
+    // GET /api/v1/service-types/rules?types[]=general_freight&types[]=hazmat
     public function rules(): JsonResponse
     {
         $keys = request()->query('types', []);

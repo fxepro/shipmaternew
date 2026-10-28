@@ -106,7 +106,7 @@ const ASSIGN_FLOW = [
 
 const SHIPPER_CONTROLS = [
   { icon: Users,       title: 'Preferred carrier lists',  desc: 'Build an approved network. Only carriers you have explicitly added can receive contracted direct offers from your organisation.' },
-  { icon: Lock,        title: 'Contracted-only pools',    desc: 'Medical, hazmat, and high-value lanes can be restricted to pre-vetted carriers — no open-market exposure.' },
+  { icon: Lock,        title: 'Contracted-only pools',    desc: 'Hazmat, reefer, and high-value lanes can be restricted to pre-vetted carriers — no open-market exposure.' },
   { icon: Star,        title: 'Ratings drive selection',  desc: 'Reliability, communication, and overall scores accumulate after every completed job. Low-rated carriers are visible before you assign.' },
   { icon: Globe2,      title: 'Cross-border credentials', desc: 'US, Canada, and Mexico carriers verified against the correct authority registry for their operating country.' },
 ];
@@ -335,9 +335,9 @@ export default function ShippersTrustPage() {
             <div>
               <p style={{ fontWeight: 600, fontSize: T.h4, color: '#14532d', marginBottom: 8 }}>Regulated freight needs more than a DOT number</p>
               <p style={{ fontSize: T.body, color: '#166534', lineHeight: 1.65 }}>
-                Medical, hazmat, and high-value shipments can be restricted to contracted carrier pools with HIPAA BAA,
-                PHMSA registration, and TWIC credentials on file. Shipmater enforces credential requirements at the job level — not just at onboarding.{' '}
-                <Link href="/use-cases/medical" style={{ color: '#16a34a', fontWeight: 500 }}>Medical courier details →</Link>
+                Hazmat, high-value, and temperature-controlled shipments can be restricted to contracted carrier pools with
+                hazmat endorsements, PHMSA registration, and TWIC credentials on file. Shipmater enforces credential requirements at the job level — not just at onboarding.{' '}
+                <Link href="/use-cases/freight-logistics" style={{ color: '#16a34a', fontWeight: 500 }}>Freight details →</Link>
               </p>
             </div>
           </div>

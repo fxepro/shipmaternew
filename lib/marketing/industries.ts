@@ -1,6 +1,6 @@
 import {
-  Stethoscope, Car, ShoppingCart, HardHat,
-  Store, Factory, Landmark, Frame,
+  Car, ShoppingCart, HardHat,
+  Store, Factory, Landmark,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,65 +34,8 @@ export interface IndustryPage {
   icon: LucideIcon;
 }
 
-/** The eight Industries — independent pages under /industries/[slug]. */
+/** The six Industries — independent pages under /industries/[slug]. */
 export const INDUSTRIES: IndustryPage[] = [
-  {
-    slug: 'healthcare-pharma',
-    icon: Stethoscope,
-    title: 'Healthcare & Pharma',
-    accent: 'Cold chain. Chain of custody. No exceptions.',
-    subtitle:
-      'Lab samples, medications, and medical equipment move under temperature control, photo proof, and an exportable audit trail — not a standard courier workflow.',
-    image: '/industries/healthcare-pharma.jpg',
-    imageAlt: 'Medical courier loading temperature-controlled specimens',
-    challengeTitle: 'Medical freight fails on gaps, not miles',
-    challenge:
-      'A missed temperature window, an undocumented handoff, or an unvetted courier can invalidate a specimen run or expose a compliance gap. Healthcare and pharma logistics need carriers who are matched to cold-chain capability, jobs that capture lot and batch data, and a record that survives an audit — not a status emoji in a text thread.',
-    approachTitle: 'How Shipmater runs medical moves',
-    approach:
-      'Post with handling requirements that filter the field. Contracted pools keep approved vendors only. Every stop can log temperature context, photos, and GPS. When the run closes, you export a chain-of-custody record tied to a verified carrier — not an anonymous phone number.',
-    capabilities: [
-      {
-        title: 'Cold-chain matching',
-        desc: 'Jobs that require refrigerated handling only surface to carriers with the right equipment profile. Non-compliant bidders stay out of the pool.',
-      },
-      {
-        title: 'Lot and batch fields',
-        desc: 'Capture pharmaceutical identifiers on the job so traceability lives with the shipment record, not in a side spreadsheet.',
-      },
-      {
-        title: 'Photo + GPS custody',
-        desc: 'Pickup and delivery evidence with timestamps and location creates an auditable handoff history for compliance and insurance.',
-      },
-      {
-        title: 'Approved vendor pools',
-        desc: 'Contracted carrier lists keep sensitive lanes off the open market when your compliance policy requires a closed network.',
-      },
-      {
-        title: 'Exportable audit trail',
-        desc: 'Shipment history, evidence, and status changes stay attached to the job for regulatory review and internal QA.',
-      },
-      {
-        title: 'Time-critical dispatch',
-        desc: 'Post with arrival windows and live tracking so labs, clinics, and pharmacies see the same ETA as your ops team.',
-      },
-    ],
-    scenarioTitle: 'A biotech lab ships temperature-sensitive samples before clinic open',
-    scenarioTag: 'Cold chain held · Full custody record exported',
-    scenario: [
-      { time: '4:45am', text: 'Job posted — cold chain required, arrival by 7:00am' },
-      { time: '4:53am', text: 'Contracted refrigerated carrier confirmed' },
-      { time: '5:20am', text: 'Pickup photos + temp logged · GPS custody starts' },
-      { time: '6:48am', text: 'En route · live ETA shared with receiving lab' },
-      { time: '6:59am', text: 'Delivered · POD + lot verified · record closed' },
-    ],
-    outcomes: [
-      'Only refrigerated-capable carriers see the job',
-      'Temperature and photo evidence at both ends',
-      'GPS chain of custody exportable for audit',
-      'Approved vendors via contracted pools',
-    ],
-  },
   {
     slug: 'auto-dealerships',
     icon: Car,
@@ -270,12 +213,12 @@ export const INDUSTRIES: IndustryPage[] = [
     title: 'Retail & E-Commerce',
     accent: 'From DC to doorstep — tracked every mile.',
     subtitle:
-      'Store replenishment, returns, and high-touch last-mile with live GPS, proof of delivery, and escrow that releases when the drop is confirmed.',
+      'Store replenishment, returns, and DC-to-DC freight with live GPS, proof of delivery, and escrow that releases when the drop is confirmed.',
     image: '/industries/retail-ecommerce.jpg',
-    imageAlt: 'Retail distribution and last-mile parcel staging',
+    imageAlt: 'Retail distribution center with trailers at the dock',
     challengeTitle: 'Retail freight spans the warehouse and the front door',
     challenge:
-      'DC-to-store replenishment, customer returns, and white-glove last-mile are different jobs with the same requirement: visibility and proof. Chargebacks and “where is my order” tickets explode when tracking and POD are afterthoughts.',
+      'DC-to-store replenishment, returns consolidation, and vendor inbound are different jobs with the same requirement: visibility and proof. Chargebacks and “where is my order” tickets explode when tracking and POD are afterthoughts.',
     approachTitle: 'How Shipmater runs retail moves',
     approach:
       'Batch multi-stop store runs, share live tracking with ops or the customer, and require POD with photos and signature. Use contracted lanes for standing replenishment and open market when volume spikes. Escrow holds payment until delivery is confirmed.',
@@ -285,8 +228,8 @@ export const INDUSTRIES: IndustryPage[] = [
         desc: 'Replenish a region in one job — every store stop confirmed individually.',
       },
       {
-        title: 'Last-mile and white glove',
-        desc: 'High-value retail and furniture-style drops with handling requirements and photo POD.',
+        title: 'Pallet and store-door drops',
+        desc: 'Liftgate, appointment, and handling requirements on the tender — photo POD at every dock.',
       },
       {
         title: 'Shared live tracking',
@@ -433,63 +376,6 @@ export const INDUSTRIES: IndustryPage[] = [
       'Full photo + GPS custody trail',
       'Approved vendor pools when required',
       'Exportable shipment and payment records',
-    ],
-  },
-  {
-    slug: 'arts-specialty',
-    icon: Frame,
-    title: 'Arts & Specialty',
-    accent: 'Irreplaceable handled by the qualified few.',
-    subtitle:
-      'Fine art, antiques, instruments, and estate contents with declared value, white-glove handling, and condition photography at every handoff.',
-    image: '/industries/arts-specialty.jpg',
-    imageAlt: 'Specialty art crate prepared for white-glove transport',
-    challengeTitle: 'Specialty freight is about who never sees the job',
-    challenge:
-      'Irreplaceable items cannot be “generally insured freight.” The wrong handler should never receive the tender. You need declared value visible before bid, specialist credentials, climate or white-glove requirements, and a photographic condition record that outlasts the move.',
-    approachTitle: 'How Shipmater runs specialty moves',
-    approach:
-      'Post declared value and handling requirements so only qualified carriers engage. Filter on certifications and ratings. Capture condition photos at pickup and delivery. Coordinate multi-item estate and multi-destination specialty moves in one structured request.',
-    capabilities: [
-      {
-        title: 'Declared value on tender',
-        desc: 'Carriers see coverage expectations before they bid — no bait-and-switch on risk.',
-      },
-      {
-        title: 'Specialist filtering',
-        desc: 'Certification and experience filters keep general freight operators off high-value jobs.',
-      },
-      {
-        title: 'White-glove handling',
-        desc: 'Climate control, white-glove, and fragile handling as first-class job requirements.',
-      },
-      {
-        title: 'Condition photography',
-        desc: 'Before-and-after photo sets stored with the shipment for insurers and estates.',
-      },
-      {
-        title: 'Insurance verification',
-        desc: 'Confirm coverage posture before assignment when the item’s value demands it.',
-      },
-      {
-        title: 'Estate multi-destination',
-        desc: 'Coordinate multi-item, multi-stop specialty moves without splintering into email chaos.',
-      },
-    ],
-    scenarioTitle: 'An estate executor ships antique furniture to auction',
-    scenarioTag: 'Declared value · Specialist certified · Condition verified',
-    scenario: [
-      { time: 'Day 1', text: 'Request posted — declared value, white-glove required' },
-      { time: 'Day 1', text: 'Specialist carrier confirmed · insured to value' },
-      { time: '8:30am', text: 'Pickup — condition photos · pieces wrapped and logged' },
-      { time: '1:15pm', text: 'En route — live tracking for executor' },
-      { time: '3:40pm', text: 'Delivered to auction — condition confirmed · record closed' },
-    ],
-    outcomes: [
-      'Declared value visible before bid',
-      'Specialist and white-glove filtering',
-      'Photographic condition at both ends',
-      'Multi-item estate coordination',
     ],
   },
 ];

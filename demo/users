@@ -1,0 +1,11 @@
+Shipmater — demo users (local database: shipmaternew)
+Seeded by api/database/seeders/DatabaseSeeder.php. Local development only.
+
+Role (UI)   Role (DB)   Name            Email              Password   Organization
+---------   ---------   -------------   ----------------   --------   ----------------------
+Shipper     shipper     Alex Morgan     alex@demo.com      password   Alex Morgan's Shipper
+Carrier     carrier     Jordan Reyes    jordan@demo.com    password   Jordan Reyes' Carrier
+Carrier     carrier     Casey Rivera    casey@demo.com     password   Casey Rivera's Carrier
+Carrier     carrier     Marcus Webb     marcus@demo.com    password   Marcus Webb's Carrier
+Receiver    receiver    Sam Chen        sam@demo.com       password   —
+Admin       admin       Admin User      admin@demo.com     password   —

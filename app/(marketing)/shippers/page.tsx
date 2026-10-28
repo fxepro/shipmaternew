@@ -97,20 +97,18 @@ const FEATURES = [
   },
   {
     icon: Package,
-    title: 'Any delivery type',
-    desc: 'General freight, medical courier, auto transport, hazmat, refrigerated, white glove, last mile and more. Match the right provider to every job.',
+    title: 'Any trailer type',
+    desc: 'Dry van, reefer, flatbed, hotshot, hazmat, auto transport and heavy haul. Match the right carrier to every load.',
   },
 ];
 
 const INDUSTRIES = [
-  { label: 'Healthcare & Pharma',          href: '/industries/healthcare-pharma' },
   { label: 'Auto & Dealerships',           href: '/industries/auto-dealerships' },
   { label: 'Food & Beverage',              href: '/industries/food-beverage' },
   { label: 'Construction & Equipment',     href: '/industries/construction-equipment' },
   { label: 'Retail & E-Commerce',          href: '/industries/retail-ecommerce' },
   { label: 'Manufacturing',                href: '/industries/manufacturing' },
   { label: 'Government & Public Sector',   href: '/industries/government' },
-  { label: 'Arts & Specialty',             href: '/industries/arts-specialty' },
 ];
 
 const VETTING = [
@@ -139,7 +137,7 @@ export default function ShippersPage() {
             Pay only on delivery.
           </h1>
           <p style={{ fontFamily: BODY, fontWeight: 400, fontSize: T.body, lineHeight: 1.75, color: 'rgba(255,255,255,0.80)', marginTop: 24, maxWidth: 600, margin: '24px auto 0' }}>
-            Shipmater connects you to verified providers across every service type — from general freight to medical courier to white glove. Post a job in minutes, track it in real time, pay with escrow protection.
+            Shipmater connects you to verified providers across every service type — from dry van and reefer to flatbed and heavy haul. Post a load in minutes, track it in real time, pay with escrow protection.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4 mt-10">
             <Link href="/register"
@@ -263,15 +261,15 @@ export default function ShippersPage() {
         </div>
       </section>
 
-      {/* ── HIPAA CALLOUT ────────────────────────────────────────────────── */}
+      {/* ── REGULATED FREIGHT CALLOUT ────────────────────────────────────────────────── */}
       <section style={{ background: B.white, borderTop: `1px solid ${B.gray10}` }}>
         <div className="mx-auto max-w-[1200px] px-6 py-16">
           <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '28px 32px', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
             <ShieldCheck size={24} color="#16a34a" style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <p style={{ fontFamily: BODY, fontWeight: 600, fontSize: T.h4, color: '#14532d', marginBottom: 8 }}>HIPAA-aligned for medical shippers</p>
+              <p style={{ fontFamily: BODY, fontWeight: 600, fontSize: T.h4, color: '#14532d', marginBottom: 8 }}>Built for regulated freight</p>
               <p style={{ fontFamily: BODY, fontSize: T.body, color: '#166534', lineHeight: 1.65 }}>
-                If you ship medical specimens, pharmaceuticals, or healthcare supplies, Shipmater enforces HIPAA-trained carriers, chain-of-custody GPS logging, and contracted-only provider pools.{' '}
+                If you ship hazmat, high-value or temperature-controlled freight, Shipmater checks FMCSA authority, insurance and endorsements, logs GPS custody at every stop, and can restrict loads to contracted carrier pools.{' '}
                 <Link href="/compliance" style={{ color: '#16a34a', fontWeight: 500 }}>Read our compliance page</Link>.
               </p>
             </div>

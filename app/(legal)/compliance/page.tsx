@@ -38,7 +38,6 @@ const PILLARS = [
     color: 'bg-blue-50 text-blue-600',
     title: 'Regulatory Compliance',
     items: [
-      'HIPAA-aligned handling for medical shipment data',
       'FMCSA cargo securement rules applied to all freight jobs',
       'DOT drug and alcohol testing compliance tracked per carrier',
       'Hazmat shipments require HAZMAT-endorsed carriers only',
@@ -81,7 +80,6 @@ const PILLARS = [
 
 const CERTIFICATIONS = [
   { label: 'SOC 2 Type II', status: 'In Progress', color: 'bg-amber-50 text-amber-700' },
-  { label: 'HIPAA Aligned', status: 'Active',      color: 'bg-emerald-50 text-emerald-700' },
   { label: 'PCI DSS (via Stripe)', status: 'Active', color: 'bg-emerald-50 text-emerald-700' },
   { label: 'GDPR', status: 'Active', color: 'bg-emerald-50 text-emerald-700' },
   { label: 'CCPA', status: 'Active', color: 'bg-emerald-50 text-emerald-700' },

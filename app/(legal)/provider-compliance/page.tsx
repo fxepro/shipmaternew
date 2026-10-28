@@ -24,17 +24,6 @@ const REQUIREMENTS_BY_SERVICE = [
     recommended: ['CDL Class A or B', 'FMCSA Cargo Securement Certification'],
   },
   {
-    service: 'Medical Courier / Hospital / Lab Specimen',
-    icon: Activity,
-    required: [
-      'Commercial Auto Liability — minimum $500,000',
-      'HIPAA Privacy & Security Training (annual)',
-      'OSHA Bloodborne Pathogens Certification (annual)',
-      'Background Check — federal level',
-    ],
-    recommended: ['Chain of Custody Certification', 'OSHA Hazard Communication (HazCom)'],
-  },
-  {
     service: 'Hazardous Materials',
     icon: AlertTriangle,
     required: [
@@ -60,23 +49,16 @@ const REQUIREMENTS_BY_SERVICE = [
     recommended: ['CDL Class B', 'FMCSA Cargo Securement Certification'],
   },
   {
-    service: 'White Glove / Fine Art / Specialty',
-    icon: ShieldCheck,
-    required: [
-      'Commercial Auto Liability — minimum $500,000',
-      'Cargo Insurance — minimum $250,000',
-      'Background Check',
-    ],
-    recommended: ['White Glove Carrier Network Certification', 'Fine Art Handling & Packing', 'Home Goods Delivery (A4DD)'],
-  },
-  {
-    service: 'Last Mile / Local Delivery',
+    service: 'Flatbed / Heavy Haul / Oversize',
     icon: FileText,
     required: [
-      'Commercial Auto Liability — minimum $300,000',
-      'Background Check',
+      'Active USDOT Number',
+      'Active MC Authority',
+      'CDL Class A',
+      'Commercial Auto Liability — minimum $1,000,000',
+      'Cargo Insurance — minimum $100,000',
     ],
-    recommended: ['Defensive Driving Certification'],
+    recommended: ['FMCSA Cargo Securement Certification', 'Load Securement Training'],
   },
 ];
 
@@ -84,9 +66,8 @@ const ONGOING = [
   'Insurance certificates must remain active — expiry is tracked and carriers are suspended 7 days before lapse if not renewed',
   'DOT Medical Examiner Certificates are tracked for expiry',
   'HAZMAT certifications require renewal every 3 years per federal regulation',
-  'HIPAA and Bloodborne Pathogens training requires annual renewal',
   'Carriers falling below a 3.0 rating are placed under review',
-  'Background checks may be re-run annually for medical and high-value service types',
+  'Background checks and Clearinghouse queries may be re-run annually for hazmat and high-value service types',
 ];
 
 export default function ProviderCompliancePage() {

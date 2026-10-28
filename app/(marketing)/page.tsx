@@ -43,8 +43,8 @@ const HOW_STEPS = [
 ];
 
 const SENDER_POINTS = [
-  'Any delivery — a single item, a pallet, or a full load — handled with care',
-  'Every provider is background-checked, insured and independently verified',
+  'Any load — LTL pallets, full truckload, flatbed, reefer or heavy haul',
+  'Every carrier is checked against FMCSA authority, insurance and safety records',
   'Live GPS — see exactly where your delivery is at every moment',
   'Payment held securely and only released on confirmed delivery',
   'Clear upfront pricing — no hidden fees, no surprises after the fact',
@@ -52,12 +52,12 @@ const SENDER_POINTS = [
 ];
 
 const PROVIDER_POINTS = [
-  'Browse available requests matching your coverage area and capabilities',
+  'Browse loads that match your lanes, equipment and authority',
   'Respond in seconds — no phone calls, no back-and-forth paperwork',
   'Build standing arrangements with clients who want you on call first',
   'Get paid fast — payment released immediately on confirmed delivery',
   'Your verification record and ratings are visible to every client',
-  'Manage everything from your phone — no desktop required',
+  'Dispatchers manage the fleet from desktop; drivers run loads from their phone',
 ];
 
 const FEATURES = [
@@ -69,7 +69,7 @@ const FEATURES = [
   { icon: Zap,         title: 'Instant Notifications',      desc: 'Alerts when your provider is confirmed, en route, approaching and at the moment of delivery.' },
   { icon: Lock,        title: 'Secure Payments',            desc: 'Payment is held and only released when the recipient confirms delivery. Neither party can skip the process.' },
   { icon: BarChart2,   title: 'Delivery History',           desc: 'Full logs, cost summaries and provider performance — all in one place, always exportable.' },
-  { icon: Globe,       title: 'Any Shipment, Anywhere',     desc: 'A single envelope or a full vehicle load, across town or across the country — Shipmater handles it.' },
+  { icon: Globe,       title: 'Any Shipment, Anywhere',     desc: 'A single pallet or a full truckload, regional or coast to coast — Shipmater handles it.' },
 ];
 
 const VETTING = [
@@ -92,15 +92,15 @@ const VETTING = [
 
 const TESTIMONIALS = [
   {
-    quote: 'We ship medical samples daily. Shipmater gave us verified, trackable providers on demand — no more hoping the courier actually shows up.',
-    name:  'Dr. Sandra K.',
-    role:  'Lab Director, Regional Medical Group',
+    quote: 'We tender 40 loads a week across our regional lanes. Shipmater gave us verified carriers on demand — no more chasing check calls.',
+    name:  'Sandra K.',
+    role:  'Logistics Manager, Regional Distributor',
     stars: 5,
   },
   {
-    quote: 'I sent a collection of signed pieces to a buyer across three states. Watched every mile live. It arrived exactly as described.',
+    quote: 'I run a six-truck fleet. Loads come to me, rate cons are generated automatically, and payouts land when the POD is signed.',
     name:  'James R.',
-    role:  'Private Collector',
+    role:  'Owner-Operator & Dispatcher, JR Transport',
     stars: 5,
   },
   {
@@ -126,14 +126,14 @@ export default function HomePage() {
             <span style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', fontFamily: BODY, fontSize: T.label, fontWeight: 600, color: B.teal, letterSpacing: '0.09em', textTransform: 'uppercase' }}
               className="inline-flex items-center gap-2 rounded-full px-3 py-1 mb-8">
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: B.tealMid, display: 'inline-block' }} />
-              Dispatch · Live Tracking · Safe Carry
+              Freight Dispatch · Live Tracking · Verified Carriers
             </span>
             <h1 style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: T.hero, lineHeight: 1.07, letterSpacing: '-0.025em', color: B.white }}>
               Now everyone is<br />
               <span style={{ color: B.tealPale }}>a dispatcher.</span>
             </h1>
             <p style={{ fontFamily: BODY, fontWeight: 400, fontSize: T.body, lineHeight: 1.75, color: 'rgba(255,255,255,0.80)', marginTop: 24, maxWidth: 580 }}>
-              From high-value shipments to personal deliveries, Shipmater gives you peace of mind through vetting and live tracking.
+              For shippers, dispatchers and drivers — post loads, match FMCSA-verified carriers, and track every truck live from pickup to POD.
             </p>
             <div className="flex flex-wrap items-center gap-3 mt-10">
               <Link href="/register"
@@ -141,7 +141,7 @@ export default function HomePage() {
                 className="hover:opacity-90 transition-opacity">
                 Get started free <ArrowRight size={16} />
               </Link>
-              <Link href="/providers"
+              <Link href="/carriers"
                 style={{ border: '1px solid rgba(255,255,255,0.26)', fontFamily: BODY, fontSize: T.body, fontWeight: 400, color: 'rgba(255,255,255,0.84)', padding: '14px 28px', borderRadius: 6, textDecoration: 'none' }}
                 className="hover:bg-white/10 transition-colors">
                 Join as a provider
@@ -179,12 +179,12 @@ export default function HomePage() {
       <section style={{ background: B.gray10, borderTop: '1px solid #E0E0E0', borderBottom: '1px solid #E0E0E0' }} className="py-24">
         <div className="mx-auto max-w-[1200px] px-6 grid md:grid-cols-2 gap-16 items-center">
           <div style={{ background: `linear-gradient(160deg, ${B.darkSec} 0%, ${B.tealDeep} 100%)`, borderRadius: 8, padding: '48px 40px' }}>
-            <span style={{ fontFamily: BODY, fontSize: T.label, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: B.teal }}>For Senders</span>
+            <span style={{ fontFamily: BODY, fontSize: T.label, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: B.teal }}>For Shippers</span>
             <h2 style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: T.h2, letterSpacing: '-0.02em', color: B.white, marginTop: 14, lineHeight: 1.2 }}>
-              Your most precious cargo<br />deserves more than a prayer.
+              Your freight deserves<br />more than a load board.
             </h2>
             <p style={{ fontFamily: BODY, fontWeight: 400, fontSize: T.body, color: 'rgba(255,255,255,0.65)', marginTop: 16, lineHeight: 1.75 }}>
-              Whether it's a high-value item, a time-sensitive medical delivery or something irreplaceable — Shipmater puts a vetted, insured, trackable provider behind every movement.
+              Whether it's a recurring dry van lane, a time-critical hotshot or an oversize equipment move — Shipmater puts a verified, insured, trackable carrier behind every load.
             </p>
             <Link href="/how-it-works"
               style={{ marginTop: 28, display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: BODY, fontSize: T.body, fontWeight: 600, color: B.teal, textDecoration: 'none' }}
@@ -203,7 +203,7 @@ export default function HomePage() {
               <Link href="/register"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: B.tealDark, fontFamily: BODY, fontSize: T.body, fontWeight: 600, color: B.white, padding: '12px 24px', borderRadius: 6, textDecoration: 'none' }}
                 className="hover:opacity-90 transition-opacity">
-                Start your first delivery <ArrowRight size={16} />
+                Post your first load <ArrowRight size={16} />
               </Link>
             </div>
           </div>
@@ -229,14 +229,14 @@ export default function HomePage() {
             </div>
           </div>
           <div style={{ background: `linear-gradient(160deg, ${B.darkCard} 0%, ${B.darkSec} 100%)`, borderRadius: 8, padding: '48px 40px' }} className="order-1 md:order-2">
-            <span style={{ fontFamily: BODY, fontSize: T.label, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: B.teal }}>For Providers</span>
+            <span style={{ fontFamily: BODY, fontSize: T.label, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: B.teal }}>For Carriers</span>
             <h2 style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: T.h2, letterSpacing: '-0.02em', color: B.white, marginTop: 14, lineHeight: 1.2 }}>
               More work.<br />Better clients.<br />Less chasing.
             </h2>
             <p style={{ fontFamily: BODY, fontWeight: 400, fontSize: T.body, color: 'rgba(255,255,255,0.65)', marginTop: 16, lineHeight: 1.75 }}>
-              Stop waiting for the phone to ring. Get notified the moment a request matching your area and capabilities comes in. Respond in seconds and build a verified reputation that keeps clients coming back.
+              Stop waiting for the phone to ring. Get notified the moment a load matching your lanes and equipment is posted. Respond in seconds and build a verified reputation that keeps clients coming back.
             </p>
-            <Link href="/providers"
+            <Link href="/carriers"
               style={{ marginTop: 28, display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: BODY, fontSize: T.body, fontWeight: 600, color: B.teal, textDecoration: 'none' }}
               className="hover:text-white transition-colors">
               Learn more for providers <ArrowRight size={16} />
@@ -374,8 +374,8 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-px" style={{ background: '#E0E0E0' }}>
             {[
-              { label: 'Sender',   role: 'Shipper',  icon: Package, desc: 'Post any delivery request, review verified providers and track your shipment live from pickup to confirmed receipt.',      cta: 'Start sending',    href: '/register', bg: B.tealBg   },
-              { label: 'Provider', role: 'Carrier',  icon: Truck,   desc: 'Browse available requests, respond in seconds, build your verified reputation and get paid fast on every delivery.',    cta: 'Apply now',        href: '/register', bg: B.tealDark },
+              { label: 'Shipper',  role: 'Shipper',  icon: Package, desc: 'Post loads, review verified carriers and track every shipment live from pickup to signed POD.',      cta: 'Start shipping',    href: '/register', bg: B.tealBg   },
+              { label: 'Carrier',  role: 'Carrier',  icon: Truck,   desc: 'Dispatchers and drivers browse loads, bid in seconds, build a verified reputation and get paid fast on every delivery.',    cta: 'Apply now',        href: '/register', bg: B.tealDark },
               { label: 'Receiver', role: 'Receiver', icon: MapPin,  desc: 'Track incoming deliveries in real time. Get notified when your delivery is on the way and confirm receipt directly.',   cta: 'Track a delivery', href: '/register', bg: B.gray10   },
             ].map(r => {
               const dark = r.bg === B.tealDark;

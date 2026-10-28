@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {
   ArrowRight, MapPin, Package, ShieldCheck, CheckCircle2,
   Clock, FileText, BadgeCheck, Zap, Lock, ChevronRight,
-  Gem, Stethoscope, Users, Briefcase, Truck, Star,
+  Snowflake, HardHat, AlertTriangle, Car, Truck, Star,
 } from 'lucide-react';
 import { MarketingHub } from '@/components/marketing/MarketingHub';
 import { HOW_IT_WORKS_HUB } from '@/lib/marketing/hub-links';
@@ -57,7 +57,7 @@ const STEPS = [
     detail: [
       'Each quote is itemised — base rate, handling and any surcharges shown upfront',
       'Provider profiles show credentials, insurance coverage and verified ratings',
-      'You can see relevant experience — medical deliveries, high-value items and more',
+      'You can see relevant experience — equipment type, lanes run, hazmat and heavy haul history',
       'No pressure to accept — quotes are valid for 24 hours',
     ],
     note: 'You are never obligated to accept a quote.',
@@ -91,40 +91,40 @@ const STEPS = [
 
 const USE_CASES = [
   {
-    icon: Gem,
-    title: 'High-Value & Precious Items',
-    desc: 'Jewellery, precious metals, signed collectibles, rare art. Insured, tracked providers who understand the weight of what they\'re carrying.',
-    tags: ['Insured transit', 'Chain of custody', 'Live tracking'],
-  },
-  {
-    icon: Stethoscope,
-    title: 'Medical & Pharmaceutical',
-    desc: 'Lab samples, medications, medical equipment. Time-critical deliveries with full audit trails and temperature-aware provider matching.',
-    tags: ['Chain of custody', 'Time-sensitive', 'Full audit log'],
-  },
-  {
-    icon: Users,
-    title: 'Personal & Family',
-    desc: 'A child travelling to summer camp. A care package to an elderly parent. An irreplaceable family heirloom across the country. Watch every mile.',
-    tags: ['Live GPS', 'Milestone alerts', 'Shareable tracking'],
-  },
-  {
-    icon: Briefcase,
-    title: 'Corporate & Sensitive',
-    desc: 'Confidential documents, signed contracts, proprietary equipment. Verified providers, chain of custody, no exceptions on accountability.',
-    tags: ['Verified providers', 'Signed receipt', 'Full log'],
-  },
-  {
-    icon: Package,
-    title: 'Oversized & Specialist',
-    desc: 'Furniture, instruments, industrial equipment, vehicles. Providers matched to your specific load requirements and handling needs.',
-    tags: ['Load matching', 'Specialist handling', 'Insured'],
-  },
-  {
     icon: Truck,
-    title: 'Regular & Recurring',
-    desc: 'Set up standing arrangements with trusted providers for predictable, recurring delivery needs. No renegotiating. No surprises.',
-    tags: ['Priority arrangement', 'Fixed rates', 'Preferred provider'],
+    title: 'Dry Van & General Freight',
+    desc: 'FTL and LTL across regional and long-haul lanes. Post a load, get bids from carriers with active authority and cargo coverage.',
+    tags: ['FTL / LTL', 'Competitive bids', 'Live tracking'],
+  },
+  {
+    icon: Snowflake,
+    title: 'Refrigerated & Cold Chain',
+    desc: 'Reefer loads with temperature requirements on the tender. Only reefer-equipped carriers can bid, and every stop is logged.',
+    tags: ['Reefer only', 'Temp requirements', 'Per-stop log'],
+  },
+  {
+    icon: HardHat,
+    title: 'Flatbed & Heavy Haul',
+    desc: 'Steel, lumber, machinery and oversize equipment. Dims, weight and permit notes captured upfront so only the right rigs respond.',
+    tags: ['Flatbed / RGN', 'Oversize', 'Load-secure photos'],
+  },
+  {
+    icon: AlertTriangle,
+    title: 'Hazmat',
+    desc: 'Hazardous materials restricted to carriers with hazmat endorsements, PHMSA registration and the right insurance limits.',
+    tags: ['Endorsement checked', 'PHMSA', 'Full audit log'],
+  },
+  {
+    icon: Car,
+    title: 'Auto Transport',
+    desc: 'Open and enclosed car haulers for dealers, auctions and fleets. VIN and condition photos at pickup and delivery.',
+    tags: ['Open / enclosed', 'VIN logging', 'Condition photos'],
+  },
+  {
+    icon: Star,
+    title: 'Contracted Lanes',
+    desc: 'Set up standing agreements with preferred carriers for recurring lanes. Agreed rates, direct dispatch, no re-bidding every week.',
+    tags: ['Preferred carriers', 'Fixed rates', 'Direct dispatch'],
   },
 ];
 

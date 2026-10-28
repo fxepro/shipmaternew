@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import {
-  ArrowRight, CheckCircle2, MapPin, Stethoscope,
-  Truck, Frame, ShoppingCart, HardHat, Car,
+  ArrowRight, CheckCircle2, MapPin,
+  Truck, HardHat, Car,
   Shield, FileText, Lock, Zap,
 } from 'lucide-react';
 import { MarketingHub } from '@/components/marketing/MarketingHub';
@@ -64,32 +64,6 @@ const INDUSTRIES = [
     },
   },
   {
-    id: 'medical',
-    icon: Stethoscope,
-    label: 'Medical & Pharmaceutical',
-    headline: 'Cold chain.\nChain of custody.\nNo exceptions.',
-    intro: 'Medical and pharmaceutical deliveries carry compliance requirements that a standard courier simply can\'t meet. Shipmater enforces cold chain handling, logs temperature at every stage, captures photo proof at pickup and delivery, and produces a complete chain of custody record exportable for regulatory purposes.',
-    points: [
-      'Cold chain handling enforcement — only providers with refrigerated capability are matched',
-      'Temperature logging at pickup, in transit and at delivery — timestamped and stored',
-      'Lot number and batch reference fields for pharmaceutical traceability',
-      'Photo proof captured at both ends — condition documented, not assumed',
-      'GPS chain of custody record exportable for audit, compliance or insurance',
-      'Approved vendor lists supported through contracted provider model',
-    ],
-    scenario: {
-      title: 'A biotech lab ships temperature-sensitive samples',
-      items: [
-        { time: '4:45am',  text: 'Request posted — cold chain required, arrival by 7am' },
-        { time: '4:53am',  text: 'Provider confirmed — refrigerated vehicle, credentialed' },
-        { time: '5:20am',  text: 'Pickup confirmed · Temp logged 2.1°C · Photos taken' },
-        { time: '6:48am',  text: 'En route · Temp 2.0°C · ETA 7:02am' },
-        { time: '6:59am',  text: 'Delivered · Temp 2.1°C · Lot verified · Record exported' },
-      ],
-      tag: 'Cold chain maintained · Full compliance record generated',
-    },
-  },
-  {
     id: 'auto-transport',
     icon: Car,
     label: 'Auto Transport',
@@ -113,58 +87,6 @@ const INDUSTRIES = [
         { time: '6:14pm',  text: 'Delivered · 8 delivery photos taken · Buyer confirmed' },
       ],
       tag: 'VIN logged · 16 condition photos · Zero disputes',
-    },
-  },
-  {
-    id: 'art-antiques',
-    icon: Frame,
-    label: 'Art, Antiques & Estate Moves',
-    headline: 'Irreplaceable handled\nby the irreplaceable few.',
-    intro: 'Fine art, signed pieces, antique furniture, estate contents. These items can\'t be replaced and can\'t be handled by someone who\'s never done it before. Shipmater filters providers by certification, specialist experience and coverage level — so only those qualified to handle your item ever see the job.',
-    points: [
-      'Declared value field — providers see coverage requirements before bidding',
-      'Provider filtering by certification and specialist handling credentials',
-      'White-glove and climate-controlled handling requirements supported',
-      'Photographic condition record at pickup and delivery — stored permanently',
-      'Insurance verification at the item level before provider is assigned',
-      'Estate executor support — multi-item, multi-destination moves coordinated in one request',
-    ],
-    scenario: {
-      title: 'An estate executor ships antique furniture to auction',
-      items: [
-        { time: 'Day 1',  text: 'Request posted — declared value $24,000, white-glove required' },
-        { time: 'Day 1',  text: 'Provider confirmed — specialist certified, insured to value' },
-        { time: '8:30am', text: 'Pickup · Condition photos · Pieces wrapped and logged' },
-        { time: '1:15pm', text: 'En route · Live tracking' },
-        { time: '3:40pm', text: 'Delivered to auction house · Condition confirmed · Record closed' },
-      ],
-      tag: 'Declared value: $24,000 · Specialist certified · Condition verified',
-    },
-  },
-  {
-    id: 'food-beverage',
-    icon: ShoppingCart,
-    label: 'Food & Beverage Distribution',
-    headline: 'Recurring routes.\nTemperature held.\nEvery time.',
-    intro: 'Food and beverage distribution runs on reliability. The same routes, the same standards, the same providers — every week. Shipmater\'s contracted model supports recurring schedules, refrigerated handling enforcement, and multi-stop batch dispatch. Miss a temperature window and you\'ll know before it becomes a problem.',
-    points: [
-      'Contracted providers for recurring routes — same provider, same standard, every run',
-      'Refrigerated handling enforcement — non-compliant providers cannot bid on cold jobs',
-      'Batch dispatch for multi-stop delivery runs — single request, multiple destinations',
-      'Temperature logging per stop — every handoff recorded',
-      'Scheduled weekly or daily delivery automation — post once, run continuously',
-      'Delivery history and cost summaries per route available for accounts and compliance',
-    ],
-    scenario: {
-      title: 'A restaurant group runs weekly multi-stop supply deliveries',
-      items: [
-        { time: 'Every Mon', text: 'Recurring request auto-posted · Provider pre-assigned' },
-        { time: '5:00am',    text: 'Provider confirmed · Refrigerated vehicle logged' },
-        { time: '5:45am',    text: 'Pickup confirmed · Temp 3°C · Batch manifest signed' },
-        { time: '7:30am',    text: 'Stop 1 delivered · Temp 3.1°C · Signed' },
-        { time: '9:10am',    text: 'Stop 3 delivered · All locations confirmed · Log closed' },
-      ],
-      tag: 'Recurring · 3 stops · Cold chain held across all deliveries',
     },
   },
   {
@@ -253,7 +175,7 @@ export default function UseCasesPage() {
               <span style={{ color: B.tealPale }}>that can't afford to get it wrong.</span>
             </h1>
             <p style={{ fontFamily: BODY, fontWeight: 400, fontSize: T.body, lineHeight: 1.75, color: 'rgba(255,255,255,0.75)', marginTop: 20, maxWidth: 540 }}>
-              Six industries. Different requirements, different stakes — one platform built to handle all of them with the same standard of vetting, tracking and accountability.
+              Freight, auto transport and heavy equipment. Different loads, different stakes — one platform for shippers, dispatchers and drivers with the same standard of vetting, tracking and accountability.
             </p>
           </div>
           {/* Industry jump links (in-page anchors — use-cases stays as one long page) */}
@@ -336,7 +258,7 @@ export default function UseCasesPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px" style={{ background: 'rgba(255,255,255,0.07)' }}>
             {[
-              { icon: Shield,   title: 'Vetted providers',  desc: 'Background-checked, insured and credential-verified before their first delivery — regardless of industry.' },
+              { icon: Shield,   title: 'Vetted providers',  desc: 'Background-checked, insured and credential-verified before their first load — authority, insurance and safety record checked.' },
               { icon: MapPin,   title: 'Live GPS',          desc: 'Real-time position from pickup to delivery. Every mile tracked, every milestone logged.' },
               { icon: Lock,     title: 'Secure payments',   desc: 'Payment held in escrow and only released when the recipient confirms delivery.' },
               { icon: FileText, title: 'Full audit trail',  desc: 'Every handoff, photo, temperature reading and status change logged permanently.' },

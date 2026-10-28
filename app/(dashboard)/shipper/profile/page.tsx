@@ -1087,23 +1087,7 @@ function ComplianceTab({ initialData }: { initialData: ShipperProfile }) {
           onFileChange={name => setForm(f => ({ ...f, coi_url: name }))}
           onExpiryChange={d => setForm(f => ({ ...f, coi_expiry: d }))}
         />
-      </ProfileSection>
-
-      <ProfileSection
-        icon={FileCheck}
-        title="HIPAA Business Associate Agreement (BAA)"
-        subtitle="Required if your organisation is in healthcare and shipments may contain PHI-adjacent items (medical records, specimens, devices)."
-      >
-        <UploadDoc
-          label="HIPAA Business Associate Agreement (BAA)"
-          required={false}
-          url={form.hipaa_baa_url}
-          expiry={form.hipaa_baa_expiry}
-          onFileChange={name => setForm(f => ({ ...f, hipaa_baa_url: name }))}
-          onExpiryChange={d => setForm(f => ({ ...f, hipaa_baa_expiry: d }))}
-        />
-      </ProfileSection>
-
+      </ProfileSection>
       <ProfileSection
         icon={FileCheck}
         title="HazMat Shipper Registration (PHMSA)"

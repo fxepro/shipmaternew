@@ -152,12 +152,6 @@ const QUOTE_PRESETS: { id: string; label: string; desc: string; defaults: Omit<Q
       require_max_weight: true, require_payment_terms: true, payment_terms_hint: 'Net 30' },
   },
   {
-    id: 'medical', label: 'Medical', desc: 'Pharma, medical supplies',
-    defaults: { rate_type: 'flat', require_fuel_surcharge: false, require_detention_rate: false,
-      free_time_hrs: 0, require_equipment_type: true, equipment_type_hint: 'Temp-controlled',
-      require_max_weight: false, require_payment_terms: true, payment_terms_hint: 'Net 15' },
-  },
-  {
     id: 'heavy_equipment', label: 'Heavy Equipment', desc: 'Oversized / construction',
     defaults: { rate_type: 'flat', require_fuel_surcharge: true,  require_detention_rate: true,
       free_time_hrs: 4, require_equipment_type: true, equipment_type_hint: 'Lowboy / RGN',

@@ -1,7 +1,7 @@
 import {
   Package, MapPin, ShieldCheck, ClipboardList,
   Briefcase, DollarSign, Globe, UserCircle2, Lock,
-  Building2, Truck, Stethoscope, Car,
+  Building2, Truck, HardHat, Car,
   Globe2, Flag, Table2,
 } from 'lucide-react';
 import type { HubPage } from '@/components/marketing/MarketingHub';
@@ -31,7 +31,7 @@ export const HOW_IT_WORKS_HUB: HubPage[] = [
 export const USE_CASES_HUB: HubPage[] = [
   { icon: Building2,   title: 'All Use Cases',  desc: 'You are here — browse every use case Shipmater serves.',                href: '/use-cases',                    active: true },
   { icon: Truck,       title: 'Freight',        desc: 'FTL, LTL, hotshot, multi-stop routes, and heavy haul.',               href: '/use-cases/freight-logistics' },
-  { icon: Stethoscope, title: 'Medical',        desc: 'Cold chain, chain of custody, and HIPAA-aligned delivery.',         href: '/use-cases/medical' },
+  { icon: HardHat,     title: 'Construction',   desc: 'Heavy equipment, oversize loads, permits and flatbed matching.',     href: '/use-cases/construction' },
   { icon: Car,         title: 'Auto Transport', desc: 'VIN logging, condition photos, dealer and private moves.',          href: '/use-cases/auto-transport' },
 ];
 

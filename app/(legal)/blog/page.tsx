@@ -19,7 +19,7 @@ interface Post {
   author: { id: number; name: string } | null;
 }
 
-const CATEGORIES = ['All', 'Freight', 'Medical Courier', 'Compliance', 'Platform', 'Carrier Tips', 'Shipper Guide'];
+const CATEGORIES = ['All', 'Freight', 'Dispatch', 'Compliance', 'Platform', 'Carrier Tips', 'Shipper Guide'];
 
 function PostCard({ post }: { post: Post }) {
   const date = post.published_at
