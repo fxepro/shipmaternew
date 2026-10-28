@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import {
   LayoutDashboard, Package, DollarSign, User,
   Truck, BarChart2, Users, AlertTriangle, Route, MapPin, Building2, FileText,
   Briefcase, PlusCircle, Radio, ClipboardList, BookOpen, Warehouse, Palette,
-  TrendingUp, Shield,
+  TrendingUp, Shield, Plus, Minus, CreditCard, Receipt, FileSignature, Plug,
+  Settings, UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/user';
@@ -17,7 +19,14 @@ interface NavItem {
   icon: React.ElementType;
 }
 
-const NAV: Record<UserRole, { section: string; items: NavItem[] }[]> = {
+interface NavSection {
+  section: string;
+  items: NavItem[];
+  /** Collapsed by default: only the first item shows, with a +/- toggle for the rest */
+  collapsible?: boolean;
+}
+
+const NAV: Record<UserRole, NavSection[]> = {
   shipper: [
     {
       section: 'Overview',
@@ -112,37 +121,56 @@ const NAV: Record<UserRole, { section: string; items: NavItem[] }[]> = {
   admin: [
     {
       section: 'Console',
-      items: [{ label: 'Dashboard', href: '/admin', icon: BarChart2 }],
+      items: [{ label: 'Overview', href: '/admin', icon: BarChart2 }],
     },
     {
-      section: 'Manage',
+      section: 'Operations',
       items: [
-        { label: 'Shipments',     href: '/admin/shipments', icon: Package       },
-        { label: 'Users',         href: '/admin/users',     icon: Users         },
-        { label: 'Disputes',      href: '/admin/disputes',  icon: AlertTriangle },
-        { label: 'Carrier Queue', href: '/admin/carriers',  icon: Truck         },
-        { label: 'Shipper Queue', href: '/admin/shippers',  icon: Building2     },
+        { label: 'Shipments & Jobs', href: '/admin/shipments', icon: Package       },
+        { label: 'Disputes',         href: '/admin/disputes',  icon: AlertTriangle },
+        { label: 'Users',            href: '/admin/users',     icon: Users         },
       ],
     },
     {
-      section: 'Platform',
+      section: 'Onboarding & Compliance',
       items: [
-        { label: 'Organizations', href: '/admin/orgs',        icon: Building2  },
-        { label: 'Financials',    href: '/admin/financials',   icon: TrendingUp },
-        { label: 'Blog',          href: '/admin/blog',         icon: BookOpen   },
+        { label: 'Carrier Queue',    href: '/admin/carriers',  icon: Truck         },
+        { label: 'Shipper Queue',    href: '/admin/shippers',  icon: Building2     },
+        { label: 'NOAs / Factoring', href: '/admin/noas',      icon: FileSignature },
       ],
     },
     {
-      section: 'Resources',
+      section: 'Finance',
       items: [
-        { label: 'Resources', href: '/shipper/resources',  icon: BookOpen },
-        { label: 'Admin',     href: '/admin/resources',    icon: Shield  },
+        { label: 'Payments',    href: '/admin/payments',    icon: CreditCard },
+        { label: 'Ledger',      href: '/admin/financials',  icon: TrendingUp },
+        { label: 'Receivables', href: '/admin/receivables', icon: Receipt    },
+      ],
+    },
+    {
+      section: 'Organizations',
+      items: [{ label: 'Organizations', href: '/admin/orgs', icon: Building2 }],
+    },
+    {
+      section: 'Settings',
+      items: [
+        { label: 'Integrations',   href: '/admin/integrations', icon: Plug     },
+        { label: 'Platform',       href: '/admin/settings',     icon: Settings },
+        { label: 'Admins & Roles', href: '/admin/roles',        icon: UserCog  },
+      ],
+    },
+    {
+      section: 'Content',
+      items: [
+        { label: 'Blog',      href: '/admin/blog',      icon: BookOpen },
+        { label: 'Resources', href: '/admin/resources', icon: Shield   },
       ],
     },
     {
       section: 'Shipper View',
+      collapsible: true,
       items: [
-        { label: 'Dashboard',        href: '/shipper',                     icon: LayoutDashboard },
+        { label: 'Shipper View',     href: '/shipper',                     icon: LayoutDashboard },
         { label: 'My Shipments',     href: '/shipper/shipments',           icon: Package         },
         { label: 'Create Job',       href: '/shipper/jobs/contracted/new', icon: PlusCircle      },
         { label: 'My Jobs',          href: '/shipper/jobs',                icon: ClipboardList   },
@@ -161,8 +189,9 @@ const NAV: Record<UserRole, { section: string; items: NavItem[] }[]> = {
     },
     {
       section: 'Carrier View',
+      collapsible: true,
       items: [
-        { label: 'Dashboard',   href: '/carrier',           icon: LayoutDashboard },
+        { label: 'Carrier View', href: '/carrier',           icon: LayoutDashboard },
         { label: 'Available',   href: '/carrier/jobs',      icon: Briefcase       },
         { label: 'My Jobs',     href: '/carrier/my-jobs',   icon: ClipboardList   },
         { label: 'Offers',      href: '/carrier/offers',    icon: Radio           },
@@ -186,6 +215,7 @@ interface SidebarProps {
 
 export function Sidebar({ role, isPlatformTenant, brandName, logoUrl }: SidebarProps) {
   const pathname = usePathname();
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const baseSections = NAV[role] ?? [];
   // For platform tenants, inject Branding into the Account section
@@ -232,55 +262,104 @@ export function Sidebar({ role, isPlatformTenant, brandName, logoUrl }: SidebarP
 
       {/* Nav */}
       <nav className="flex-1 px-2.5 py-2.5 space-y-2.5">
-        {sections.map(({ section, items }) => (
-          <div key={section}>
-            <p
-              className="mb-0.5 px-2 text-caption font-medium uppercase"
-              style={{ letterSpacing: '0.08em', color: 'var(--on-dark-muted)', opacity: 0.75 }}
-            >
-              {section}
-            </p>
-            <ul className="space-y-0">
-              {items.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== `/${role}` &&
-                    pathname.startsWith(item.href + '/') &&
-                    !allItems.some(
-                      (other) =>
-                        other.href !== item.href &&
-                        other.href.length > item.href.length &&
-                        (pathname === other.href || pathname.startsWith(other.href + '/'))
-                    ));
-                return (
+        {sections.map(({ section, items, collapsible }, idx) => {
+          const isActive = (item: NavItem) =>
+            pathname === item.href ||
+            (item.href !== `/${role}` &&
+              pathname.startsWith(item.href + '/') &&
+              !allItems.some(
+                (other) =>
+                  other.href !== item.href &&
+                  other.href.length > item.href.length &&
+                  (pathname === other.href || pathname.startsWith(other.href + '/'))
+              ));
+
+          if (collapsible) {
+            const [entry, ...rest] = items;
+            const firstCollapsible = sections.findIndex((s) => s.collapsible) === idx;
+            // Stay open while the admin is on one of this section's pages
+            const open = expanded[section] ?? rest.some(isActive);
+            return (
+              <div key={section}>
+                {firstCollapsible && <SectionLabel>Surrogate Views</SectionLabel>}
+                <div className="flex items-center">
+                  <div className="flex-1 min-w-0">
+                    <NavLink item={entry} active={isActive(entry)} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((e) => ({ ...e, [section]: !open }))}
+                    aria-expanded={open}
+                    aria-label={`${open ? 'Collapse' : 'Expand'} ${section}`}
+                    className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-white/12"
+                    style={{ color: 'var(--on-dark-muted)' }}
+                  >
+                    {open ? <Minus size={13} /> : <Plus size={13} />}
+                  </button>
+                </div>
+                {open && (
+                  <ul className="mt-0.5 ml-3 space-y-0 border-l pl-1.5" style={{ borderColor: 'rgba(255,255,255,0.12)' }}>
+                    {rest.map((item) => (
+                      <li key={item.href}>
+                        <NavLink item={item} active={isActive(item)} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          }
+
+          return (
+            <div key={section}>
+              <SectionLabel>{section}</SectionLabel>
+              <ul className="space-y-0">
+                {items.map((item) => (
                   <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        'group flex items-center gap-2 rounded-md px-2 py-1.5 font-medium transition-colors',
-                        isActive ? 'shadow-sm' : 'hover:bg-white/12'
-                      )}
-                      style={{
-                        background: isActive ? 'var(--navy)' : 'transparent',
-                        color:      isActive ? 'var(--on-dark)' : 'var(--on-dark-muted)',
-                        fontSize: 'var(--text-nav)',
-                        fontWeight: 500,
-                      }}
-                    >
-                      <item.icon
-                        size={15}
-                        style={{ color: isActive ? '#FFFFFF' : 'var(--on-dark-muted)', opacity: isActive ? 1 : 0.85 }}
-                      />
-                      {item.label}
-                    </Link>
+                    <NavLink item={item} active={isActive(item)} />
                   </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
 
     </aside>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="mb-0.5 px-2 text-caption font-medium uppercase"
+      style={{ letterSpacing: '0.08em', color: 'var(--on-dark-muted)', opacity: 0.75 }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        'group flex items-center gap-2 rounded-md px-2 py-1.5 font-medium transition-colors',
+        active ? 'shadow-sm' : 'hover:bg-white/12'
+      )}
+      style={{
+        background: active ? 'var(--navy)' : 'transparent',
+        color:      active ? 'var(--on-dark)' : 'var(--on-dark-muted)',
+        fontSize: 'var(--text-nav)',
+        fontWeight: 500,
+      }}
+    >
+      <item.icon
+        size={15}
+        style={{ color: active ? '#FFFFFF' : 'var(--on-dark-muted)', opacity: active ? 1 : 0.85 }}
+      />
+      {item.label}
+    </Link>
   );
 }
