@@ -164,15 +164,20 @@ class AdminController extends Controller
             });
         }
 
-        if ($request->filled('role')) {
+        if ($request->filled('role') && $request->input('role') !== 'all') {
             $query->where('role', $request->input('role'));
         }
 
-        $users = $query->limit(200)->get()->map(fn (User $u) => [
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->input('status'));
+        }
+
+        $users = $query->limit(500)->get()->map(fn (User $u) => [
             'id'         => $u->id,
             'name'       => $u->name,
             'email'      => $u->email,
             'role'       => $u->role,
+            'status'     => $u->status ?? 'active',
             'avatar_url' => $u->avatar_url,
             'created_at' => $u->created_at?->toISOString(),
             'org'        => $u->currentOrg ? [
@@ -183,6 +188,131 @@ class AdminController extends Controller
         ]);
 
         return response()->json(['data' => $users]);
+    }
+
+    // GET /api/v1/admin/users/{user}
+    // Full record for the admin user detail page.
+    public function user(Request $request, User $user): JsonResponse
+    {
+        if ($err = $this->requireAdmin($request)) return $err;
+
+        $user->load(['currentOrg', 'carrierProfile', 'shipperProfile']);
+
+        $profile     = $user->carrierProfile ?? $user->shipperProfile;
+        $profileData = $profile ? $profile->attributesToArray() : null;
+        if ($profileData) {
+            // Secrets and full ID numbers stay out of the admin UI
+            unset($profileData['plaid_access_token'], $profileData['stripe_verification_data']);
+            if (!empty($profileData['national_id_number'])) {
+                $profileData['national_id_number'] = '•••• ' . substr((string) $profileData['national_id_number'], -4);
+            }
+        }
+
+        $documents = collect();
+        if ($user->carrierProfile) {
+            $documents = DB::table('carrier_documents')->where('carrier_profile_id', $user->carrierProfile->id)
+                ->orderByDesc('created_at')
+                ->get(['id', 'type', 'name', 'url', 'expiry_date', 'verified_at', 'created_at']);
+        } elseif ($user->shipperProfile) {
+            $documents = DB::table('shipper_documents')->where('shipper_profile_id', $user->shipperProfile->id)
+                ->orderByDesc('created_at')
+                ->get(['id', 'type', 'name', 'url', 'verified_at', 'created_at']);
+        }
+
+        $asShipper = Shipment::where('shipper_id', $user->id);
+        $asCarrier = Shipment::where('carrier_id', $user->id);
+
+        $recent = Shipment::where(fn ($q) => $q->where('shipper_id', $user->id)
+                ->orWhere('carrier_id', $user->id)
+                ->orWhere('receiver_id', $user->id))
+            ->latest()
+            ->limit(10)
+            ->get(['id', 'item_description', 'status', 'pickup_city', 'pickup_state', 'delivery_city', 'delivery_state', 'agreed_cost', 'created_at'])
+            ->map(fn (Shipment $s) => [
+                'id'          => $s->id,
+                'item'        => $s->item_description,
+                'status'      => $s->status,
+                'route'       => "{$s->pickup_city}, {$s->pickup_state} → {$s->delivery_city}, {$s->delivery_state}",
+                'agreed_cost' => $s->agreed_cost ? (float) $s->agreed_cost : null,
+                'created_at'  => $s->created_at?->toISOString(),
+            ]);
+
+        return response()->json([
+            'data' => [
+                'account' => [
+                    'id'                 => $user->id,
+                    'name'               => $user->name,
+                    'email'              => $user->email,
+                    'role'               => $user->role,
+                    'avatar_url'         => $user->avatar_url,
+                    'email_verified_at'  => $user->email_verified_at?->toISOString(),
+                    'stripe_customer_id' => $user->stripe_customer_id,
+                    'created_at'         => $user->created_at?->toISOString(),
+                    'updated_at'         => $user->updated_at?->toISOString(),
+                    'last_sign_in_at'    => $user->tokens()->max('created_at'),
+                ],
+                'status' => [
+                    'status'     => $user->status ?? 'active',
+                    'reason'     => $user->status_reason,
+                    'changed_at' => $user->status_changed_at?->toISOString(),
+                    'changed_by' => $user->status_changed_by ? User::find($user->status_changed_by)?->name : null,
+                ],
+                'current_org'   => $user->currentOrg?->only(['id', 'name', 'type', 'plan', 'status']),
+                'organizations' => DB::table('org_members')
+                    ->join('organizations', 'organizations.id', '=', 'org_members.org_id')
+                    ->where('org_members.user_id', $user->id)
+                    ->get(['organizations.id', 'organizations.name', 'organizations.type',
+                           'org_members.role', 'org_members.status', 'org_members.joined_at']),
+                'profile_type' => $user->carrierProfile ? 'carrier' : ($user->shipperProfile ? 'shipper' : null),
+                'profile'      => $profileData,
+                'documents'    => $documents,
+                'activity'     => [
+                    'shipments_as_shipper' => (clone $asShipper)->count(),
+                    'shipments_as_carrier' => (clone $asCarrier)->count(),
+                    'delivered'            => Shipment::where(fn ($q) => $q->where('shipper_id', $user->id)->orWhere('carrier_id', $user->id))
+                        ->where('status', 'delivered')->count(),
+                    'total_spent'          => (float) (clone $asShipper)->where('status', 'delivered')->sum('agreed_cost'),
+                    'total_earned'         => (float) (clone $asCarrier)->where('status', 'delivered')->sum('agreed_cost'),
+                    'bids'                 => DB::table('bids')->where('carrier_id', $user->id)->count(),
+                ],
+                'recent_shipments' => $recent,
+            ],
+        ]);
+    }
+
+    // PUT /api/v1/admin/users/{user}/status
+    // Activate, pause (read-only) or deactivate (signed out, cannot sign in) an account.
+    public function updateUserStatus(Request $request, User $user): JsonResponse
+    {
+        if ($err = $this->requireAdmin($request)) return $err;
+
+        $data = $request->validate([
+            'status' => ['required', 'in:active,paused,deactivated'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        abort_if($user->id === $request->user()->id, 422, 'You cannot change your own account status.');
+
+        $user->update([
+            'status'            => $data['status'],
+            'status_reason'     => $data['reason'] ?? null,
+            'status_changed_at' => now(),
+            'status_changed_by' => $request->user()->id,
+        ]);
+
+        // Sign a deactivated user out everywhere
+        if ($data['status'] === 'deactivated') {
+            $user->tokens()->delete();
+        }
+
+        return response()->json([
+            'data' => [
+                'status'     => $user->status,
+                'reason'     => $user->status_reason,
+                'changed_at' => $user->status_changed_at?->toISOString(),
+                'changed_by' => $request->user()->name,
+            ],
+        ]);
     }
 
     // GET /api/v1/admin/financials

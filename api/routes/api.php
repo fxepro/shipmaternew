@@ -48,7 +48,7 @@ Route::post('/clearinghouse/webhook', [ClearinghouseController::class, 'webhook'
 // ── Broadcasting auth ─────────────────────────────────────────────────
 Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
     return \Illuminate\Support\Facades\Broadcast::auth($request);
-})->middleware('auth:sanctum');
+})->middleware(['auth:sanctum', 'account.status']);
 
 // ── Blog (public) ─────────────────────────────────────────────────────
 Route::get('/blog',        [BlogController::class, 'index']);
@@ -80,7 +80,7 @@ Route::post('/auth/email/verify', [AuthController::class, 'verifyEmail'])
     ->middleware('throttle:10,1');
 
 // ── Authenticated ──────────────────────────────────────────────────────
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
 
     // Current user
     Route::get('/user',          [AuthController::class, 'user']);
@@ -195,6 +195,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/shipments', [AdminController::class, 'shipments']);
     Route::get('/admin/shipments/{shipment}', [AdminController::class, 'shipment']);
     Route::get('/admin/users',     [AdminController::class, 'users']);
+    Route::get('/admin/users/{user}',        [AdminController::class, 'user']);
+    Route::put('/admin/users/{user}/status', [AdminController::class, 'updateUserStatus']);
     Route::get('/admin/disputes',  [AdminController::class, 'disputes']);
 
     // Admin: carrier approval queue (pending_review only)

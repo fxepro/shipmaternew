@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'carrier.approved' => \App\Http\Middleware\RequireCarrierApproval::class,
+            'account.status'   => \App\Http\Middleware\EnforceAccountStatus::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

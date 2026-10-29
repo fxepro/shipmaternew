@@ -24,6 +24,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     protected $fillable = [
         'name', 'email', 'password', 'role', 'avatar_url', 'current_org_id', 'stripe_customer_id',
+        'status', 'status_reason', 'status_changed_at', 'status_changed_by',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -33,6 +34,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
+            'status_changed_at' => 'datetime',
         ];
     }
 

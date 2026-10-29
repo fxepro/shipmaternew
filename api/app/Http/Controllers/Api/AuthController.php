@@ -95,6 +95,14 @@ class AuthController extends Controller
 
         /** @var User $user */
         $user = Auth::user();
+
+        if ($user->status === 'deactivated') {
+            Auth::guard('web')->logout();
+            throw ValidationException::withMessages([
+                'email' => ['This account has been deactivated. Contact support.'],
+            ]);
+        }
+
         $user->load('currentOrg', 'carrierProfile');
 
         $user->tokens()->delete();
