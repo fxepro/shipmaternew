@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import {
   LayoutDashboard, Package, DollarSign, User,
-  Truck, BarChart2, Users, AlertTriangle, Route, MapPin, Building2, FileText,
+  Truck, BarChart2, Users, ShieldCheck, AlertTriangle, Route, MapPin, Building2, FileText,
   Briefcase, PlusCircle, Radio, ClipboardList, BookOpen, Warehouse, Palette,
   TrendingUp, Shield, Plus, Minus, CreditCard, Receipt, FileSignature, Plug,
   Settings, UserCog,
@@ -68,7 +68,10 @@ const NAV: Record<UserRole, NavSection[]> = {
     },
     {
       section: 'Account',
-      items: [{ label: 'Profile', href: '/shipper/profile', icon: User }],
+      items: [
+        { label: 'Profile',      href: '/shipper/profile',      icon: User        },
+        { label: 'Verification', href: '/shipper/verification', icon: ShieldCheck },
+      ],
     },
     {
       section: 'Resources',
@@ -98,7 +101,11 @@ const NAV: Record<UserRole, NavSection[]> = {
     },
     {
       section: 'Account',
-      items: [{ label: 'Profile', href: '/carrier/profile', icon: User }],
+      items: [
+        { label: 'Profile',      href: '/carrier/profile',      icon: User        },
+        { label: 'Verification', href: '/carrier/verification', icon: ShieldCheck },
+        { label: 'Team',         href: '/carrier/team',         icon: Users       },
+      ],
     },
     {
       section: 'Resources',
@@ -134,10 +141,9 @@ const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Onboarding & Compliance',
       items: [
-        { label: 'Carriers',         href: '/admin/carriers',        icon: Truck         },
-        { label: 'Carrier Members',  href: '/admin/carrier-members', icon: Users         },
-        { label: 'Shippers',         href: '/admin/shippers',        icon: Building2     },
-        { label: 'NOAs / Factoring', href: '/admin/noas',            icon: FileSignature },
+        { label: 'Companies',        href: '/admin/companies', icon: Building2     },
+        { label: 'People',           href: '/admin/people',    icon: Users         },
+        { label: 'NOAs / Factoring', href: '/admin/noas',      icon: FileSignature },
       ],
     },
     {

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BidController;
 use App\Http\Controllers\Api\CarrierController;
+use App\Http\Controllers\Api\AdminPeopleController;
 use App\Http\Controllers\Api\PlaidController;
 use App\Http\Controllers\Api\ShipperPaymentController;
 use App\Http\Controllers\Api\CarrierVerificationController;
@@ -25,6 +26,8 @@ use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\AdminCompanyController;
 use App\Http\Controllers\Api\AdminOrgController;
 use App\Http\Controllers\Api\OrgController;
+use App\Http\Controllers\Api\MyChecksController;
+use App\Http\Controllers\Api\DriverAssignmentController;
 use App\Http\Controllers\Api\PlatformLeadController;
 use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\ServiceTypeController;
@@ -76,6 +79,7 @@ Route::get('/orgs/{org}/ratings', [RatingController::class, 'profileRatings']);
 
 // ── Auth (public) ──────────────────────────────────────────────────────────
 Route::post('/auth/register', [AuthController::class, 'register']);
+Route::get('/invitations/{token}', [OrgController::class, 'showInvitation'])->middleware('throttle:30,1');
 Route::post('/auth/login',    [AuthController::class, 'login']);
 Route::post('/auth/email/verify', [AuthController::class, 'verifyEmail'])
     ->middleware('throttle:10,1');
@@ -106,6 +110,13 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
         Route::post('/shipments/{shipment}/deliver', [ShipmentController::class, 'deliver']);
         Route::put('/shipments/{shipment}/start',    [ShipmentController::class, 'start']);
         Route::post('/shipments/{shipment}/ping',    [ShipmentController::class, 'ping']);
+
+        // Driver assignment: only approved drivers with current credentials
+        Route::get('/carrier/drivers',               [DriverAssignmentController::class, 'drivers']);
+        Route::get('/shipments/{id}/driver',         [DriverAssignmentController::class, 'show']);
+        Route::put('/shipments/{id}/driver',         [DriverAssignmentController::class, 'assign']);
+        Route::get('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'show']);
+        Route::put('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'assign']);
         Route::put('/bids/{bid}/withdraw',           [BidController::class, 'withdraw']);
     });
 
@@ -151,6 +162,14 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/org/members',                     [OrgController::class, 'members']);
     Route::put('/org/members/{id}',                [OrgController::class, 'updateMember']);
     Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember']);
+    // A person's own checks: identity record and credentials (docs/people-types-and-checks.md)
+    Route::get('/me/checks',                         [MyChecksController::class, 'show']);
+    Route::put('/me/identity',                       [MyChecksController::class, 'updateIdentity']);
+    Route::post('/me/identity/files',                [MyChecksController::class, 'uploadIdentityFile']);
+    Route::post('/me/credentials',                   [MyChecksController::class, 'storeCredential']);
+    Route::post('/me/credentials/{credential}',      [MyChecksController::class, 'updateCredential']);
+    Route::delete('/me/credentials/{credential}',    [MyChecksController::class, 'destroyCredential']);
+
     Route::get('/org/invitations',                 [OrgController::class, 'invitations']);
     Route::post('/org/invitations',                [OrgController::class, 'invite']);
     Route::post('/org/invitations/accept',         [OrgController::class, 'acceptInvitation']);
@@ -201,9 +220,17 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/admin/disputes',  [AdminController::class, 'disputes']);
 
     // Admin: carrier approval queue (pending_review only)
-    Route::get('/admin/carriers/pending-review',    [CarrierController::class, 'pendingReview']);
-    Route::post('/admin/carriers/{id}/review',      [CarrierController::class, 'reviewCarrier']);
-    Route::post('/admin/carriers/{id}/background',  [CarrierController::class, 'recordBackground']);
+    // People at carrier/shipper companies: identity, background (drivers), credentials, approval (owners + drivers)
+    Route::get('/admin/people',                                  [AdminPeopleController::class, 'index']);
+    Route::get('/admin/people/{user}',                           [AdminPeopleController::class, 'show']);
+    Route::post('/admin/people/{user}/identity',                 [AdminPeopleController::class, 'recordIdentity']);
+    Route::post('/admin/people/{user}/background',               [AdminPeopleController::class, 'recordBackground']);
+    Route::post('/admin/people/{user}/credentials',              [AdminPeopleController::class, 'storeCredential']);
+    Route::post('/admin/people/{user}/review',                   [AdminPeopleController::class, 'review']);
+    Route::get('/admin/people/{user}/files/{kind}',              [AdminPeopleController::class, 'identityFile']);
+    Route::post('/admin/people/credentials/{credential}/verify', [AdminPeopleController::class, 'verifyCredential']);
+    Route::delete('/admin/people/credentials/{credential}',      [AdminPeopleController::class, 'destroyCredential']);
+    Route::get('/admin/people/credentials/{credential}/file',    [AdminPeopleController::class, 'credentialFile']);
 
     // Admin: carrier and shipper companies (organizations)
     Route::get('/admin/companies',                  [AdminCompanyController::class, 'index']);

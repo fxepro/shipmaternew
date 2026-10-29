@@ -1,7 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { CompanyList } from '@/components/admin/CompanyList';
-
+// Carriers and shippers are now one Companies list
 export default function AdminShippersPage() {
-  return <CompanyList type="shipper" />;
+  redirect('/admin/companies?type=shipper');
 }

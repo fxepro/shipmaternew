@@ -69,6 +69,23 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(ShipperProfile::class);
     }
 
+    // ── Person checks (docs/people-types-and-checks.md) ────────────────────
+
+    public function personVerification(): HasOne
+    {
+        return $this->hasOne(PersonVerification::class);
+    }
+
+    public function personIdentity(): HasOne
+    {
+        return $this->hasOne(PersonIdentity::class);
+    }
+
+    public function personCredentials(): HasMany
+    {
+        return $this->hasMany(PersonCredential::class);
+    }
+
     public function dispatchedShipments(): HasMany
     {
         return $this->hasMany(Shipment::class, 'shipper_id');
@@ -131,7 +148,7 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     public function isOrgOwner(): bool  { return $this->orgRole() === 'owner'; }
-    public function isOrgAdmin(): bool  { return in_array($this->orgRole(), ['owner', 'admin']); }
+    public function isOrgAdmin(): bool  { return in_array($this->orgRole(), ['owner', 'staff']); }
     public function isDriver(): bool    { return $this->orgRole() === 'driver'; }
-    public function isDispatcher(): bool { return in_array($this->orgRole(), ['owner', 'admin', 'dispatcher']); }
+    public function isDispatcher(): bool { return in_array($this->orgRole(), ['owner', 'staff', 'dispatcher']); }
 }

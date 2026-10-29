@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle } from 'lucide-react';
 import { freightJobApi, authApi } from '@/lib/api';
 import { JobView } from '@/components/jobs/JobView';
+import { DriverAssignment } from '@/components/jobs/DriverAssignment';
 
 export default function CarrierJobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -44,14 +45,17 @@ export default function CarrierJobPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <JobView
-      job={job}
-      role="carrier"
-      backHref="/carrier/my-jobs"
-      backLabel="My Jobs"
-      currentUserId={currentUserId}
-      onStopUpdated={() => qc.invalidateQueries({ queryKey: ['carrier-job', jobId] })}
-      onJobUpdated={()  => qc.invalidateQueries({ queryKey: ['carrier-job', jobId] })}
-    />
+    <div className="space-y-5">
+      <JobView
+        job={job}
+        role="carrier"
+        backHref="/carrier/my-jobs"
+        backLabel="My Jobs"
+        currentUserId={currentUserId}
+        onStopUpdated={() => qc.invalidateQueries({ queryKey: ['carrier-job', jobId] })}
+        onJobUpdated={()  => qc.invalidateQueries({ queryKey: ['carrier-job', jobId] })}
+      />
+      <DriverAssignment shipmentId={jobId} kind="freight-jobs" />
+    </div>
   );
 }

@@ -28,7 +28,22 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role'     => ['required', Rule::in(['shipper', 'carrier', 'receiver'])],
             'company_name' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'invite_token' => ['sometimes', 'nullable', 'string', 'size:64'],
         ]);
+
+        // Joining an existing company by invitation: no company of their own; their role comes from the invite
+        $invitation = null;
+        if (!empty($data['invite_token'])) {
+            $invitation = \App\Models\OrgInvitation::where('token', $data['invite_token'])
+                ->whereNull('accepted_at')->where('expires_at', '>', now())->first();
+            if (!$invitation) {
+                throw ValidationException::withMessages(['invite_token' => ['This invitation has expired or was already used.']]);
+            }
+            if (strtolower($invitation->email) !== strtolower($data['email'])) {
+                throw ValidationException::withMessages(['email' => ['Use the email address the invitation was sent to.']]);
+            }
+            $data['role'] = \App\Models\Organization::find($invitation->org_id)?->type ?? $data['role'];
+        }
 
         $user = User::create([
             'name'     => $data['name'],
@@ -37,8 +52,17 @@ class AuthController extends Controller
             'role'     => $data['role'],
         ]);
 
-        // Create solo org for carriers and shippers
-        if (in_array($data['role'], ['carrier', 'shipper'])) {
+        if ($invitation) {
+            \App\Models\OrgMember::create([
+                'org_id' => $invitation->org_id, 'user_id' => $user->id,
+                'role' => $invitation->role, 'status' => 'active', 'joined_at' => now(),
+            ]);
+            $invitation->update(['accepted_at' => now()]);
+            $user->update(['current_org_id' => $invitation->org_id]);
+            $user->load('currentOrg');
+        }
+        // Otherwise they're starting a company: create their solo org
+        elseif (in_array($data['role'], ['carrier', 'shipper'])) {
             $org = $this->createSoloOrg($user, $data['role']);
             $user->update(['current_org_id' => $org->id]);
             $user->setRelation('currentOrg', $org);
@@ -52,14 +76,16 @@ class AuthController extends Controller
             ]);
         }
 
-        // Shippers get a profile shell so verification status can attach
-        if ($user->role === 'shipper') {
+        // Shippers get a profile shell so verification status can attach (company owners only)
+        if ($user->role === 'shipper' && !$invitation) {
             ShipperProfile::create([
                 'user_id'      => $user->id,
                 'org_id'       => $user->current_org_id,
                 'company_name' => $request->input('company_name') ?: null,
             ]);
         }
+
+        \App\Services\PersonChecks::refresh($user);
 
         try {
             $user->sendEmailVerificationNotification();

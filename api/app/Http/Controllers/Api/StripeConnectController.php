@@ -160,7 +160,7 @@ class StripeConnectController extends Controller
                     'require_matching_selfie'=> true,
                 ],
             ],
-            'return_url' => config('app.frontend_url') . '/carrier/profile?tab=personal&identity=success',
+            'return_url' => config('app.frontend_url') . '/carrier/verification?identity=success',
             'metadata'   => [
                 'user_id'            => (string) $user->id,
                 'carrier_profile_id' => (string) $profile->id,
@@ -299,6 +299,8 @@ class StripeConnectController extends Controller
 
                 $profile->update($updates);
 
+                $this->saveVerifiedIdentity($session->id, (int) ($session->metadata['user_id'] ?? $profile->user_id));
+
                 \App\Models\CarrierVerification::updateOrCreate(
                     ['carrier_profile_id' => $profile->id, 'check_type' => 'identity'],
                     [
@@ -321,6 +323,17 @@ class StripeConnectController extends Controller
                 $profileId = $session->metadata['carrier_profile_id'] ?? null;
                 if (!$profileId) return;
 
+                if ($userId = $session->metadata['user_id'] ?? null) {
+                    $identity = \App\Models\PersonIdentity::firstOrCreate(['user_id' => (int) $userId]);
+                    if ($identity->status !== 'verified') {
+                        $identity->update([
+                            'status'             => 'failed',
+                            'provider_reference' => $session->id,
+                            'failure_reason'     => $session->last_error?->reason ?? 'Stripe could not verify the ID. Try again or upload your ID here.',
+                        ]);
+                    }
+                }
+
                 $profile = CarrierProfile::find($profileId);
                 if (!$profile) return;
 
@@ -341,5 +354,50 @@ class StripeConnectController extends Controller
         };
 
         return response()->json(['received' => true]);
+    }
+
+    /**
+     * Copy Stripe Identity's verified outputs into the identity record Shipmater keeps.
+     * The webhook payload omits them, so the session is re-fetched with them expanded.
+     */
+    private function saveVerifiedIdentity(string $sessionId, int $userId): void
+    {
+        try {
+            $session = $this->stripe()->identity->verificationSessions->retrieve($sessionId, [
+                'expand' => ['verified_outputs', 'verified_outputs.id_number', 'last_verification_report'],
+            ]);
+            $out = $session->verified_outputs;
+            $doc = $session->last_verification_report?->document;
+            $date = fn ($d) => $d && $d->year ? sprintf('%04d-%02d-%02d', $d->year, $d->month ?? 1, $d->day ?? 1) : null;
+
+            $identity = \App\Models\PersonIdentity::firstOrCreate(['user_id' => $userId]);
+            $identity->fill(array_filter([
+                'legal_first_name'   => $out?->first_name,
+                'legal_last_name'    => $out?->last_name,
+                'date_of_birth'      => $date($out?->dob),
+                'street'             => $out?->address?->line1,
+                'unit'               => $out?->address?->line2,
+                'city'               => $out?->address?->city,
+                'state'              => $out?->address?->state,
+                'zip'                => $out?->address?->postal_code,
+                'country'            => $out?->address?->country,
+                'id_number'          => $out?->id_number,
+                'id_type'            => match ($doc?->type) { 'driving_license' => 'driver_license', 'passport' => 'passport', 'id_card' => 'state_id', default => null },
+                'id_issuing_country' => $doc?->issuing_country,
+                'id_issue_date'      => $date($doc?->issued_date),
+                'id_expiry_date'     => $date($doc?->expiration_date),
+            ], fn ($v) => $v !== null && $v !== ''));
+            $identity->fill([
+                'status' => 'verified', 'verification_method' => 'stripe_identity', 'provider_reference' => $session->id,
+                'verified_at' => now(), 'verified_by' => null, 'failure_reason' => null,
+            ]);
+            $identity->save();
+
+            if ($user = \App\Models\User::find($userId)) {
+                \App\Services\PersonChecks::refresh($user);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Could not save Stripe Identity outputs', ['session' => $sessionId, 'error' => $e->getMessage()]);
+        }
     }
 }

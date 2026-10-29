@@ -138,6 +138,12 @@ class CarrierProfile extends Model
         ];
     }
 
+    /** Mirror profile-held checks into the person's records (person_verifications, identities, credentials) */
+    protected static function booted(): void
+    {
+        static::saved(fn (CarrierProfile $profile) => \App\Services\PersonChecks::syncFromCarrierProfile($profile));
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

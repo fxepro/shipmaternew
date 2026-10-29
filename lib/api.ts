@@ -283,6 +283,24 @@ export const orgApi = {
   cancelInvitation:  (id: number)                               => api.delete(`/api/v1/org/invitations/${id}`),
   switchOrg:         (orgId: number)                            => api.put('/api/v1/org/switch', { org_id: orgId }),
   myOrganizations:   ()                                         => api.get('/api/v1/user/organizations'),
+  /** Public: what an invite link is for, shown before signing up or signing in */
+  showInvitation:    (token: string)                            => api.get(`/api/v1/invitations/${token}`),
+};
+
+// ── A person's own checks (docs/people-types-and-checks.md) ─────────────
+const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
+export const myChecksApi = {
+  get:              ()                                           => api.get('/api/v1/me/checks'),
+  updateIdentity:   (data: Record<string, unknown>)              => api.put('/api/v1/me/identity', data),
+  uploadIdentity:   (kind: string, file: File) => {
+    const form = new FormData();
+    form.append('kind', kind);
+    form.append('file', file);
+    return api.post('/api/v1/me/identity/files', form, multipart);
+  },
+  saveCredential:   (data: FormData, id?: number)                =>
+    api.post(id ? `/api/v1/me/credentials/${id}` : '/api/v1/me/credentials', data, multipart),
+  deleteCredential: (id: number)                                 => api.delete(`/api/v1/me/credentials/${id}`),
 };
 
 // ── Admin: org management + Stripe toggle ─────────────────────────────

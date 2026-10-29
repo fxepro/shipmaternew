@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { paymentApi, profileApi, orgApi, shipperVerificationApi } from '@/lib/api';
+import { TeamManager } from '@/components/team/TeamManager';
 import { PlaidLinkButton } from '@/components/payments/PlaidLinkButton';
 import {
   User, Building2, CreditCard, Bell, Zap,
@@ -21,7 +22,6 @@ import {
   collectFieldIssues,
   validateProfileTabForm,
   validateBusinessTabForm,
-  validateTeamInvite,
   profileTabFieldErrors,
   looksLikeEmail,
   looksLikePhone,
@@ -1348,187 +1348,10 @@ function ServicesTab({ initialData }: { initialData: ShipperProfile }) {
   );
 }
 
-// ── Tab: Team ─────────────────────────────────────────────────────────────────
-
-const ROLE_LABELS: Record<string, string> = {
-  owner:      'Owner',
-  admin:      'Admin',
-  dispatcher: 'Dispatcher',
-  driver:     'Driver',
-  viewer:     'Viewer',
-};
-
-const ROLE_COLORS: Record<string, string> = {
-  owner:      'bg-purple-50 text-purple-700',
-  admin:      'bg-blue-50 text-blue-700',
-  dispatcher: 'bg-teal-50 text-[var(--color-teal)]',
-  driver:     'bg-amber-50 text-amber-700',
-  viewer:     'bg-[var(--color-cream)] text-[var(--color-text-muted)]',
-};
+// ── Tab: Team ── (shared with carriers; roles per docs/people-types-and-checks.md)
 
 function TeamTab() {
-  const qc = useQueryClient();
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole]   = useState('dispatcher');
-  const [showInvite, setShowInvite]   = useState(false);
-
-  const { data: members = [],     isLoading: loadingMembers }     = useQuery({ queryKey: ['org-members'],     queryFn: () => orgApi.members().then(r => r.data.data) });
-  const { data: invitations = [], isLoading: loadingInvitations } = useQuery({ queryKey: ['org-invitations'], queryFn: () => orgApi.invitations().then(r => r.data.data) });
-
-  const inviteMutation = useMutation({
-    mutationFn: () => orgApi.invite(inviteEmail, inviteRole),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['org-invitations'] });
-      setInviteEmail('');
-      setShowInvite(false);
-    },
-  });
-
-  const updateRoleMutation = useMutation({
-    mutationFn: ({ id, role }: { id: number; role: string }) => orgApi.updateMember(id, role),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-members'] }),
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (id: number) => orgApi.removeMember(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-members'] }),
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: (id: number) => orgApi.cancelInvitation(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-invitations'] }),
-  });
-
-  return (
-    <div className="space-y-6">
-
-      {/* Members */}
-      <ProfileSection
-        icon={Users}
-        title="Team members"
-        actions={
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-full bg-[var(--color-cream)] px-2 py-0.5 text-xs font-semibold text-[var(--color-text-muted)]">
-              {members.length}
-            </span>
-            <button onClick={() => setShowInvite(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)] transition-colors">
-              <Plus size={12} /> Invite member
-            </button>
-          </div>
-        }
-      >
-        {loadingMembers ? (
-          <div className="space-y-3 animate-pulse">
-            {[1,2].map(i => <div key={i} className="h-14 rounded-xl bg-[var(--color-cream-dark)]" />)}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {(members as any[]).map((m: any) => (
-              <div key={m.id} className="flex items-center gap-3 rounded-xl border border-[var(--color-cream-dark)] px-4 py-3">
-                <div className="w-8 h-8 rounded-full bg-[var(--color-slate)] flex items-center justify-center text-xs font-bold text-white shrink-0">
-                  {m.name.split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--color-text)] truncate">{m.name}</p>
-                  <p className="text-xs text-[var(--color-text-faint)] truncate">{m.email}</p>
-                </div>
-                {m.is_owner ? (
-                  <span className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${ROLE_COLORS['owner']}`}>
-                    <Crown size={10} /> Owner
-                  </span>
-                ) : (
-                  <select
-                    value={m.role}
-                    onChange={e => updateRoleMutation.mutate({ id: m.id, role: e.target.value })}
-                    className="rounded-lg border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-2.5 py-1 text-xs text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none"
-                  >
-                    {(['admin', 'dispatcher', 'viewer'] as const).map(r => (
-                      <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                    ))}
-                  </select>
-                )}
-                {!m.is_owner && (
-                  <button onClick={() => removeMutation.mutate(m.id)} disabled={removeMutation.isPending}
-                    className="text-[var(--color-text-faint)] hover:text-red-500 transition-colors ml-1">
-                    <UserMinus size={14} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </ProfileSection>
-
-      {/* Pending invitations */}
-      {(invitations as any[]).length > 0 && (
-        <ProfileSection icon={Send} title="Pending invitations">
-          <div className="space-y-2">
-            {(invitations as any[]).map((inv: any) => (
-              <div key={inv.id} className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--color-cream-dark)] px-4 py-3">
-                <Send size={14} className="text-[var(--color-text-faint)] shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[var(--color-text)] truncate">{inv.email}</p>
-                  <p className="text-xs text-[var(--color-text-faint)]">Expires {inv.expires_at} · {ROLE_LABELS[inv.role]}</p>
-                </div>
-                <button onClick={() => cancelMutation.mutate(inv.id)} disabled={cancelMutation.isPending}
-                  className="text-[var(--color-text-faint)] hover:text-red-500 transition-colors">
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </ProfileSection>
-      )}
-
-      {/* Invite modal */}
-      {showInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-[var(--color-white)] p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold text-[var(--color-text)]">Invite team member</h3>
-              <button onClick={() => setShowInvite(false)} className="text-[var(--color-text-faint)] hover:text-[var(--color-text)]"><X size={18} /></button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <Label>Email address</Label>
-                <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="colleague@company.com"
-                  className="profile-input" />
-              </div>
-              <div>
-                <Label>Role</Label>
-                <div className="profile-select-wrap">
-                  <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} className="profile-select">
-                    <option value="admin">Admin — full access except billing</option>
-                    <option value="dispatcher">Dispatcher — create and manage shipments</option>
-                    <option value="viewer">Viewer — read-only</option>
-                  </select>
-                  <ChevronDown size={14} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-faint)]" />
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 flex gap-3">
-              <button onClick={() => setShowInvite(false)} className="flex-1 rounded-xl border border-[var(--color-cream-dark)] py-2.5 text-sm font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] transition-colors">Cancel</button>
-              <button
-                onClick={() => {
-                  const msg = validateTeamInvite(inviteEmail, inviteRole);
-                  if (msg) {
-                    toast.error(msg);
-                    return;
-                  }
-                  inviteMutation.mutate();
-                }}
-                disabled={!inviteEmail || inviteMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[var(--color-teal)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-60 shadow-sm transition-all">
-                {inviteMutation.isPending ? <><Loader2 size={13} className="animate-spin" /> Sending…</> : <><Send size={13} /> Send invite</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <TeamManager type="shipper" />;
 }
 
 // ── Tab: Subscription (static — Stripe not yet integrated) ────────────────────

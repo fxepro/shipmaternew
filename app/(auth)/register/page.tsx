@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Package, Truck } from 'lucide-react';
-import { authApi } from '@/lib/api';
+import { authApi, orgApi } from '@/lib/api';
 import { establishSession, getRolePath } from '@/lib/auth';
 import { getTenantConfigClient, type TenantConfig } from '@/lib/tenant';
 
@@ -69,10 +69,31 @@ const inputStyle = {
   boxSizing: 'border-box' as const,
 };
 
+interface InviteInfo {
+  email: string;
+  role: string;
+  company_name: string | null;
+  company_type: 'carrier' | 'shipper' | null;
+  expired: boolean;
+  accepted: boolean;
+}
+
+const INVITE_ROLE_LABELS: Record<string, string> = { staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer' };
+
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const inviteToken = useSearchParams().get('invite');
   const [error, setError]   = useState('');
   const [tenant, setTenant] = useState<TenantConfig | null>(null);
+  const [invite, setInvite] = useState<InviteInfo | null>(null);
 
   useEffect(() => { setTenant(getTenantConfigClient()); }, []);
 
@@ -87,13 +108,29 @@ export default function RegisterPage() {
 
   const selectedRole = watch('role');
 
+  // Joining a company by invitation: each person gets their own login under that company
+  useEffect(() => {
+    if (!inviteToken) return;
+    orgApi.showInvitation(inviteToken)
+      .then((r) => {
+        const info = r.data.data as InviteInfo;
+        setInvite(info);
+        setValue('email', info.email);
+        if (info.company_type) setValue('role', info.company_type);
+      })
+      .catch(() => setError('This invitation link is not valid. Ask for a new one.'));
+  }, [inviteToken, setValue]);
+
+  const inviteUsable = invite && !invite.expired && !invite.accepted;
+
   async function onSubmit(data: FormData) {
     setError('');
     try {
-      const res = await authApi.register(data);
+      const res = await authApi.register(inviteUsable ? { ...data, invite_token: inviteToken } : data);
       const { token } = res.data as { token: string };
       establishSession(token);
-      router.replace(getRolePath(data.role));
+      // Invited people start with their own verification checklist
+      router.replace(inviteUsable ? `${getRolePath(data.role)}/verification` : getRolePath(data.role));
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Registration failed. Please try again.');
@@ -143,8 +180,19 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit(onSubmit)}>
 
-          {/* Role selector */}
-          <div style={{ marginBottom: 24 }}>
+          {invite && (
+            <div style={{
+              marginBottom: 20, padding: '12px 14px', borderRadius: 8,
+              background: inviteUsable ? B.tealBg : B.redBg, color: inviteUsable ? B.darkSec : B.red, fontSize: 14, lineHeight: 1.5,
+            }}>
+              {inviteUsable ? (
+                <>You&apos;re joining <strong>{invite.company_name ?? 'a company'}</strong> as <strong>{INVITE_ROLE_LABELS[invite.role] ?? invite.role}</strong>. Create your own login below.</>
+              ) : invite.accepted ? 'This invitation was already used. Sign in instead.' : 'This invitation has expired. Ask for a new one.'}
+            </div>
+          )}
+
+          {/* Role selector (not shown when joining by invitation) */}
+          <div style={{ marginBottom: 24, display: inviteUsable ? 'none' : undefined }}>
             <p style={{ fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 10 }}>
               I am a…
             </p>
@@ -202,7 +250,7 @@ export default function RegisterPage() {
           </div>
 
           {/* Name + Company */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: inviteUsable ? '1fr' : '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={{ display: 'block', fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 6 }}>
                 Full name
@@ -215,7 +263,7 @@ export default function RegisterPage() {
               />
               {errors.name && <p style={{ fontFamily: BODY, fontSize: 12, color: B.red, marginTop: 4 }}>{errors.name.message}</p>}
             </div>
-            <div>
+            <div style={{ display: inviteUsable ? 'none' : undefined }}>
               <label style={{ display: 'block', fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 6 }}>
                 Company <span style={{ color: B.gray50, fontWeight: 400 }}>(optional)</span>
               </label>
@@ -301,7 +349,7 @@ export default function RegisterPage() {
             }}
             className="hover:opacity-90 transition-opacity"
           >
-            {isSubmitting ? 'Creating account…' : `Create ${selectedRole} account`}
+            {isSubmitting ? 'Creating account…' : inviteUsable ? 'Create my login' : `Create ${selectedRole} account`}
           </button>
         </form>
       </div>
@@ -309,7 +357,7 @@ export default function RegisterPage() {
       {/* Sign in link */}
       <p style={{ fontFamily: BODY, fontSize: 14, color: 'rgba(255,255,255,0.50)', marginTop: 24 }}>
         Already have an account?{' '}
-        <Link href="/login" style={{ color: B.teal, fontWeight: 500, textDecoration: 'none' }}
+        <Link href={inviteToken ? `/login?invite=${inviteToken}` : '/login'} style={{ color: B.teal, fontWeight: 500, textDecoration: 'none' }}
           className="hover:underline">
           Sign in
         </Link>

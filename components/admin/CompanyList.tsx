@@ -11,6 +11,7 @@ import { CompanyStatusBadge, BackgroundBadge, COMPANY_STATUSES } from '@/compone
 interface CompanyRow {
   id: number;
   name: string;
+  type: 'carrier' | 'shipper';
   members: number;
   owner: { id: number; name: string; email: string } | null;
   dot_number: string | null;
@@ -21,12 +22,14 @@ interface CompanyRow {
   created_at: string;
 }
 
-/** Table of carrier or shipper companies (organizations) with a status filter. */
-export function CompanyList({ type }: { type: 'carrier' | 'shipper' }) {
+type CompanyType = 'all' | 'carrier' | 'shipper';
+
+/** Table of carrier and shipper companies (organizations) with type and status filters. */
+export function CompanyList({ initialType = 'all' }: { initialType?: CompanyType }) {
   const router = useRouter();
+  const [type, setType] = useState<CompanyType>(initialType);
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
-  const isCarrier = type === 'carrier';
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['admin-companies', type, status],
@@ -41,9 +44,9 @@ export function CompanyList({ type }: { type: 'carrier' | 'shipper' }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="page-title">{isCarrier ? 'Carriers' : 'Shippers'}</h1>
+        <h1 className="page-title">Companies</h1>
         <p className="mt-1 text-sm text-[var(--color-text-faint)]">
-          {isCarrier ? 'Carrier companies.' : 'Shipper companies.'} A company needs a clear background check before it can be approved.
+          Carrier and shipper companies. A company needs a clear background check before it can be approved; a carrier also needs its owner approved in People.
         </p>
       </div>
 
@@ -54,6 +57,16 @@ export function CompanyList({ type }: { type: 'carrier' | 'shipper' }) {
           placeholder="Search company or owner…"
           className="w-64 bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)] transition-colors"
         />
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as CompanyType)}
+          aria-label="Filter by company type"
+          className="bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]"
+        >
+          <option value="all">Carriers and shippers</option>
+          <option value="carrier">Carriers</option>
+          <option value="shipper">Shippers</option>
+        </select>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -71,13 +84,13 @@ export function CompanyList({ type }: { type: 'carrier' | 'shipper' }) {
       {isLoading ? (
         <div className="skeleton h-64 rounded-xl" />
       ) : companies.length === 0 ? (
-        <EmptyState icon={isCarrier ? Truck : Building2} title="No companies match these filters" />
+        <EmptyState icon={type === 'carrier' ? Truck : Building2} title="No companies match these filters" />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--color-cream-dark)]">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-cream-dark)] bg-[var(--color-slate)]">
-                {['Company', 'Owner', isCarrier ? 'DOT / MC' : 'EIN', 'Members', 'Background', 'Status', 'Joined', ''].map((h) => (
+                {['Company', 'Type', 'Owner', 'DOT / MC / EIN', 'Members', 'Background', 'Status', 'Joined', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-sage-light)]">{h}</th>
                 ))}
               </tr>
@@ -90,12 +103,18 @@ export function CompanyList({ type }: { type: 'carrier' | 'shipper' }) {
                   className="cursor-pointer border-b border-[var(--color-cream-dark)] last:border-b-0 bg-[var(--color-white)] hover:bg-[var(--color-cream)] transition-colors"
                 >
                   <td className="px-4 py-3 font-medium text-[var(--color-text)]">{c.name}</td>
+                  <td className="px-4 py-3 text-[var(--color-text-muted)]">
+                    <span className="inline-flex items-center gap-1.5">
+                      {c.type === 'carrier' ? <Truck size={13} /> : <Building2 size={13} />}
+                      {c.type === 'carrier' ? 'Carrier' : 'Shipper'}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <p className="text-[var(--color-text)]">{c.owner?.name ?? '—'}</p>
                     <p className="text-xs text-[var(--color-text-muted)]">{c.owner?.email}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-[var(--color-text-muted)]">
-                    {isCarrier ? (
+                    {c.type === 'carrier' ? (
                       <>
                         <p>{c.dot_number ? `DOT ${c.dot_number}` : '—'}</p>
                         {c.mc_number && <p>{c.mc_number}</p>}

@@ -7,6 +7,8 @@ use App\Models\CarrierProfile;
 use App\Models\Organization;
 use App\Models\Shipment;
 use App\Models\ShipperProfile;
+use App\Models\User;
+use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,18 +24,19 @@ class AdminCompanyController extends Controller
     /** Background results that count as passed */
     public const BACKGROUND_PASSED = ['clear', 'approved', 'passed'];
 
-    // GET /api/v1/admin/companies?type=carrier|shipper&status=...&q=...
+    // GET /api/v1/admin/companies?type=all|carrier|shipper&status=...&q=...
     public function index(Request $request): JsonResponse
     {
         abort_unless($request->user()->isPlatformAdmin(), 403);
 
         $data = $request->validate([
-            'type'   => ['required', 'in:carrier,shipper'],
+            'type'   => ['nullable', 'in:all,carrier,shipper'],
             'status' => ['nullable', 'string'],
             'q'      => ['nullable', 'string', 'max:100'],
         ]);
 
-        $query = Organization::where('type', $data['type'])
+        $types = ($data['type'] ?? 'all') === 'all' ? ['carrier', 'shipper'] : [$data['type']];
+        $query = Organization::whereIn('type', $types)
             ->withCount('orgMembers')
             ->with('owner')
             ->latest();
@@ -46,11 +49,14 @@ class AdminCompanyController extends Controller
         }
 
         $orgs     = $query->limit(500)->get();
-        $profiles = $this->ownerProfiles($orgs, $data['type']);
+        $profiles = [
+            'carrier' => $this->ownerProfiles($orgs->where('type', 'carrier'), 'carrier'),
+            'shipper' => $this->ownerProfiles($orgs->where('type', 'shipper'), 'shipper'),
+        ];
 
         return response()->json([
             'data' => $orgs->map(function (Organization $o) use ($profiles) {
-                $p = $profiles->get($o->owner_id);
+                $p = $profiles[$o->type]->get($o->owner_id);
                 return [
                     'id'                      => $o->id,
                     'name'                    => $p?->company_name ?: $o->name,
@@ -74,7 +80,7 @@ class AdminCompanyController extends Controller
     {
         abort_unless($request->user()->isPlatformAdmin(), 403);
 
-        $org->load(['owner', 'orgMembers.user.carrierProfile']);
+        $org->load(['owner', 'orgMembers.user.personVerification']);
         $memberIds = $org->orgMembers->pluck('user_id');
         $isCarrier = $org->type === 'carrier';
 
@@ -118,19 +124,23 @@ class AdminCompanyController extends Controller
                         ->get(['id', 'type', 'name', 'url', 'expiry_date', 'verified_at', 'created_at'])
                     : ($profile ? DB::table('shipper_documents')->where('shipper_profile_id', $profile->id)->orderByDesc('created_at')
                         ->get(['id', 'type', 'name', 'url', 'verified_at', 'created_at']) : []),
-                'members' => $org->orgMembers->map(fn ($m) => [
-                    'user_id'          => $m->user_id,
-                    'name'             => $m->user?->name,
-                    'email'            => $m->user?->email,
-                    'role'             => $m->role,
-                    'membership'       => $m->status,
-                    'joined_at'        => $m->joined_at,
-                    'account_status'   => $m->user?->status ?? 'active',
-                    // Person-level approval (carrier members only, for now)
-                    'person_status'     => $isCarrier ? $m->user?->carrierProfile?->verification_status : null,
-                    'person_background' => $isCarrier ? $m->user?->carrierProfile?->background_check_status : null,
-                    'identity_verified' => $isCarrier ? (bool) $m->user?->carrierProfile?->identity_verified : null,
-                ])->values(),
+                'members' => $org->orgMembers->filter(fn ($m) => $m->user)->map(function ($m) use ($org) {
+                    $role      = $m->user_id === $org->owner_id ? 'owner' : $m->role;
+                    $checklist = PersonChecks::checklist($m->user, ['org' => $org, 'type' => $org->type, 'role' => $role]);
+                    return [
+                        'user_id'           => $m->user_id,
+                        'name'              => $m->user->name,
+                        'email'             => $m->user->email,
+                        'role'              => $role,
+                        'membership'        => $m->status,
+                        'joined_at'         => $m->joined_at,
+                        'account_status'    => $m->user->status ?? 'active',
+                        'approval_required' => $checklist['approval_required'],
+                        'person_status'     => $checklist['approval_required'] ? ($m->user->personVerification?->status ?? 'incomplete') : 'not_required',
+                        'required_met'      => $checklist['required_met'],
+                        'required_total'    => $checklist['required_total'],
+                    ];
+                })->values(),
                 'activity' => [
                     'shipments' => (clone $shipments)->count(),
                     'active'    => (clone $shipments)->whereIn('status', ['assigned', 'in_transit'])->count(),
@@ -166,6 +176,15 @@ class AdminCompanyController extends Controller
             return response()->json([
                 'error' => 'A clear company background check is required before this company can be approved.',
                 'code'  => 'background_not_clear',
+            ], 422);
+        }
+
+        // A carrier's owner must be approved as a person first
+        if ($data['action'] === 'approve' && $org->type === 'carrier'
+            && User::find($org->owner_id)?->personVerification?->status !== 'approved') {
+            return response()->json([
+                'error' => 'The owner must be approved as a person (People) before this carrier can be approved.',
+                'code'  => 'owner_not_approved',
             ], 422);
         }
 

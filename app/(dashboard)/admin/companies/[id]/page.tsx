@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { UserStatusBadge } from '@/components/admin/UserStatusBadge';
 import { Card, Fields, Table, display, type Row } from '@/components/admin/DetailParts';
 import { CompanyStatusBadge, BackgroundBadge, BACKGROUND_RESULTS, BACKGROUND_PASSED } from '@/components/admin/CompanyBadges';
+import { PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
 import { formatCurrency } from '@/lib/utils';
 
 interface CompanyDetail {
@@ -204,26 +205,23 @@ export default function AdminCompanyDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-cream-dark)]">
-                  {['Name', 'Email', 'Role', 'Account', ...(isCarrier ? ['Person approval', 'Background', 'ID'] : []), 'Joined'].map((h) => (
+                  {['Name', 'Email', 'Role', 'Account', 'Required checks', 'Person approval', 'Joined'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-text-faint)]">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {data.members.map((m) => (
-                  <tr key={m.user_id} onClick={() => router.push(`/admin/users/${m.user_id}`)}
+                  <tr key={m.user_id} onClick={() => router.push(`/admin/people/${m.user_id}`)}
                     className="cursor-pointer border-b border-[var(--color-cream-dark)] last:border-b-0 hover:bg-[var(--color-cream)]">
                     <td className="px-3 py-2 font-medium">{m.name}</td>
                     <td className="px-3 py-2">{display('email', m.email)}</td>
-                    <td className="px-3 py-2 capitalize">{m.role}</td>
+                    <td className="px-3 py-2">{ROLE_LABELS[m.role] ?? m.role}</td>
                     <td className="px-3 py-2"><UserStatusBadge status={m.account_status} /></td>
-                    {isCarrier && (
-                      <>
-                        <td className="px-3 py-2">{display('status', m.person_status)}</td>
-                        <td className="px-3 py-2"><BackgroundBadge status={(m.person_background as string) ?? null} /></td>
-                        <td className="px-3 py-2">{display('identity_verified', m.identity_verified)}</td>
-                      </>
-                    )}
+                    <td className="px-3 py-2 text-[var(--color-text-muted)]">
+                      {Number(m.required_total) > 0 ? `${m.required_met} of ${m.required_total}` : 'None'}
+                    </td>
+                    <td className="px-3 py-2"><PersonStatusBadge status={(m.person_status as string) ?? null} /></td>
                     <td className="px-3 py-2">{display('joined_at', m.joined_at)}</td>
                   </tr>
                 ))}
@@ -231,11 +229,10 @@ export default function AdminCompanyDetailPage() {
             </table>
           </div>
         )}
-        {isCarrier && (
-          <p className="mt-3 text-xs text-[var(--color-text-faint)]">
-            Approve people and record their background checks in <Link href="/admin/carrier-members" className="underline">Carrier Members</Link>.
-          </p>
-        )}
+        <p className="mt-3 text-xs text-[var(--color-text-faint)]">
+          Review people, their identity and credentials in <Link href={`/admin/people?type=${data.company.type}`} className="underline">People</Link>.
+          {isCarrier && ' The owner must be approved before the company can be.'}
+        </p>
       </Card>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

@@ -6,7 +6,9 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { toast } from 'sonner';
 import { login, getRolePath } from '@/lib/auth';
+import { orgApi } from '@/lib/api';
 import { getTenantConfigClient, type TenantConfig } from '@/lib/tenant';
 
 const B = {
@@ -51,6 +53,21 @@ export default function LoginPage() {
     setError('');
     try {
       const user = await login(data.email, data.password);
+
+      // Signing in from an invite link: join that company, then go to its verification checklist
+      const inviteToken = new URLSearchParams(window.location.search).get('invite');
+      if (inviteToken) {
+        try {
+          await orgApi.acceptInvitation(inviteToken);
+          const info = (await orgApi.showInvitation(inviteToken)).data.data as { company_type: string | null };
+          router.replace(`${getRolePath(user.role, info.company_type ?? undefined)}/verification`);
+          return;
+        } catch (e: unknown) {
+          const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+          toast.error(msg ?? 'Could not accept the invitation. Ask for a new one.');
+        }
+      }
+
       router.replace(getRolePath(user.role, user.org?.type));
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;
