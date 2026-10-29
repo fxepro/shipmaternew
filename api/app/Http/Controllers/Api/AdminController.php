@@ -28,34 +28,29 @@ class AdminController extends Controller
     {
         if ($err = $this->requireAdmin($request)) return $err;
 
-        $total      = Shipment::count();
-        $activeToday = Shipment::whereIn('status', ['in_transit', 'assigned'])
-            ->whereDate('updated_at', today())
-            ->count();
-        $disputed   = Shipment::where('status', 'disputed')->count();
-        $revenue    = Shipment::whereNotNull('platform_fee_cents')
+        $total    = Shipment::count();
+        $carriers = $this->countUsersOfType('carrier');
+        $shippers = $this->countUsersOfType('shipper');
+        $revenue  = Shipment::whereNotNull('platform_fee_cents')
             ->sum('platform_fee_cents') / 100;
-
-        // Daily shipment counts for the last 14 days
-        $daily = Shipment::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->where('created_at', '>=', now()->subDays(13))
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get()
-            ->map(fn ($row) => ['date' => $row->date, 'count' => (int) $row->count]);
 
         return response()->json([
             'data' => [
-                'total'        => $total,
-                'active_today' => $activeToday,
-                'disputed'     => $disputed,
-                'revenue'      => number_format((float) $revenue, 2, '.', ''),
-                'daily'        => $daily,
+                'total'          => $total,
+                'total_carriers' => $carriers,
+                'total_shippers' => $shippers,
+                'revenue'        => number_format((float) $revenue, 2, '.', ''),
             ],
         ]);
+    }
+
+    /** Users whose legacy role or current org type matches (same rule as User::isCarrier/isShipper). */
+    private function countUsersOfType(string $type): int
+    {
+        return User::where(fn ($q) => $q
+            ->where('role', $type)
+            ->orWhereHas('currentOrg', fn ($o) => $o->where('type', $type))
+        )->count();
     }
 
     // GET /api/v1/admin/shipments
