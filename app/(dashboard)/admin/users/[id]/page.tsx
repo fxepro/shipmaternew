@@ -203,11 +203,13 @@ export default function AdminUserDetailPage() {
           ) : (
             <div className="space-y-4">
               {data.organizations.map((o) => (
-                <Fields
-                  key={String(o.id)}
-                  data={o}
-                  fields={[['name', 'Name'], ['type', 'Type'], ['role', 'Member role'], ['status', 'Membership status'], ['joined_at', 'Joined']]}
-                />
+                <div key={String(o.id)} className="space-y-2">
+                  <Fields
+                    data={o}
+                    fields={[['name', 'Name'], ['type', 'Type'], ['role', 'Member role'], ['status', 'Membership status'], ['joined_at', 'Joined']]}
+                  />
+                  <Link href={`/admin/companies/${o.id}`} className="text-sm font-medium text-[var(--color-teal)]">View company →</Link>
+                </div>
               ))}
             </div>
           )}

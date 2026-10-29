@@ -225,6 +225,29 @@ class CarrierController extends Controller
     // ── POST /api/v1/admin/carriers/{id}/approve ─────────────────────────────
     // POST /api/v1/admin/carriers/{id}/reject
 
+    // POST /api/v1/admin/carriers/{id}/background   { result, notes? }
+    // Records the outcome of a person's background check run outside the platform.
+    public function recordBackground(Request $request, int $id): JsonResponse
+    {
+        abort_unless($request->user()->role === 'admin', 403);
+
+        $validated = $request->validate([
+            'result' => ['required', 'in:pending,clear,consider,failed'],
+            'notes'  => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $profile = User::where('role', 'carrier')->findOrFail($id)->carrierProfile;
+        abort_unless($profile, 404, 'Carrier profile not found.');
+
+        $profile->update(['background_check_status' => $validated['result']]);
+
+        if (!empty($validated['notes'])) {
+            $profile->update(['verification_notes' => $validated['notes']]);
+        }
+
+        return response()->json(['message' => 'Background check recorded.', 'status' => $profile->background_check_status]);
+    }
+
     public function reviewCarrier(Request $request, int $id): JsonResponse
     {
         abort_unless($request->user()->role === 'admin', 403);
@@ -246,6 +269,15 @@ class CarrierController extends Controller
             return response()->json([
                 'error' => 'Identity verification must be completed before this carrier can be approved.',
                 'code'  => 'identity_not_verified',
+            ], 422);
+        }
+
+        // So is a clear background check on the person
+        if ($validated['action'] === 'approve'
+            && !in_array($profile->background_check_status, AdminCompanyController::BACKGROUND_PASSED, true)) {
+            return response()->json([
+                'error' => 'A clear background check is required before this person can be approved.',
+                'code'  => 'background_not_clear',
             ], 422);
         }
 

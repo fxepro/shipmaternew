@@ -20,6 +20,9 @@ class Organization extends Model
         'stripe_mode', 'stripe_connect_id', 'commission_rate',
         // Compliance / tenant flags
         'fmcsa_broker_mc', 'is_platform_tenant',
+        // Company-level approval (admin)
+        'verification_status', 'verification_notes', 'verification_updated_at', 'verification_updated_by',
+        'background_check_status', 'background_check_reference', 'background_check_notes', 'background_checked_at',
     ];
 
     protected function casts(): array
@@ -28,6 +31,8 @@ class Organization extends Model
             'settings'          => 'json',
             'commission_rate'   => 'float',
             'is_platform_tenant'=> 'boolean',
+            'verification_updated_at' => 'datetime',
+            'background_checked_at'   => 'datetime',
         ];
     }
 

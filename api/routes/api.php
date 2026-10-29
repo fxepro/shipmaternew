@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\CertificationController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\EvidenceController;
 use App\Http\Controllers\Api\TenantController;
+use App\Http\Controllers\Api\AdminCompanyController;
 use App\Http\Controllers\Api\AdminOrgController;
 use App\Http\Controllers\Api\OrgController;
 use App\Http\Controllers\Api\PlatformLeadController;
@@ -202,6 +203,13 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     // Admin: carrier approval queue (pending_review only)
     Route::get('/admin/carriers/pending-review',    [CarrierController::class, 'pendingReview']);
     Route::post('/admin/carriers/{id}/review',      [CarrierController::class, 'reviewCarrier']);
+    Route::post('/admin/carriers/{id}/background',  [CarrierController::class, 'recordBackground']);
+
+    // Admin: carrier and shipper companies (organizations)
+    Route::get('/admin/companies',                  [AdminCompanyController::class, 'index']);
+    Route::get('/admin/companies/{org}',            [AdminCompanyController::class, 'show']);
+    Route::post('/admin/companies/{org}/review',    [AdminCompanyController::class, 'review']);
+    Route::post('/admin/companies/{org}/background',[AdminCompanyController::class, 'recordBackground']);
     Route::get('/admin/shippers/pending-review',    [ShipperVerificationController::class, 'pendingReview']);
     Route::post('/admin/shippers/{id}/review',      [ShipperVerificationController::class, 'reviewShipper']);
 

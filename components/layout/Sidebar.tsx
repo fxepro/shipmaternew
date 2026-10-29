@@ -134,9 +134,10 @@ const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Onboarding & Compliance',
       items: [
-        { label: 'Carrier Queue',    href: '/admin/carriers',  icon: Truck         },
-        { label: 'Shipper Queue',    href: '/admin/shippers',  icon: Building2     },
-        { label: 'NOAs / Factoring', href: '/admin/noas',      icon: FileSignature },
+        { label: 'Carriers',         href: '/admin/carriers',        icon: Truck         },
+        { label: 'Carrier Members',  href: '/admin/carrier-members', icon: Users         },
+        { label: 'Shippers',         href: '/admin/shippers',        icon: Building2     },
+        { label: 'NOAs / Factoring', href: '/admin/noas',            icon: FileSignature },
       ],
     },
     {
