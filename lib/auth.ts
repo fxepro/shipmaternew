@@ -9,26 +9,43 @@ export function resetClientSession(): void {
   queryClient.clear();
 }
 
+/** Thrown when the API can't be reached; the stored session is kept so the user stays signed in. */
+export class AuthUnavailableError extends Error {
+  constructor(public status?: number) {
+    super('Could not reach the server to confirm your session.');
+  }
+}
+
+const ME_RETRY_DELAYS_MS = [1000, 2500];
+
 export async function getUser(): Promise<User | null> {
   // Real token takes priority — if a Sanctum token is stored, use it.
   // Demo mode is only a fallback when there is no real session.
   const token = getStoredToken();
 
   if (token) {
-    try {
-      const res = await authApi.me();
-      const user = res.data.data as User;
-      // Stale demo cookie must not outlive a real login
-      clearDemoUser();
-      console.log('[auth] me() OK – user:', user?.email, 'role:', user?.role);
-      return user;
-    } catch (e: unknown) {
-      const status = (e as { response?: { status?: number } })?.response?.status;
-      if (status !== 401) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await authApi.me();
+        const user = res.data.data as User;
+        // Stale demo cookie must not outlive a real login
+        clearDemoUser();
+        console.log('[auth] me() OK – user:', user?.email, 'role:', user?.role);
+        return user;
+      } catch (e: unknown) {
+        const status = (e as { response?: { status?: number } })?.response?.status;
+
+        // Only an explicit 401 means the session is gone; sign out and fall through to demo mode
+        if (status === 401) {
+          clearStoredToken();
+          break;
+        }
+
+        // Network errors, timeouts and 5xx are temporary: keep the token and retry
         console.error('[auth] me() FAILED – status:', status, e);
+        if (attempt >= ME_RETRY_DELAYS_MS.length) throw new AuthUnavailableError(status);
+        await new Promise((r) => setTimeout(r, ME_RETRY_DELAYS_MS[attempt]));
       }
-      clearStoredToken();
-      // Fall through to demo mode check
     }
   }
 

@@ -14,13 +14,16 @@ function AdminGate({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState(false);
 
   useEffect(() => {
-    getUser().then((u) => {
-      if (!u || u.role !== 'admin') {
-        router.replace('/login');
-        return;
-      }
-      setOk(true);
-    });
+    getUser()
+      .then((u) => {
+        if (!u || u.role !== 'admin') {
+          router.replace('/login');
+          return;
+        }
+        setOk(true);
+      })
+      // Server unreachable: the dashboard layout shows the retry screen; stay signed in here
+      .catch(() => {});
   }, [router]);
 
   if (!ok) {
