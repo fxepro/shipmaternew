@@ -1,64 +1,70 @@
 'use client';
 
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Truck, CheckCircle, XCircle, ShieldCheck, ShieldQuestion,
-  BadgeCheck, AlertCircle, Clock, DollarSign,
-} from 'lucide-react';
+import { Truck, CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { toast } from 'sonner';
 
-interface PendingCarrier {
-  id:                     number;
-  name:                   string;
-  email:                  string;
-  verification_status:    string;
-  background_check_status:string | null;
-  dot_verified:           boolean;
-  mc_verified:            boolean;
-  identity_verified:      boolean;
-  identity_verified_at:   string | null;
-  identity_check_status:  string | null;
-  age_verified:           boolean;
-  onboarding_fee_paid:    boolean;
-  member_since:           string;
+interface QueueCarrier {
+  id:                      number;
+  name:                    string;
+  email:                   string;
+  company_name:            string | null;
+  dot_number:              string | null;
+  mc_number:               string | null;
+  verification_status:     string | null;
+  background_check_status: string | null;
+  dot_verified:            boolean;
+  mc_verified:             boolean;
+  identity_verified:       boolean;
+  identity_check_status:   string | null;
+  age_verified:            boolean;
+  onboarding_fee_paid:     boolean;
+  verification_notes:      string | null;
+  submitted_at:            string | null;
+  status_updated_at:       string | null;
+  created_at:              string;
 }
 
-// ── Badge helpers ─────────────────────────────────────────────────────────────
+// Carrier onboarding pipeline, in order
+const STATUSES: { value: string; label: string; cls: string }[] = [
+  { value: 'pending_review',     label: 'Pending review',          cls: 'bg-amber-50 text-amber-700' },
+  { value: 'incomplete',         label: 'Incomplete',              cls: 'badge-muted' },
+  { value: 'pending_payment',    label: 'Awaiting onboarding fee', cls: 'badge-muted' },
+  { value: 'pending_background', label: 'Background check',        cls: 'badge-info' },
+  { value: 'approved',           label: 'Approved',                cls: 'badge-success' },
+  { value: 'rejected',           label: 'Rejected',                cls: 'badge-danger' },
+];
 
-function CheckBadge({
-  ok, label, pending = false,
-}: { ok: boolean; label: string; pending?: boolean }) {
-  if (ok) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-        <CheckCircle size={9} /> {label}
-      </span>
-    );
-  }
-  if (pending) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-        <Clock size={9} /> {label}
-      </span>
-    );
-  }
+function StatusBadge({ status }: { status: string | null }) {
+  const s = STATUSES.find((x) => x.value === status);
+  return <span className={`badge ${s?.cls ?? 'badge-muted'}`}>{s?.label ?? status ?? '—'}</span>;
+}
+
+function Check({ ok, pending, label }: { ok: boolean; pending?: boolean; label: string }) {
+  const [cls, Icon] = ok
+    ? ['bg-emerald-50 border-emerald-200 text-emerald-700', CheckCircle]
+    : pending
+      ? ['bg-amber-50 border-amber-200 text-amber-700', Clock]
+      : ['bg-red-50 border-red-200 text-red-600', XCircle];
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-      <XCircle size={9} /> {label}
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${cls}`}>
+      <Icon size={9} /> {label}
     </span>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export default function AdminCarriersPage() {
+  const router = useRouter();
   const qc = useQueryClient();
+  const [status, setStatus] = useState('pending_review');
 
   const { data: res, isLoading } = useQuery({
-    queryKey: ['admin-carriers-pending'],
-    queryFn: () => api.get('/api/v1/admin/carriers/pending-review'),
+    queryKey: ['admin-carriers', status],
+    queryFn: () => api.get('/api/v1/admin/carriers/pending-review', { params: { status } }),
   });
 
   const review = useMutation({
@@ -66,152 +72,125 @@ export default function AdminCarriersPage() {
       api.post(`/api/v1/admin/carriers/${id}/review`, { action, notes }),
     onSuccess: (_, { action }) => {
       toast.success(`Carrier ${action === 'approve' ? 'approved' : 'rejected'}`);
-      qc.invalidateQueries({ queryKey: ['admin-carriers-pending'] });
+      qc.invalidateQueries({ queryKey: ['admin-carriers'] });
     },
-    onError: (err: any) => {
-      const msg = err?.response?.data?.error ?? 'Action failed';
-      toast.error(msg);
+    onError: (err: { response?: { data?: { error?: string; message?: string } } }) => {
+      toast.error(err?.response?.data?.error ?? err?.response?.data?.message ?? 'Action failed');
     },
   });
 
-  const carriers: PendingCarrier[] = res?.data?.data ?? [];
+  const carriers: QueueCarrier[] = res?.data?.data ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="page-title">
-            Carrier Approval Queue
-          </h1>
-          <p className="mt-1 text-sm text-[var(--color-text-faint)]">
-            Identity verification is required before a carrier can be approved.
-          </p>
-        </div>
-        <span className="rounded-full bg-[var(--color-teal-pale)] px-3 py-1 text-sm font-semibold text-[var(--color-teal)]">
-          {carriers.length} pending
+    <div className="space-y-5">
+      <div>
+        <h1 className="page-title">Carrier Queue</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-faint)]">
+          Identity verification is required before a carrier can be approved.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          aria-label="Filter by status"
+          className="bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]"
+        >
+          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          <option value="all">All carriers</option>
+        </select>
+        <span className="ml-auto text-sm text-[var(--color-text-muted)]">
+          {isLoading ? '' : `${carriers.length} carrier${carriers.length === 1 ? '' : 's'}`}
         </span>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-cream)] px-4 py-3 text-xs text-[var(--color-text-faint)]">
-        <span className="font-semibold text-[var(--color-text)]">Required to approve:</span>
-        <CheckBadge ok={true}  label="Identity" />
-        <span className="text-[var(--color-cream-dark)]">|</span>
-        <span className="font-semibold">Recommended:</span>
-        <CheckBadge ok={true}  label="DOT" />
-        <CheckBadge ok={true}  label="Fee Paid" />
-        <CheckBadge ok={true}  label="Background" />
-      </div>
-
       {isLoading ? (
-        <div className="space-y-3">
-          {[0,1,2].map(n => <div key={n} className="h-28 rounded-xl bg-[var(--color-cream)] animate-pulse" />)}
-        </div>
+        <div className="skeleton h-64 rounded-xl" />
       ) : carriers.length === 0 ? (
         <EmptyState
           icon={Truck}
-          title="No carriers pending review"
-          description="New carrier registrations waiting for approval will appear here."
+          title={status === 'pending_review' ? 'No carriers pending review' : 'No carriers with this status'}
+          description={status === 'pending_review' ? 'Carriers who finish onboarding and need approval will appear here.' : undefined}
         />
       ) : (
-        <div className="space-y-3">
-          {carriers.map((c) => {
-            const canApprove = c.identity_verified;
-            const bgPending  = c.background_check_status === 'pending' || c.background_check_status === 'in_progress';
-            const bgPassed   = c.background_check_status === 'clear' || c.background_check_status === 'passed';
-
-            return (
-              <div
-                key={c.id}
-                className="rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
-              >
-                <div className="flex items-start justify-between gap-4">
-
-                  {/* Left: info */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-[var(--color-text)]">{c.name}</p>
-                      <span className="text-xs text-[var(--color-text-faint)]">{c.member_since}</span>
-                    </div>
-                    <p className="text-sm text-[var(--color-text-muted)]">{c.email}</p>
-
-                    {/* Verification badges */}
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-
-                      {/* Identity — required */}
-                      <CheckBadge
-                        ok={c.identity_verified}
-                        pending={c.identity_check_status === 'pending'}
-                        label={c.identity_verified
-                          ? `ID Verified${c.identity_verified_at ? ' ' + new Date(c.identity_verified_at).toLocaleDateString() : ''}`
-                          : c.identity_check_status === 'pending' ? 'ID Pending'
-                          : 'ID Not Verified'}
-                      />
-
-                      {/* Age */}
-                      <CheckBadge ok={c.age_verified} label="18+" />
-
-                      {/* DOT */}
-                      <CheckBadge ok={c.dot_verified} label="DOT" />
-
-                      {/* MC */}
-                      {c.mc_verified && <CheckBadge ok={true} label="MC" />}
-
-                      {/* Background */}
-                      <CheckBadge
-                        ok={bgPassed}
-                        pending={bgPending}
-                        label={bgPassed ? 'Background Clear'
-                          : bgPending    ? 'Background Pending'
-                          : 'No Background Check'}
-                      />
-
-                      {/* Onboarding fee */}
-                      <CheckBadge ok={c.onboarding_fee_paid} label="Fee Paid" />
-                    </div>
-
-                    {/* Identity required warning */}
-                    {!c.identity_verified && (
-                      <div className="mt-2 flex items-center gap-1.5">
-                        <AlertCircle size={12} className="text-red-500 shrink-0" />
-                        <p className="text-xs text-red-600">
-                          Cannot approve — carrier must complete identity verification first.
-                        </p>
+        <div className="overflow-x-auto rounded-xl border border-[var(--color-cream-dark)]">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-cream-dark)] bg-[var(--color-slate)]">
+                {['Carrier', 'Company', 'DOT / MC', 'Checks', 'Status', 'Submitted', ''].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-sage-light)]">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {carriers.map((c) => {
+                const bgPending = c.background_check_status === 'pending' || c.background_check_status === 'in_progress' || c.background_check_status === 'invitation_sent';
+                const bgPassed  = c.background_check_status === 'clear' || c.background_check_status === 'passed' || c.background_check_status === 'approved';
+                const reviewable = c.verification_status === 'pending_review';
+                const submitted = c.submitted_at ?? c.created_at;
+                return (
+                  <tr
+                    key={c.id}
+                    onClick={() => router.push(`/admin/users/${c.id}`)}
+                    className="cursor-pointer border-b border-[var(--color-cream-dark)] last:border-b-0 bg-[var(--color-white)] hover:bg-[var(--color-cream)] transition-colors align-top"
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-[var(--color-text)]">{c.name}</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">{c.email}</p>
+                    </td>
+                    <td className="px-4 py-3 text-[var(--color-text-muted)]">{c.company_name ?? '—'}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--color-text-muted)]">
+                      <p>{c.dot_number ? `DOT ${c.dot_number}` : '—'}</p>
+                      {c.mc_number && <p>{c.mc_number}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex max-w-[220px] flex-wrap gap-1">
+                        <Check ok={c.identity_verified} pending={c.identity_check_status === 'pending'} label="ID" />
+                        <Check ok={c.age_verified} label="18+" />
+                        <Check ok={c.dot_verified} label="DOT" />
+                        {c.mc_verified && <Check ok label="MC" />}
+                        <Check ok={bgPassed} pending={bgPending} label="Background" />
+                        <Check ok={c.onboarding_fee_paid} label="Fee" />
                       </div>
-                    )}
-                  </div>
-
-                  {/* Right: actions */}
-                  <div className="flex shrink-0 flex-col gap-2 items-end">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => review.mutate({ id: c.id, action: 'approve' })}
-                        disabled={review.isPending || !canApprove}
-                        title={!canApprove ? 'Identity verification required before approval' : 'Approve carrier'}
-                        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                          canApprove
-                            ? 'bg-[var(--color-teal)] text-white hover:bg-[var(--color-teal-dark)]'
-                            : 'cursor-not-allowed bg-[var(--color-cream-dark)] text-[var(--color-text-faint)]'
-                        } disabled:opacity-60`}
-                      >
-                        {canApprove
-                          ? <><ShieldCheck size={13} /> Approve</>
-                          : <><ShieldQuestion size={13} /> Approve</>
-                        }
-                      </button>
-                      <button
-                        onClick={() => review.mutate({ id: c.id, action: 'reject' })}
-                        disabled={review.isPending}
-                        className="flex items-center gap-1.5 rounded-lg border border-[var(--color-danger)] px-3 py-1.5 text-xs font-semibold text-[var(--color-danger)] transition-colors hover:bg-red-50 disabled:opacity-50"
-                      >
-                        <XCircle size={13} /> Reject
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={c.verification_status} />
+                      {c.verification_notes && <p className="mt-1 max-w-[180px] text-xs text-[var(--color-text-faint)]">{c.verification_notes}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-[var(--color-text-muted)]">{new Date(submitted).toLocaleDateString()}</td>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {reviewable ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => review.mutate({ id: c.id, action: 'approve' })}
+                            disabled={review.isPending || !c.identity_verified}
+                            title={c.identity_verified ? 'Approve carrier' : 'Identity verification required before approval'}
+                            className="flex items-center gap-1 rounded-lg bg-[var(--color-teal)] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:cursor-not-allowed disabled:bg-[var(--color-cream-dark)] disabled:text-[var(--color-text-faint)]"
+                          >
+                            <ShieldCheck size={12} /> Approve
+                          </button>
+                          <button
+                            onClick={() => {
+                              const notes = prompt(`Reason for rejecting ${c.name}? (optional, shown on the record)`);
+                              if (notes === null) return;
+                              review.mutate({ id: c.id, action: 'reject', notes: notes || undefined });
+                            }}
+                            disabled={review.isPending}
+                            className="flex items-center gap-1 rounded-lg border border-[var(--color-danger)] px-2.5 py-1.5 text-xs font-semibold text-[var(--color-danger)] hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <XCircle size={12} /> Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="block text-right text-sm font-medium text-[var(--color-teal)]">View</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

@@ -179,9 +179,13 @@ class CarrierController extends Controller
     {
         abort_unless($request->user()->role === 'admin', 403);
 
+        // ?status= filters by verification status; defaults to the review queue, 'all' lists every carrier
+        $status = $request->input('status', 'pending_review');
+
         $carriers = User::where('role', 'carrier')
-            ->whereHas('carrierProfile', fn ($q) => $q->where('verification_status', 'pending_review'))
+            ->whereHas('carrierProfile', fn ($q) => $status === 'all' ? $q : $q->where('verification_status', $status))
             ->with('carrierProfile.verifications')
+            ->latest()
             ->get()
             ->map(function ($u) {
                 $profile = $u->carrierProfile;
@@ -203,6 +207,15 @@ class CarrierController extends Controller
                     'identity_check_status'   => $idCheck?->status,
                     'onboarding_fee_paid'     => (bool) ($profile?->onboarding_fee_paid ?? false),
                     'member_since'            => $u->created_at->format('M Y'),
+                    'company_name'            => $profile?->company_name,
+                    'dot_number'              => $profile?->dot_number,
+                    'mc_number'               => $profile?->mc_number,
+                    'carrier_type'            => $profile?->carrier_type,
+                    'account_status'          => $u->status ?? 'active',
+                    'verification_notes'      => $profile?->verification_notes,
+                    'submitted_at'            => $profile?->submitted_for_verification_at,
+                    'status_updated_at'       => $profile?->verification_status_updated_at,
+                    'created_at'              => $u->created_at?->toISOString(),
                 ];
             });
 
