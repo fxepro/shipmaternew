@@ -31,7 +31,7 @@ export default function AdminShipmentsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="page-title">All Shipments</h1>
+      <h1 className="page-title">Shipments</h1>
 
       <div className="flex flex-wrap items-center gap-3">
         <input

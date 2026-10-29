@@ -78,6 +78,77 @@ class AdminController extends Controller
         ]);
     }
 
+    // GET /api/v1/admin/shipments/{shipment}
+    // Full record for the admin detail page: every shipment column plus related records.
+    public function shipment(Request $request, Shipment $shipment): JsonResponse
+    {
+        if ($err = $this->requireAdmin($request)) return $err;
+
+        $shipment->load([
+            'shipper.shipperProfile', 'carrier.carrierProfile', 'receiver',
+            'contract', 'serviceType', 'bids.carrier',
+        ]);
+
+        $pings = $shipment->gpsPings()->orderByDesc('pinged_at')->get();
+
+        return response()->json([
+            'data' => [
+                'shipment'     => $shipment->attributesToArray(),
+                'organization' => $shipment->org_id ? Organization::find($shipment->org_id, ['id', 'name', 'type', 'stripe_mode', 'commission_rate']) : null,
+                'service_type' => $shipment->serviceType?->only(['id', 'key', 'name', 'category']),
+                'shipper'      => $this->partySummary($shipment->shipper),
+                'carrier'      => $this->partySummary($shipment->carrier),
+                'receiver'     => $this->partySummary($shipment->receiver),
+                'contract'     => $shipment->contract?->only([
+                    'id', 'title', 'status', 'rate_type', 'rate', 'fuel_surcharge', 'detention_rate',
+                    'payment_terms', 'equipment_type', 'valid_from', 'valid_to',
+                ]),
+                'bids' => $shipment->bids->sortByDesc('created_at')->values()->map(fn ($b) => [
+                    'id'                      => $b->id,
+                    'carrier'                 => $b->carrier?->name,
+                    'carrier_id'              => $b->carrier_id,
+                    'amount'                  => (float) $b->amount,
+                    'status'                  => $b->status,
+                    'estimated_pickup_date'   => $b->estimated_pickup_date,
+                    'estimated_delivery_date' => $b->estimated_delivery_date,
+                    'note'                    => $b->note,
+                    'created_at'              => $b->created_at?->toISOString(),
+                ]),
+                'transactions' => DB::table('transactions')->where('shipment_id', $shipment->id)
+                    ->orderByDesc('created_at')
+                    ->get(['id', 'invoice_no', 'description', 'category', 'amount', 'status', 'due_date', 'paid_at', 'created_at']),
+                'gps' => [
+                    'count'  => $pings->count(),
+                    'latest' => $pings->first()?->only(['lat', 'lng', 'speed', 'eta', 'pinged_at']),
+                    'pings'  => $pings->take(50)->map->only(['lat', 'lng', 'speed', 'eta', 'pinged_at'])->values(),
+                ],
+            ],
+        ]);
+    }
+
+    /** Contact and status summary for a party on a shipment (no sensitive identity or bank fields). */
+    private function partySummary(?User $user): ?array
+    {
+        if (!$user) return null;
+
+        $carrier = $user->relationLoaded('carrierProfile') ? $user->carrierProfile : null;
+        $shipper = $user->relationLoaded('shipperProfile') ? $user->shipperProfile : null;
+
+        return array_filter([
+            'id'      => $user->id,
+            'name'    => $user->name,
+            'email'   => $user->email,
+            'role'    => $user->role,
+            'company' => $carrier?->company_name ?? $shipper?->company_name,
+            'phone'   => $carrier?->phone ?? $shipper?->business_phone ?? $shipper?->phone,
+            'verification_status' => $carrier?->verification_status ?? $shipper?->verification_status,
+            'dot_number'   => $carrier?->dot_number,
+            'mc_number'    => $carrier?->mc_number,
+            'rating'       => $carrier?->rating ?? $shipper?->rating,
+            'stripe_account_status' => $carrier?->stripe_account_status,
+        ], fn ($v) => $v !== null);
+    }
+
     // GET /api/v1/admin/users
     public function users(Request $request): JsonResponse
     {

@@ -193,6 +193,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin: platform metrics + management
     Route::get('/admin/metrics',   [AdminController::class, 'metrics']);
     Route::get('/admin/shipments', [AdminController::class, 'shipments']);
+    Route::get('/admin/shipments/{shipment}', [AdminController::class, 'shipment']);
     Route::get('/admin/users',     [AdminController::class, 'users']);
     Route::get('/admin/disputes',  [AdminController::class, 'disputes']);
 

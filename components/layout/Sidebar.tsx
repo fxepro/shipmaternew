@@ -126,7 +126,7 @@ const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Operations',
       items: [
-        { label: 'Shipments & Jobs', href: '/admin/shipments', icon: Package       },
+        { label: 'Shipments',        href: '/admin/shipments', icon: Package       },
         { label: 'Disputes',         href: '/admin/disputes',  icon: AlertTriangle },
         { label: 'Users',            href: '/admin/users',     icon: Users         },
       ],
