@@ -22,9 +22,10 @@ const ROLE_HELP: Record<string, string> = {
   viewer:     'Viewer — read-only',
 };
 
-const INVITE_ROLES: Record<'carrier' | 'shipper', string[]> = {
+const INVITE_ROLES: Record<'carrier' | 'shipper' | 'factor', string[]> = {
   carrier: ['driver', 'dispatcher', 'staff', 'viewer'],
   shipper: ['staff', 'viewer'],
+  factor:  ['staff', 'viewer'],
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -45,7 +46,7 @@ async function copyLink(url: string) {
 }
 
 /** Team members and invitations for the current company. Each person joins with their own login. */
-export function TeamManager({ type }: { type: 'carrier' | 'shipper' }) {
+export function TeamManager({ type }: { type: 'carrier' | 'shipper' | 'factor' }) {
   const qc = useQueryClient();
   const roles = INVITE_ROLES[type];
   const [inviteEmail, setInviteEmail] = useState('');

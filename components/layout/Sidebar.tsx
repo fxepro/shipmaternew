@@ -60,7 +60,10 @@ const NAV: Record<UserRole, NavSection[]> = {
     },
     {
       section: 'Financials',
-      items: [{ label: 'Payments', href: '/shipper/payments', icon: DollarSign }],
+      items: [
+        { label: 'Payments',  href: '/shipper/payments',  icon: DollarSign    },
+        { label: 'Factoring', href: '/shipper/factoring', icon: FileSignature },
+      ],
     },
     {
       section: 'Reports',
@@ -93,7 +96,10 @@ const NAV: Record<UserRole, NavSection[]> = {
     },
     {
       section: 'Financials',
-      items: [{ label: 'Earnings', href: '/carrier/earnings', icon: DollarSign }],
+      items: [
+        { label: 'Earnings',  href: '/carrier/earnings',  icon: DollarSign    },
+        { label: 'Factoring', href: '/carrier/factoring', icon: FileSignature },
+      ],
     },
     {
       section: 'Reports',
@@ -110,6 +116,23 @@ const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Resources',
       items: [{ label: 'Resources', href: '/carrier/resources', icon: BookOpen }],
+    },
+  ],
+  factor: [
+    {
+      section: 'Overview',
+      items: [
+        { label: 'Dashboard', href: '/factor',           icon: LayoutDashboard },
+        { label: 'Factoring', href: '/factor/factoring', icon: FileSignature   },
+        { label: 'Payments',  href: '/factor/payments',  icon: DollarSign      },
+      ],
+    },
+    {
+      section: 'Account',
+      items: [
+        { label: 'Profile',      href: '/factor/profile',      icon: User        },
+        { label: 'Verification', href: '/factor/verification', icon: ShieldCheck },
+      ],
     },
   ],
   receiver: [

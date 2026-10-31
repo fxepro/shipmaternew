@@ -5,9 +5,10 @@ export const ROLE_LABELS: Record<string, string> = {
   owner: 'Owner', staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer',
 };
 
-export const ROLES_BY_TYPE: Record<'carrier' | 'shipper', string[]> = {
+export const ROLES_BY_TYPE: Record<'carrier' | 'shipper' | 'factor', string[]> = {
   carrier: ['owner', 'staff', 'dispatcher', 'driver', 'viewer'],
   shipper: ['owner', 'staff', 'viewer'],
+  factor:  ['owner', 'staff', 'viewer'],
 };
 
 /** Person approval statuses, in pipeline order */

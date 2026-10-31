@@ -59,9 +59,9 @@ class PaymentService
         $customerId  = $this->getOrCreateCustomer($shipper);
         $amountCents = (int) round((float) $shipment->agreed_cost * 100);
 
-        // Resolve the effective commission rate from the org, falling back to platform default.
+        // Shipmater's fee, paid by the carrier (docs/fees-and-billing.md). Early payment gets the lower rate.
         $org      = $shipper->currentOrg;
-        $feeRate  = $org ? $org->commissionRate() : ($this->feePercent / 100);
+        $feeRate  = \App\Services\Fees::rateFor((bool) ($shipment->early_payment ?? false));
         $feeCents = (int) round($amountCents * $feeRate);
 
         $baseParams = [
@@ -129,7 +129,7 @@ class PaymentService
             $intent = $this->stripe->paymentIntents->capture($shipment->payment_intent_id);
 
             $amountCents = $intent->amount_received;
-            $feeCents    = $shipment->platform_fee_cents ?: (int) round($amountCents * $this->feePercent / 100);
+            $feeCents    = $shipment->platform_fee_cents ?: (int) round($amountCents * \App\Services\Fees::standardRate());
             $netCents    = $amountCents - $feeCents;
 
             $shipment->update(['payment_status' => 'captured']);

@@ -51,6 +51,27 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Admin User', 'password' => 'password', 'role' => 'admin']
         );
 
+        // Factoring company: a company of its own, no Shipmater approval (docs/noa-factoring.md)
+        $factor = User::updateOrCreate(
+            ['email' => 'dana@demo.com'],
+            ['name' => 'Dana Brooks', 'password' => 'password', 'role' => 'factor']
+        );
+        $factorOrg = \App\Models\Organization::firstOrCreate(
+            ['owner_id' => $factor->id, 'type' => 'factor'],
+            [
+                'name' => 'Summit Freight Capital LLC', 'slug' => 'summit-freight-capital', 'status' => 'active',
+                'verification_status' => 'not_required',
+                'phone' => '+1 (555) 010-7788', 'email' => 'noa@summitfreightcapital.test',
+                'street' => '400 Commerce St', 'city' => 'Dallas', 'state' => 'TX', 'zip' => '75202', 'country' => 'US',
+                'tax_id' => '84-1234567',
+            ]
+        );
+        \App\Models\OrgMember::firstOrCreate(
+            ['org_id' => $factorOrg->id, 'user_id' => $factor->id],
+            ['role' => 'owner', 'status' => 'active', 'joined_at' => now()]
+        );
+        $factor->update(['current_org_id' => $factorOrg->id]);
+
         // ── Carrier profiles ──────────────────────────────────────────────
 
         CarrierProfile::firstOrCreate(
@@ -677,6 +698,7 @@ class DatabaseSeeder extends Seeder
                 ['Carrier 2',  'casey@demo.com',  'password'],
                 ['Receiver',   'sam@demo.com',    'password'],
                 ['Admin',      'admin@demo.com',  'password'],
+                ['Factor',     'dana@demo.com',   'password'],
             ]
         );
         $this->command->info('');
@@ -759,5 +781,7 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call(LocationSeeder::class);
+        $this->call(FactoringDemoSeeder::class);
+        $this->call(PaymentsDemoSeeder::class);
     }
 }

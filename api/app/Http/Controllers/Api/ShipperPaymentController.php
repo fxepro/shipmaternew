@@ -20,39 +20,8 @@ class ShipperPaymentController extends Controller
 
     public function createIntent(Request $request, Bid $bid): JsonResponse
     {
-        $user     = $request->user();
-        $shipment = $bid->shipment;
-
-        abort_unless($user->isShipper(), 403);
-        abort_unless($shipment->shipper_id === $user->id, 403);
-        abort_unless($bid->status === 'pending', 422, 'Bid is no longer available.');
-        abort_unless($shipment->status === 'bidding' || $shipment->status === 'pending', 422, 'Shipment is not open for payment.');
-
-        // If a PaymentIntent already exists for this shipment (e.g. shipper re-opened the modal),
-        // return the existing one so we don't create duplicates.
-        if ($shipment->payment_intent_id && $shipment->payment_status === 'authorized') {
-            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-            try {
-                $intent = $stripe->paymentIntents->retrieve($shipment->payment_intent_id);
-                if (in_array($intent->status, ['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture'])) {
-                    return response()->json([
-                        'client_secret'     => $intent->client_secret,
-                        'payment_intent_id' => $intent->id,
-                        'amount_cents'      => $intent->amount,
-                        'fee_cents'         => $shipment->platform_fee_cents,
-                    ]);
-                }
-            } catch (\Exception) {
-                // Fall through to create a new one
-            }
-        }
-
-        // Temporarily set agreed_cost from the bid amount so PaymentService can read it
-        $shipment->agreed_cost = $bid->amount;
-
-        $result = $this->payments->createFreightIntent($shipment, $user);
-
-        return response()->json($result);
+        // Replaced by scheduled load payments (App\Services\Payments\LoadPayments): held the day before pickup, charged at delivery
+        return response()->json(['error' => 'Payments are now taken automatically: the card on file is held the day before pickup and charged at delivery.', 'code' => 'gone'], 410);
     }
 
     // ── PUT /api/v1/bids/{bid}/accept ─────────────────────────────────────────
@@ -68,21 +37,11 @@ class ShipperPaymentController extends Controller
         abort_unless($shipment->shipper_id === $user->id, 403);
         abort_unless($bid->status === 'pending', 422, 'This bid can no longer be accepted.');
 
-        $data = $request->validate([
-            'payment_intent_id' => ['required', 'string'],
-        ]);
-
-        // Verify the PaymentIntent is authorized (requires_capture) before assigning
-        $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-        try {
-            $intent = $stripe->paymentIntents->retrieve($data['payment_intent_id']);
-            abort_unless(
-                in_array($intent->status, ['requires_capture', 'succeeded']),
-                422,
-                'Payment has not been authorized yet. Please complete payment first.'
-            );
-        } catch (\Exception $e) {
-            abort(422, 'Could not verify payment: ' . $e->getMessage());
+        // A card or bank account must be on file; it is held the day before pickup (docs/fees-and-billing.md)
+        $payments = app(\App\Services\Payments\LoadPayments::class);
+        $org = \App\Services\Payments\LoadPayments::orgOf($user->id, 'shipper');
+        if (!$payments->defaultMethod($org?->id)) {
+            return response()->json(['error' => 'Add a card or bank account in Payments before accepting a bid.', 'code' => 'payment_method_required'], 422);
         }
 
         // Accept the bid and assign the carrier
@@ -92,12 +51,12 @@ class ShipperPaymentController extends Controller
             'carrier_id'         => $bid->carrier_id,
             'agreed_cost'        => $bid->amount,
             'status'             => 'assigned',
-            'payment_intent_id'  => $data['payment_intent_id'],
-            'payment_status'     => 'authorized',
+            'payment_status'     => 'scheduled',
         ]);
+        $payments->schedule('shipment', $shipment->fresh());
 
         return response()->json([
-            'message'    => 'Bid accepted and payment authorized.',
+            'message'    => 'Bid accepted. Your card is held the day before pickup and charged at delivery.',
             'shipment_id' => $shipment->id,
         ]);
     }
@@ -108,14 +67,7 @@ class ShipperPaymentController extends Controller
 
     public function payShipment(Request $request, Shipment $shipment): JsonResponse
     {
-        $user = $request->user();
-        abort_unless($user->isShipper(), 403);
-        abort_unless($shipment->shipper_id === $user->id, 403);
-        abort_unless($shipment->agreed_cost > 0, 422, 'No agreed cost on this shipment.');
-        abort_unless(in_array($shipment->payment_status, ['unpaid', null]), 422, 'Payment already exists.');
-
-        $result = $this->payments->createFreightIntent($shipment, $user);
-
-        return response()->json($result);
+        // Replaced by scheduled load payments (App\Services\Payments\LoadPayments): held the day before pickup, charged at delivery
+        return response()->json(['error' => 'Payments are now taken automatically: the card on file is held the day before pickup and charged at delivery.', 'code' => 'gone'], 410);
     }
 }

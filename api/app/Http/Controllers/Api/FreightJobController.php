@@ -319,6 +319,8 @@ class FreightJobController extends Controller
             'status'    => 'posted',
             'posted_at' => now(),
         ]);
+        // Contracted jobs already have their carrier: schedule the payment now
+        if ($job->carrier_id) app(\App\Services\Payments\LoadPayments::class)->schedule('freight_job', $job);
 
         return response()->json(['data' => $job]);
     }
@@ -351,6 +353,11 @@ class FreightJobController extends Controller
             $allDone = $job->stops()->where('status', '!=', 'completed')->doesntExist();
             if ($allDone) {
                 $job->update(['status' => 'completed']);
+                // Delivered: charge the shipper's hold (or charge now if there is none)
+                $payments = app(\App\Services\Payments\LoadPayments::class);
+                $payment  = \App\Models\LoadPayment::where('load_type', 'freight_job')->where('load_id', $job->id)->first()
+                    ?? $payments->schedule('freight_job', $job);
+                if ($payment) $payments->charge($payment);
             } elseif ($job->status === 'posted') {
                 $job->update(['status' => 'in_progress']);
             }

@@ -93,10 +93,12 @@ export function getRolePath(role: string, orgType?: string): string {
   // Org type takes priority over legacy role
   if (orgType === 'carrier') return '/carrier';
   if (orgType === 'shipper') return '/shipper';
+  if (orgType === 'factor')  return '/factor';
 
   // Fallback to legacy role
   switch (role) {
     case 'carrier':  return '/carrier';
+    case 'factor':   return '/factor';
     case 'receiver': return '/receiver';
     case 'admin':    return '/admin';
     default:         return '/shipper';

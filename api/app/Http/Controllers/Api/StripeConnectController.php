@@ -145,9 +145,32 @@ class StripeConnectController extends Controller
     public function identitySession(Request $request): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isCarrier(), 403);
+        abort_unless($user->isCarrier() || $user->isFactor(), 403);
 
         $stripe  = $this->stripe();
+        $options = [
+            'document' => [
+                'allowed_types'          => ['driving_license', 'passport'],
+                'require_id_number'      => true,
+                'require_live_capture'   => true,
+                'require_matching_selfie'=> true,
+            ],
+        ];
+
+        // Factor owners have no carrier profile: the result goes straight to their person record
+        if (!$user->isCarrier()) {
+            $session = $stripe->identity->verificationSessions->create([
+                'type'       => 'document',
+                'options'    => $options,
+                'return_url' => config('app.frontend_url') . '/factor/verification?identity=success',
+                'metadata'   => ['user_id' => (string) $user->id],
+            ]);
+            \App\Models\PersonIdentity::firstOrCreate(['user_id' => $user->id])
+                ->update(['provider_reference' => $session->id, 'verification_method' => 'stripe_identity']);
+
+            return response()->json(['url' => $session->url]);
+        }
+
         $profile = $user->carrierProfile()->firstOrCreate(['user_id' => $user->id]);
 
         $session = $stripe->identity->verificationSessions->create([
@@ -188,17 +211,47 @@ class StripeConnectController extends Controller
         $payload   = $request->getContent();
         $sigHeader = $request->header('Stripe-Signature');
 
-        try {
-            $event = \Stripe\Webhook::constructEvent(
-                $payload,
-                $sigHeader,
-                config('services.stripe.webhook_secret')
-            );
-        } catch (\Exception $e) {
-            return response()->json(['error' => 'Invalid signature'], 400);
+        // Platform events and connected-account events (load payments charged on carrier/factor accounts)
+        // arrive on two Stripe webhook endpoints with their own secrets
+        $event = null;
+        // STRIPE_CONNECT_WEBHOOK_SECRET may list several secrets, comma-separated (e.g. live and sandbox destinations)
+        $secrets = array_merge([config('services.stripe.webhook_secret')], explode(',', (string) config('services.stripe.connect_webhook_secret')));
+        foreach (array_filter(array_map('trim', $secrets)) as $secret) {
+            try {
+                $event = \Stripe\Webhook::constructEvent($payload, $sigHeader, $secret);
+                break;
+            } catch (\Exception) {
+                // Try the next secret
+            }
         }
+        if (!$event) return response()->json(['error' => 'Invalid signature'], 400);
+
+        // Load payments and Shipmater's fee on factored loads (docs/fees-and-billing.md)
+        $payments = app(\App\Services\Payments\LoadPayments::class);
+        if (str_starts_with($event->type, 'payment_intent.')) $payments->handleIntentEvent($event->type, $event->data->object);
+        if ($event->type === 'charge.refunded') $payments->handleRefund($event->data->object);
 
         match ($event->type) {
+
+            // ── Shipper subscription payments → Shipmater revenue ───────────
+            'invoice.paid' => (function () use ($event) {
+                $invoice = $event->data->object;
+                $meta    = $invoice->subscription_details->metadata ?? $invoice->parent->subscription_details->metadata ?? null;
+                if (($meta['type'] ?? '') !== 'shipper_subscription' || (int) $invoice->amount_paid <= 0) return;
+                \App\Models\LedgerEntry::record('subscription', (int) $invoice->amount_paid, [
+                    'org_id' => (int) ($meta['org_id'] ?? 0) ?: null, 'source_type' => 'invoice', 'reference' => $invoice->id,
+                    'description' => 'Shipper subscription', 'occurred_at' => now()->setTimestamp($invoice->status_transitions->paid_at ?? time()),
+                ]);
+            })(),
+
+            // ── Shipper subscription (docs/fees-and-billing.md) ────────────
+            'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted' => (function () use ($event) {
+                $stripeSub = $event->data->object;
+                if (($stripeSub->metadata['type'] ?? '') !== 'shipper_subscription') return;
+                $sub = \App\Models\ShipperSubscription::where('stripe_subscription_id', $stripeSub->id)
+                    ->orWhere('org_id', (int) ($stripeSub->metadata['org_id'] ?? 0))->first();
+                if ($sub) SubscriptionController::syncFromStripe($sub, $stripeSub);
+            })(),
 
             // ── Onboarding fee paid → trigger Checkr ───────────────────────
             'payment_intent.succeeded' => (function () use ($event) {
@@ -209,6 +262,12 @@ class StripeConnectController extends Controller
                 if (!$profileId) return;
 
                 $profile = CarrierProfile::find($profileId);
+                if ($profile) {
+                    \App\Models\LedgerEntry::record('onboarding', (int) $intent->amount_received, [
+                        'org_id' => \App\Services\Payments\LoadPayments::orgOf($profile->user_id, 'carrier')?->id,
+                        'source_type' => 'carrier_profile', 'source_id' => $profile->id, 'reference' => $intent->id, 'description' => 'Carrier onboarding fee',
+                    ]);
+                }
                 if (!$profile || $profile->onboarding_fee_paid) return;
 
                 $profile->update([
@@ -273,7 +332,11 @@ class StripeConnectController extends Controller
             'identity.verification_session.verified' => (function () use ($event) {
                 $session   = $event->data->object;
                 $profileId = $session->metadata['carrier_profile_id'] ?? null;
-                if (!$profileId) return;
+                if (!$profileId) {
+                    // Not a carrier (e.g. a factor owner): just the person record
+                    if ($userId = $session->metadata['user_id'] ?? null) $this->saveVerifiedIdentity($session->id, (int) $userId);
+                    return;
+                }
 
                 $profile = CarrierProfile::find($profileId);
                 if (!$profile) return;
@@ -321,7 +384,6 @@ class StripeConnectController extends Controller
             'identity.verification_session.requires_input' => (function () use ($event) {
                 $session   = $event->data->object;
                 $profileId = $session->metadata['carrier_profile_id'] ?? null;
-                if (!$profileId) return;
 
                 if ($userId = $session->metadata['user_id'] ?? null) {
                     $identity = \App\Models\PersonIdentity::firstOrCreate(['user_id' => (int) $userId]);
@@ -333,6 +395,7 @@ class StripeConnectController extends Controller
                         ]);
                     }
                 }
+                if (!$profileId) return;
 
                 $profile = CarrierProfile::find($profileId);
                 if (!$profile) return;

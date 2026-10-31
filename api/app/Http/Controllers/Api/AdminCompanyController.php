@@ -30,12 +30,12 @@ class AdminCompanyController extends Controller
         abort_unless($request->user()->isPlatformAdmin(), 403);
 
         $data = $request->validate([
-            'type'   => ['nullable', 'in:all,carrier,shipper'],
+            'type'   => ['nullable', 'in:all,carrier,shipper,factor'],
             'status' => ['nullable', 'string'],
             'q'      => ['nullable', 'string', 'max:100'],
         ]);
 
-        $types = ($data['type'] ?? 'all') === 'all' ? ['carrier', 'shipper'] : [$data['type']];
+        $types = ($data['type'] ?? 'all') === 'all' ? ['carrier', 'shipper', 'factor'] : [$data['type']];
         $query = Organization::whereIn('type', $types)
             ->withCount('orgMembers')
             ->with('owner')
@@ -52,6 +52,7 @@ class AdminCompanyController extends Controller
         $profiles = [
             'carrier' => $this->ownerProfiles($orgs->where('type', 'carrier'), 'carrier'),
             'shipper' => $this->ownerProfiles($orgs->where('type', 'shipper'), 'shipper'),
+            'factor'  => collect(), // factors keep company details on the org
         ];
 
         return response()->json([
@@ -65,7 +66,7 @@ class AdminCompanyController extends Controller
                     'owner'                   => $o->owner?->only(['id', 'name', 'email']),
                     'dot_number'              => $p?->dot_number ?? null,
                     'mc_number'               => $p?->mc_number ?? null,
-                    'ein'                     => $p?->ein ?? null,
+                    'ein'                     => $p?->ein ?? ($o->type === 'factor' ? $o->tax_id : null),
                     'verification_status'     => $o->verification_status,
                     'background_check_status' => $o->background_check_status,
                     'status'                  => $o->status,
@@ -83,10 +84,13 @@ class AdminCompanyController extends Controller
         $org->load(['owner', 'orgMembers.user.personVerification']);
         $memberIds = $org->orgMembers->pluck('user_id');
         $isCarrier = $org->type === 'carrier';
+        $isFactor  = $org->type === 'factor';
 
-        $profile = $isCarrier
-            ? CarrierProfile::where('user_id', $org->owner_id)->first()
-            : ShipperProfile::where('user_id', $org->owner_id)->first();
+        $profile = match ($org->type) {
+            'carrier' => CarrierProfile::where('user_id', $org->owner_id)->first(),
+            'shipper' => ShipperProfile::where('user_id', $org->owner_id)->first(),
+            default   => null,
+        };
 
         $partyColumn = $isCarrier ? 'carrier_id' : 'shipper_id';
         $shipments   = Shipment::whereIn($partyColumn, $memberIds);
@@ -105,6 +109,8 @@ class AdminCompanyController extends Controller
                     'website'    => $org->website ?? ($isCarrier ? null : $profile?->website),
                     'created_at' => $org->created_at?->toISOString(),
                     'owner'      => $org->owner?->only(['id', 'name', 'email']),
+                    'address'    => collect([$org->street, $org->city, $org->state, $org->zip])->filter()->implode(', ') ?: null,
+                    'tax_id'     => $isFactor ? $org->tax_id : null,
                     'stripe_mode'     => $org->stripe_mode,
                     'commission_rate' => $org->commission_rate,
                 ],
@@ -119,11 +125,11 @@ class AdminCompanyController extends Controller
                     'background_notes'     => $org->background_check_notes,
                     'background_checked_at'=> $org->background_checked_at?->toISOString(),
                 ],
-                'documents' => $isCarrier
+                'documents' => $isFactor ? [] : ($isCarrier
                     ? DB::table('carrier_documents')->where('org_id', $org->id)->orderByDesc('created_at')
                         ->get(['id', 'type', 'name', 'url', 'expiry_date', 'verified_at', 'created_at'])
                     : ($profile ? DB::table('shipper_documents')->where('shipper_profile_id', $profile->id)->orderByDesc('created_at')
-                        ->get(['id', 'type', 'name', 'url', 'verified_at', 'created_at']) : []),
+                        ->get(['id', 'type', 'name', 'url', 'verified_at', 'created_at']) : [])),
                 'members' => $org->orgMembers->filter(fn ($m) => $m->user)->map(function ($m) use ($org) {
                     $role      = $m->user_id === $org->owner_id ? 'owner' : $m->role;
                     $checklist = PersonChecks::checklist($m->user, ['org' => $org, 'type' => $org->type, 'role' => $role]);
@@ -171,6 +177,11 @@ class AdminCompanyController extends Controller
             'action' => ['required', 'in:approve,reject'],
             'notes'  => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // Factors aren't approved by Shipmater (docs/noa-factoring.md)
+        if ($org->type === 'factor') {
+            return response()->json(['error' => "Factoring companies don't need Shipmater approval.", 'code' => 'not_required'], 422);
+        }
 
         if ($data['action'] === 'approve' && !in_array($org->background_check_status, self::BACKGROUND_PASSED, true)) {
             return response()->json([

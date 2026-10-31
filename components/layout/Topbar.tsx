@@ -8,6 +8,7 @@ const ROLE_TITLE: Record<UserRole, string> = {
   carrier:  'Carrier Portal',
   receiver: 'My Deliveries',
   admin:    'Admin Console',
+  factor:   'Factor Portal',
 };
 
 interface TopbarProps {

@@ -1,290 +1,140 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  DollarSign, TrendingUp, ArrowDownCircle, Clock,
-  Download, Search, Filter, ChevronDown, FileText,
-} from 'lucide-react';
-import { api } from '@/lib/api';
+import { CircleDollarSign, Download, TrendingUp, Wallet } from 'lucide-react';
+import { adminFinanceApi } from '@/lib/api';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { money, day } from '@/components/payments/LoadPaymentsView';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface FinancialSummary {
-  total_revenue:   number;
-  platform_fees:   number;
-  carrier_payouts: number;
-  pending:         number;
-  job_count:       number;
+interface Ledger {
+  from: string; to: string; revenue: number; volume: number;
+  totals: Record<string, { amount: number; volume: number; count: number }>;
+  months: { month: string; revenue: number; volume: number; by_kind: Record<string, number> }[];
+  entries: { id: number; kind: string; amount: number; volume: number; company: string | null; description: string | null; reference: string | null; occurred_at: string }[];
 }
 
-interface FinancialRow {
-  id:               number;
-  title:            string;
-  reference:        string | null;
-  invoice_number:   string | null;
-  status:           string;
-  payment_status:   string | null;
-  shipper:          string | null;
-  carrier:          string | null;
-  shipper_total:    number | null;
-  platform_fee:     number | null;
-  carrier_payout:   number | null;
-  invoice_date:     string | null;
-  invoice_due_date: string | null;
-  created_at:       string;
-}
+const KINDS: Record<string, string> = {
+  load_fee: 'Load fees', factored_fee: 'Factored-load fees', subscription: 'Shipper subscriptions', onboarding: 'Carrier onboarding',
+  refund: 'Refunds', load_volume: 'Factored volume (no fee)',
+};
+const th = 'px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-text-faint)]';
+const td = 'px-4 py-3';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+/** Shipmater's revenue by month and source, with the load volume it came from (docs/fees-and-billing.md) */
+export default function AdminLedgerPage() {
+  const [from, setFrom] = useState(`${new Date().getFullYear()}-01-01`);
+  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [kind, setKind] = useState('');
 
-function fmtUSD(val: number | null | undefined): string {
-  if (val == null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-}
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-ledger', from, to, kind],
+    queryFn: () => adminFinanceApi.ledger({ from, to, ...(kind && { kind }) }).then((r) => r.data.data as Ledger),
+  });
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+  const maxRevenue = Math.max(1, ...(data?.months ?? []).map((m) => m.revenue));
 
-function statusBadge(s: string | null) {
-  if (!s) return null;
-  const map: Record<string, string> = {
-    paid:       'bg-emerald-100 text-emerald-700',
-    completed:  'bg-emerald-100 text-emerald-700',
-    processing: 'bg-blue-100 text-blue-700',
-    pending:    'bg-amber-100 text-amber-700',
-    unpaid:     'bg-red-100 text-red-700',
-    failed:     'bg-red-100 text-red-700',
-  };
+  function exportCsv() {
+    if (!data) return;
+    const rows = [['Date', 'Kind', 'Company', 'Description', 'Revenue', 'Volume', 'Reference'],
+      ...data.entries.map((e) => [e.occurred_at.slice(0, 10), KINDS[e.kind] ?? e.kind, e.company ?? '', e.description ?? '', e.amount.toFixed(2), e.volume.toFixed(2), e.reference ?? ''])];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `shipmater-ledger-${from}-to-${to}.csv`;
+    a.click();
+  }
+
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${map[s] ?? 'bg-gray-100 text-gray-700'}`}>
-      {s}
-    </span>
-  );
-}
-
-// ── Summary Card ──────────────────────────────────────────────────────────────
-
-function SummaryCard({ icon: Icon, label, value, sub, color }: {
-  icon: React.ElementType; label: string; value: string; sub?: string; color: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-5">
-      <div className="flex items-start justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.07em] text-[var(--color-text-faint)]">{label}</p>
-          <p className="mt-1.5 text-2xl font-bold text-[var(--color-text)]">{value}</p>
-          {sub && <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">{sub}</p>}
+          <h1 className="page-title">Ledger</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">Everything Shipmater earns: load fees, factored-load fees, subscriptions and onboarding, with the load volume behind it.</p>
         </div>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color}`}>
-          <Icon size={18} />
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-[var(--color-cream-dark)] px-2 py-1.5 text-sm" />
+          <span className="text-xs text-[var(--color-text-faint)]">to</span>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-[var(--color-cream-dark)] px-2 py-1.5 text-sm" />
+          <select value={kind} onChange={(e) => setKind(e.target.value)} className="rounded-lg border border-[var(--color-cream-dark)] px-2 py-1.5 text-sm">
+            <option value="">All sources</option>
+            {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <button onClick={exportCsv} disabled={!data?.entries.length} className="btn btn-navy flex items-center gap-1.5 text-xs disabled:opacity-50"><Download size={13} /> CSV</button>
         </div>
       </div>
+
+      {isLoading || !data ? <div className="skeleton h-64 rounded-xl" /> : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Card icon={Wallet} label="Shipmater revenue" value={money(data.revenue)} />
+            <Card icon={CircleDollarSign} label="Load volume" value={money(data.volume)} hint="All load payments processed" />
+            <Card icon={TrendingUp} label="Take rate" value={data.volume ? `${((data.revenue / data.volume) * 100).toFixed(1)}%` : '—'} hint="Revenue ÷ volume" />
+            <Card icon={Wallet} label="Subscriptions" value={money(data.totals.subscription?.amount ?? 0)} hint={`${data.totals.subscription?.count ?? 0} invoices`} />
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="card">
+              <div className="card-head card-head-tint px-5 py-3"><p className="card-title">By source</p></div>
+              <table className="w-full text-sm">
+                <tbody>
+                  {Object.entries(KINDS).map(([k, label]) => (
+                    <tr key={k} className="border-b border-[var(--color-cream-dark)] last:border-b-0">
+                      <td className={td}>{label}</td>
+                      <td className={`${td} text-right text-xs text-[var(--color-text-faint)]`}>{data.totals[k]?.count ?? 0}</td>
+                      <td className={`${td} text-right font-medium`}>{money(data.totals[k]?.amount ?? 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+
+            <section className="card">
+              <div className="card-head card-head-tint px-5 py-3"><p className="card-title">By month</p></div>
+              <div className="card-body space-y-2">
+                {data.months.length === 0 && <p className="text-sm text-[var(--color-text-faint)]">No revenue in this period.</p>}
+                {data.months.map((m) => (
+                  <div key={m.month} className="grid grid-cols-[64px_1fr_96px] items-center gap-3 text-sm">
+                    <span className="text-[var(--color-text-muted)]">{m.month}</span>
+                    <div className="h-2.5 rounded-full bg-[var(--color-cream)]"><div className="h-2.5 rounded-full bg-[var(--color-teal)]" style={{ width: `${(m.revenue / maxRevenue) * 100}%` }} /></div>
+                    <span className="text-right font-medium">{money(m.revenue)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          {data.entries.length === 0 ? <EmptyState icon={Wallet} title="No ledger entries" description="Entries appear as loads are paid, fees collected and subscriptions billed." /> : (
+            <div className="overflow-x-auto rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)]">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-[var(--color-cream-dark)] bg-[var(--color-cream)]">{['Date', 'Source', 'Company', 'Description', 'Revenue', 'Volume'].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.entries.map((e) => (
+                    <tr key={e.id} className="border-b border-[var(--color-cream-dark)] last:border-b-0">
+                      <td className={td}>{day(e.occurred_at)}</td>
+                      <td className={td}>{KINDS[e.kind] ?? e.kind}</td>
+                      <td className={td}>{e.company ?? '—'}</td>
+                      <td className={`${td} text-[var(--color-text-muted)]`}>{e.description ?? '—'}</td>
+                      <td className={`${td} font-medium ${e.amount < 0 ? 'text-red-700' : ''}`}>{money(e.amount)}</td>
+                      <td className={`${td} text-[var(--color-text-muted)]`}>{e.volume ? money(e.volume) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
-export default function AdminFinancialsPage() {
-  const [from,   setFrom]   = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 29);
-    return d.toISOString().split('T')[0];
-  });
-  const [to,     setTo]     = useState(() => new Date().toISOString().split('T')[0]);
-  const [status, setStatus] = useState('all');
-  const [search, setSearch] = useState('');
-
-  const qp = new URLSearchParams({ from, to, ...(status !== 'all' && { status }) });
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-financials', from, to, status],
-    queryFn:  () => api.get(`/api/v1/admin/financials?${qp}`).then(r => r.data.data),
-    staleTime: 60_000,
-  });
-
-  const summary: FinancialSummary = data?.summary ?? { total_revenue: 0, platform_fees: 0, carrier_payouts: 0, pending: 0, job_count: 0 };
-  const rows: FinancialRow[]      = data?.rows     ?? [];
-
-  const filtered = useMemo(() => {
-    if (!search) return rows;
-    const q = search.toLowerCase();
-    return rows.filter(r =>
-      r.title?.toLowerCase().includes(q) ||
-      r.reference?.toLowerCase().includes(q) ||
-      r.invoice_number?.toLowerCase().includes(q) ||
-      r.shipper?.toLowerCase().includes(q) ||
-      r.carrier?.toLowerCase().includes(q)
-    );
-  }, [rows, search]);
-
-  function exportCsv() {
-    const url = `/api/v1/admin/financials/export?${qp}`;
-    // Open via API client to include the auth token cookie
-    window.location.href = url;
-  }
-
+function Card({ icon: Icon, label, value, hint }: { icon: React.ElementType; label: string; value: string; hint?: string }) {
   return (
-    <div className="space-y-6">
-
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="page-title">
-            Financial Reporting
-          </h1>
-          <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">
-            Platform revenue, fees, and carrier payouts
-          </p>
-        </div>
-        <button
-          onClick={exportCsv}
-          className="flex items-center gap-2 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)] transition-colors"
-        >
-          <Download size={14} /> Export CSV
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5">
-          <Filter size={13} className="text-[var(--color-text-faint)]" />
-          <label className="text-xs text-[var(--color-text-faint)]">From</label>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="text-sm text-[var(--color-text)] focus:outline-none bg-transparent" />
-          <label className="text-xs text-[var(--color-text-faint)] ml-2">To</label>
-          <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="text-sm text-[var(--color-text)] focus:outline-none bg-transparent" />
-        </div>
-
-        <select
-          value={status}
-          onChange={e => setStatus(e.target.value)}
-          className="rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none appearance-none pr-8"
-        >
-          <option value="all">All payment statuses</option>
-          <option value="paid">Paid</option>
-          <option value="pending">Pending</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="processing">Processing</option>
-        </select>
-
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search size={13} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-faint)]" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search job, invoice, shipper…"
-            className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] pl-9 pr-4 py-2.5 text-sm focus:border-[var(--color-teal)] focus:outline-none"
-          />
-        </div>
-
-        <p className="ml-auto text-xs text-[var(--color-text-faint)]">
-          {summary.job_count} jobs in range
-        </p>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <SummaryCard
-          icon={DollarSign} label="Total Revenue" color="bg-emerald-50 text-emerald-600"
-          value={fmtUSD(summary.total_revenue)}
-          sub="Shipper invoices collected"
-        />
-        <SummaryCard
-          icon={TrendingUp} label="Platform Fees" color="bg-[var(--color-teal-pale)] text-[var(--color-teal)]"
-          value={fmtUSD(summary.platform_fees)}
-          sub="Net margin on jobs"
-        />
-        <SummaryCard
-          icon={ArrowDownCircle} label="Carrier Payouts" color="bg-blue-50 text-blue-600"
-          value={fmtUSD(summary.carrier_payouts)}
-          sub="After platform fee"
-        />
-        <SummaryCard
-          icon={Clock} label="Pending / Outstanding" color="bg-amber-50 text-amber-600"
-          value={fmtUSD(summary.pending)}
-          sub="Awaiting payment"
-        />
-      </div>
-
-      {/* Table */}
-      <div className="rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] overflow-hidden">
-        {isLoading ? (
-          <div className="divide-y divide-[var(--color-cream-dark)]">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-3.5 animate-pulse">
-                <div className="h-3 w-24 rounded bg-[var(--color-cream-dark)]" />
-                <div className="h-3 w-32 rounded bg-[var(--color-cream)]" />
-                <div className="h-3 w-20 rounded bg-[var(--color-cream-dark)] ml-auto" />
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FileText size={30} className="text-[var(--color-cream-dark)] mb-3" />
-            <p className="text-sm font-medium text-[var(--color-text-muted)]">No financial records for this period</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
-              <thead>
-                <tr className="border-b border-[var(--color-cream-dark)] bg-[var(--color-cream)]">
-                  {['Invoice', 'Job', 'Shipper', 'Carrier', 'Shipper Total', 'Platform Fee', 'Carrier Payout', 'Payment', 'Date'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.07em] text-[var(--color-text-muted)]">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(row => (
-                  <tr key={row.id} className="border-b border-[var(--color-cream-dark)] last:border-0 hover:bg-[var(--color-cream)] transition-colors">
-                    <td className="px-4 py-3.5">
-                      {row.invoice_number
-                        ? <span className="font-mono text-xs text-[var(--color-teal)]">{row.invoice_number}</span>
-                        : <span className="text-[var(--color-text-faint)]">—</span>
-                      }
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <p className="font-medium text-[var(--color-text)] truncate max-w-[160px]">{row.title ?? `Job #${row.id}`}</p>
-                      {row.reference && (
-                        <p className="text-xs text-[var(--color-text-faint)]">{row.reference}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-[var(--color-text-faint)]">{row.shipper ?? '—'}</td>
-                    <td className="px-4 py-3.5 text-[var(--color-text-faint)]">{row.carrier ?? '—'}</td>
-                    <td className="px-4 py-3.5 font-semibold text-[var(--color-text)]">{fmtUSD(row.shipper_total)}</td>
-                    <td className="px-4 py-3.5 text-emerald-600 font-semibold">{fmtUSD(row.platform_fee)}</td>
-                    <td className="px-4 py-3.5 text-blue-600">{fmtUSD(row.carrier_payout)}</td>
-                    <td className="px-4 py-3.5">{statusBadge(row.payment_status)}</td>
-                    <td className="px-4 py-3.5 text-xs text-[var(--color-text-faint)]">
-                      {fmtDate(row.invoice_date ?? row.created_at)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-[var(--color-cream-dark)] bg-[var(--color-cream)]">
-                  <td colSpan={4} className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-[var(--color-text-faint)]">
-                    Totals ({filtered.length} jobs)
-                  </td>
-                  <td className="px-4 py-3 font-bold text-[var(--color-text)]">
-                    {fmtUSD(filtered.reduce((s, r) => s + (r.shipper_total ?? 0), 0))}
-                  </td>
-                  <td className="px-4 py-3 font-bold text-emerald-600">
-                    {fmtUSD(filtered.reduce((s, r) => s + (r.platform_fee ?? 0), 0))}
-                  </td>
-                  <td className="px-4 py-3 font-bold text-blue-600">
-                    {fmtUSD(filtered.reduce((s, r) => s + (r.carrier_payout ?? 0), 0))}
-                  </td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </div>
+    <div className="rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-4">
+      <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-text-faint)]"><Icon size={14} /> {label}</div>
+      <p className="mt-2 text-xl font-semibold">{value}</p>
+      {hint && <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{hint}</p>}
     </div>
   );
 }

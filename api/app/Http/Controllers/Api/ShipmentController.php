@@ -199,6 +199,9 @@ class ShipmentController extends Controller
             'status'     => $status,
         ]));
 
+        // Payment is scheduled once a carrier is assigned (docs/fees-and-billing.md)
+        if ($status === 'assigned') app(\App\Services\Payments\LoadPayments::class)->schedule('shipment', $shipment);
+
         $shipment->load(['shipper', 'carrier.carrierProfile', 'receiver']);
 
         return response()->json(['data' => new ShipmentResource($shipment)], 201);
@@ -259,6 +262,7 @@ class ShipmentController extends Controller
         abort_unless($shipment->status === 'offered', 422, 'This job is not awaiting acceptance.');
 
         $shipment->update(['status' => 'assigned']);
+        app(\App\Services\Payments\LoadPayments::class)->schedule('shipment', $shipment);
 
         return response()->json(['data' => new ShipmentResource($shipment)]);
     }
@@ -304,10 +308,11 @@ class ShipmentController extends Controller
             'delivery_photo_url' => $data['delivery_photo_url'] ?? null,
         ]);
 
-        // Capture payment and transfer to carrier's Stripe Connect account
-        if ($shipment->payment_intent_id && $shipment->payment_status === 'authorized') {
-            app(PaymentService::class)->captureAndTransfer($shipment);
-        }
+        // Delivered: charge the shipper's hold (or charge now if there is none)
+        $payments = app(\App\Services\Payments\LoadPayments::class);
+        $payment  = \App\Models\LoadPayment::where('load_type', 'shipment')->where('load_id', $shipment->id)->first()
+            ?? $payments->schedule('shipment', $shipment);
+        if ($payment) $payments->charge($payment);
 
         $shipment->load(['shipper', 'carrier.carrierProfile', 'receiver', 'latestPing']);
 

@@ -26,7 +26,7 @@ class AuthController extends Controller
             'name'     => ['required', 'string', 'max:255'],
             'email'    => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role'     => ['required', Rule::in(['shipper', 'carrier', 'receiver'])],
+            'role'     => ['required', Rule::in(['shipper', 'carrier', 'receiver', 'factor'])],
             'company_name' => ['sometimes', 'nullable', 'string', 'max:200'],
             'invite_token' => ['sometimes', 'nullable', 'string', 'size:64'],
         ]);
@@ -62,8 +62,12 @@ class AuthController extends Controller
             $user->load('currentOrg');
         }
         // Otherwise they're starting a company: create their solo org
-        elseif (in_array($data['role'], ['carrier', 'shipper'])) {
+        elseif (in_array($data['role'], ['carrier', 'shipper', 'factor'])) {
             $org = $this->createSoloOrg($user, $data['role']);
+            // Factors keep their company details on the company itself; no admin approval (docs/noa-factoring.md)
+            if ($data['role'] === 'factor') {
+                $org->update(['name' => $request->input('company_name') ?: $org->name, 'verification_status' => 'not_required']);
+            }
             $user->update(['current_org_id' => $org->id]);
             $user->setRelation('currentOrg', $org);
         }

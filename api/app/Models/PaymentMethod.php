@@ -9,6 +9,7 @@ class PaymentMethod extends Model
 {
     protected $fillable = [
         'user_id',
+        'org_id',
         'type',
         'brand',
         'last4',

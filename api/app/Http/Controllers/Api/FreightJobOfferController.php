@@ -131,6 +131,7 @@ class FreightJobOfferController extends Controller
 
         // Assign the carrier — status stays 'posted' (shown as "Dispatched" on frontend)
         $job->update(['carrier_id' => $offer->carrier_id]);
+        app(\App\Services\Payments\LoadPayments::class)->schedule('freight_job', $job);
 
         $offer->load('carrier.carrierProfile');
 

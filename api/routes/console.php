@@ -21,3 +21,11 @@ Artisan::command('people:refresh-checks', function () {
 })->purpose('Send approved people with expired or failed required items back to review');
 
 Schedule::command('people:refresh-checks')->dailyAt('06:00');
+
+// Load payments: card holds the day before pickup, and charges before a hold expires (docs/fees-and-billing.md)
+Artisan::command('payments:run', function () {
+    $r = app(App\Services\Payments\LoadPayments::class)->run();
+    $this->info("Held {$r['held']}, re-held {$r['retried']}, charged {$r['charged']}.");
+})->purpose('Place card holds due before pickup and charge holds about to expire');
+
+Schedule::command('payments:run')->hourly()->withoutOverlapping();

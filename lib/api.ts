@@ -70,7 +70,15 @@ api.interceptors.request.use((config) => {
 // A global redirect would break demo mode and cause redirect loops.
 api.interceptors.response.use(
   (res) => res,
-  (err) => Promise.reject(err)
+  (err) => {
+    // Posting a load without a subscription: say why and where to fix it
+    if (typeof window !== 'undefined' && err?.response?.data?.code === 'subscription_required') {
+      import('sonner').then(({ toast }) => toast.error('You need an active subscription to post loads.', {
+        action: { label: 'Subscribe', onClick: () => { window.location.href = '/shipper/profile?tab=subscription'; } },
+      }));
+    }
+    return Promise.reject(err);
+  }
 );
 
 // ── Auth ──────────────────────────────────────────────────────────────
@@ -80,6 +88,40 @@ export const authApi = {
   register: (data: Record<string, unknown>) => api.post('/api/v1/auth/register', data),
   me:       () => api.get('/api/v1/user'),
   verifyEmail: (token: string) => api.post('/api/v1/auth/email/verify', { token }),
+};
+
+// ── Fees and shipper subscription (docs/fees-and-billing.md) ─────────
+export const feesApi = {
+  get:    ()                              => api.get('/api/v1/fees'),
+  update: (data: Record<string, unknown>) => api.put('/api/v1/admin/settings/fees', data),
+};
+
+export const subscriptionApi = {
+  get:       ()                          => api.get('/api/v1/shipper/subscription'),
+  subscribe: (statedAnnualValue: number) => api.post('/api/v1/shipper/subscription', { stated_annual_value: statedAnnualValue }),
+  confirm:   (sessionId: string)         => api.post('/api/v1/shipper/subscription/confirm', { session_id: sessionId }),
+  cancel:    ()                          => api.post('/api/v1/shipper/subscription/cancel'),
+};
+
+export const factorStripeApi = {
+  connect: () => api.post('/api/v1/factor/stripe/connect'),
+  status:  () => api.get('/api/v1/factor/stripe/status'),
+};
+
+// ── Factoring: NOAs and factored loads (carrier, factor, shipper, admin) ──
+export const factoringApi = {
+  noas:           ()                                   => api.get('/api/v1/factoring/noas'),
+  loads:          ()                                   => api.get('/api/v1/factoring/loads'),
+  factors:        (q?: string)                         => api.get('/api/v1/factoring/factors', { params: q ? { q } : undefined }),
+  fileNoa:        (data: FormData)                     => api.post('/api/v1/factoring/noas', data),
+  requestRelease: (id: number)                         => api.post(`/api/v1/factoring/noas/${id}/request-release`),
+  decideNoa:      (id: number, action: 'confirm' | 'decline', reason?: string) => api.post(`/api/v1/factoring/noas/${id}/decide`, { action, reason }),
+  release:        (id: number, data: FormData)         => api.post(`/api/v1/factoring/noas/${id}/release`, data),
+  eligibleLoads:  ()                                   => api.get('/api/v1/factoring/eligible-loads'),
+  factorLoad:     (loadType: string, loadId: number)   => api.post('/api/v1/factoring/loads', { load_type: loadType, load_id: loadId }),
+  withdrawLoad:   (id: number)                         => api.delete(`/api/v1/factoring/loads/${id}`),
+  decideLoad:     (id: number, action: 'accept' | 'decline' | 'funded', reason?: string) => api.post(`/api/v1/factoring/loads/${id}/decide`, { action, reason }),
+  acknowledge:    (id: number)                         => api.post(`/api/v1/factoring/loads/${id}/acknowledge`),
 };
 
 // ── Marketing / white-label leads (public) ────────────────────────────
@@ -104,19 +146,10 @@ export const shipmentApi = {
 // ── Bids ──────────────────────────────────────────────────────────────
 export const bidApi = {
   place:         (shipmentId: number, data: Record<string, unknown>) => api.post(`/api/v1/shipments/${shipmentId}/bids`, data),
-  /** Step 1: create PaymentIntent for bid amount (returns client_secret) */
-  paymentIntent: (bidId: number) => api.post(`/api/v1/bids/${bidId}/payment-intent`),
-  /** Step 2: confirm bid acceptance after Stripe authorization */
-  accept:        (bidId: number, paymentIntentId: string) =>
-                   api.put(`/api/v1/bids/${bidId}/accept`, { payment_intent_id: paymentIntentId }),
+  /** Accept a bid. Nothing is charged now: the card on file is held the day before pickup, charged at delivery */
+  accept:        (bidId: number) => api.put(`/api/v1/bids/${bidId}/accept`),
   withdraw:      (bidId: number) => api.put(`/api/v1/bids/${bidId}/withdraw`),
   carrierOffers: (params?: Record<string, unknown>) => api.get('/api/v1/carrier/offers', { params }),
-};
-
-// ── Freight payments (shipper) ────────────────────────────────────────
-export const freightPaymentApi = {
-  /** Pay a contracted / direct-offer shipment (agreed_cost already set) */
-  payShipment: (shipmentId: number) => api.post(`/api/v1/shipper/pay/${shipmentId}`),
 };
 
 // ── Plaid / ACH bank connection (shipper) ─────────────────────────────
@@ -150,15 +183,30 @@ export const trackApi = {
 
 // ── Payment methods ───────────────────────────────────────────────────
 export const paymentApi = {
-  list:       () => api.get('/api/v1/payment-methods'),
-  create:     (data: Record<string, unknown>) => api.post('/api/v1/payment-methods', data),
+  list:        () => api.get('/api/v1/payment-methods'),
+  /** Stripe SetupIntent the browser confirms with Elements; then save the resulting payment method id */
+  setupIntent: () => api.post('/api/v1/payment-methods/setup-intent'),
+  save:        (paymentMethodId: string) => api.post('/api/v1/payment-methods', { payment_method_id: paymentMethodId }),
   destroy:    (id: number) => api.delete(`/api/v1/payment-methods/${id}`),
   setDefault: (id: number) => api.post(`/api/v1/payment-methods/${id}/default`),
 };
 
-// ── Transactions (shipper payment history) ────────────────────────────
-export const transactionApi = {
-  list: (params?: Record<string, unknown>) => api.get('/api/v1/transactions', { params }),
+// ── Load payments: shipper pays, carrier earns, factor receives, admin sees all ──
+export const paymentsApi = {
+  list:      (params?: Record<string, unknown>) => api.get('/api/v1/payments', { params }),
+  summary:   () => api.get('/api/v1/payments/summary'),
+  retry:     (id: number) => api.post(`/api/v1/payments/${id}/retry`),
+  payEarly:  (id: number) => api.post(`/api/v1/payments/${id}/pay-early`),
+  fees:      () => api.get('/api/v1/payments/fees'),
+  retryFee:  (id: number) => api.post(`/api/v1/payments/fees/${id}/retry`),
+};
+
+// ── Admin finance: revenue ledger, receivables, payment routing ───────
+export const adminFinanceApi = {
+  ledger:         (params?: Record<string, unknown>) => api.get('/api/v1/admin/ledger', { params }),
+  receivables:    () => api.get('/api/v1/admin/receivables'),
+  settings:       () => api.get('/api/v1/admin/settings/payments'),
+  updateSettings: (flow: 'direct' | 'platform') => api.put('/api/v1/admin/settings/payments', { flow }),
 };
 
 // ── Preferred carriers ────────────────────────────────────────────────
@@ -274,6 +322,9 @@ export const certificationApi = {
 export const orgApi = {
   get:               ()                                         => api.get('/api/v1/org'),
   update:            (data: Record<string, unknown>)            => api.put('/api/v1/org', data),
+  /** How the company is paid outside Shipmater (Account → Finance) */
+  remittance:        ()                                         => api.get('/api/v1/org/remittance'),
+  updateRemittance:  (data: Record<string, unknown>)            => api.put('/api/v1/org/remittance', data),
   members:           ()                                         => api.get('/api/v1/org/members'),
   updateMember:      (id: number, role: string)                 => api.put(`/api/v1/org/members/${id}`, { role }),
   removeMember:      (id: number)                               => api.delete(`/api/v1/org/members/${id}`),

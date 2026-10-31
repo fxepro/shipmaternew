@@ -99,11 +99,8 @@ class Organization extends Model
      */
     public function commissionRate(): float
     {
-        if ($this->commission_rate !== null) {
-            return (float) $this->commission_rate;
-        }
-
-        return (float) env('PLATFORM_FEE_PERCENT', 15) / 100;
+        // One rate for everyone, set under Platform → Fees; per-company overrides are retired
+        return \App\Services\Fees::standardRate();
     }
 
     /**

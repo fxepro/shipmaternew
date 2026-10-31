@@ -43,6 +43,9 @@ Route::post('/track/{token}', [TrackController::class, 'confirm']);
 // ── Stripe webhook (public — Stripe signs it) ──────────────────────────
 Route::post('/stripe/webhook', [StripeConnectController::class, 'webhook']);
 
+// ── Shipmater's fees (public: pricing page, job wizard) ───────────────
+Route::get('/fees', [\App\Http\Controllers\Api\FeesController::class, 'show']);
+
 // ── Checkr webhook (public — Checkr signs it) ─────────────────────────
 Route::post('/checkr/webhook', [CarrierVerificationController::class, 'checkrWebhook']);
 
@@ -93,7 +96,7 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
 
     // Shipments
     Route::get('/shipments',                         [ShipmentController::class, 'index']);
-    Route::post('/shipments',                        [ShipmentController::class, 'store']);
+    Route::post('/shipments',                        [ShipmentController::class, 'store'])->middleware('shipper.subscribed');
     Route::get('/shipments/{shipment}',              [ShipmentController::class, 'show']);
     Route::put('/shipments/{shipment}/accept-offer', [ShipmentController::class, 'acceptOffer']);
     Route::put('/shipments/{shipment}/decline-offer',[ShipmentController::class, 'declineOffer']);
@@ -159,6 +162,8 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     // Org / Team management
     Route::get('/org',                             [OrgController::class, 'show']);
     Route::put('/org',                             [OrgController::class, 'update']);
+    Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show']);
+    Route::put('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'update']);
     Route::get('/org/members',                     [OrgController::class, 'members']);
     Route::put('/org/members/{id}',                [OrgController::class, 'updateMember']);
     Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember']);
@@ -177,6 +182,46 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::put('/org/switch',                      [OrgController::class, 'switchOrg']);
     Route::get('/user/organizations',              [OrgController::class, 'userOrgs']);
 
+    // Shipper subscription (required to post loads)
+    Route::get('/shipper/subscription',          [\App\Http\Controllers\Api\SubscriptionController::class, 'show']);
+    Route::post('/shipper/subscription',         [\App\Http\Controllers\Api\SubscriptionController::class, 'subscribe']);
+    Route::post('/shipper/subscription/confirm', [\App\Http\Controllers\Api\SubscriptionController::class, 'confirm']);
+    Route::post('/shipper/subscription/cancel',  [\App\Http\Controllers\Api\SubscriptionController::class, 'cancel']);
+
+    // Factor: own Stripe account for factored-load payments
+    Route::post('/factor/stripe/connect', [\App\Http\Controllers\Api\FactorStripeController::class, 'connect']);
+    Route::get('/factor/stripe/status',   [\App\Http\Controllers\Api\FactorStripeController::class, 'status']);
+
+    // Factoring: NOAs and factored loads, for carrier, factor, shipper and admin (docs/noa-factoring.md)
+    Route::get('/factoring/noas',                      [\App\Http\Controllers\Api\FactoringController::class, 'noas']);
+    Route::post('/factoring/noas',                     [\App\Http\Controllers\Api\FactoringController::class, 'fileNoa']);
+    Route::get('/factoring/noas/{noa}/document',       [\App\Http\Controllers\Api\FactoringController::class, 'document']);
+    Route::post('/factoring/noas/{noa}/decide',        [\App\Http\Controllers\Api\FactoringController::class, 'decideNoa']);
+    Route::post('/factoring/noas/{noa}/release',       [\App\Http\Controllers\Api\FactoringController::class, 'release']);
+    Route::post('/factoring/noas/{noa}/request-release', [\App\Http\Controllers\Api\FactoringController::class, 'requestRelease']);
+    Route::get('/factoring/factors',                   [\App\Http\Controllers\Api\FactoringController::class, 'factors']);
+    Route::get('/factoring/eligible-loads',            [\App\Http\Controllers\Api\FactoringController::class, 'eligibleLoads']);
+    Route::get('/factoring/loads',                     [\App\Http\Controllers\Api\FactoringController::class, 'loads']);
+    Route::post('/factoring/loads',                    [\App\Http\Controllers\Api\FactoringController::class, 'factorLoad']);
+    Route::delete('/factoring/loads/{load}',           [\App\Http\Controllers\Api\FactoringController::class, 'withdrawLoad']);
+    Route::post('/factoring/loads/{load}/decide',      [\App\Http\Controllers\Api\FactoringController::class, 'decideLoad']);
+    Route::post('/factoring/loads/{load}/acknowledge', [\App\Http\Controllers\Api\FactoringController::class, 'acknowledge']);
+
+    // Admin: fees (Platform settings)
+    Route::put('/admin/settings/fees',    [\App\Http\Controllers\Api\FeesController::class, 'update']);
+
+    // Load payments and Shipmater revenue (docs/fees-and-billing.md)
+    Route::get('/payments',                      [\App\Http\Controllers\Api\PaymentsController::class, 'index']);
+    Route::get('/payments/summary',              [\App\Http\Controllers\Api\PaymentsController::class, 'summary']);
+    Route::get('/payments/fees',                 [\App\Http\Controllers\Api\PaymentsController::class, 'fees']);
+    Route::post('/payments/fees/{fee}/retry',    [\App\Http\Controllers\Api\PaymentsController::class, 'retryFee']);
+    Route::post('/payments/{payment}/retry',     [\App\Http\Controllers\Api\PaymentsController::class, 'retry']);
+    Route::post('/payments/{payment}/pay-early', [\App\Http\Controllers\Api\PaymentsController::class, 'payEarly']);
+    Route::get('/admin/ledger',                  [\App\Http\Controllers\Api\AdminFinanceController::class, 'ledger']);
+    Route::get('/admin/receivables',             [\App\Http\Controllers\Api\AdminFinanceController::class, 'receivables']);
+    Route::get('/admin/settings/payments',       [\App\Http\Controllers\Api\AdminFinanceController::class, 'settings']);
+    Route::put('/admin/settings/payments',       [\App\Http\Controllers\Api\AdminFinanceController::class, 'updateSettings']);
+
     // Shipper profile
     Route::get('/shipper/profile',   [ShipperProfileController::class, 'show']);
     Route::put('/shipper/profile',   [ShipperProfileController::class, 'update']);
@@ -194,6 +239,7 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
 
     // Payment methods
     Route::get('/payment-methods',                          [PaymentMethodController::class, 'index']);
+    Route::post('/payment-methods/setup-intent',            [PaymentMethodController::class, 'setupIntent']);
     Route::post('/payment-methods',                         [PaymentMethodController::class, 'store']);
     Route::delete('/payment-methods/{paymentMethod}',       [PaymentMethodController::class, 'destroy']);
     Route::post('/payment-methods/{paymentMethod}/default', [PaymentMethodController::class, 'setDefault']);
@@ -280,7 +326,7 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
 
     // ── Freight jobs (contracted work) ────────────────────────────────────────
     Route::get('/shipper/freight-jobs',                              [FreightJobController::class, 'shipperIndex']);
-    Route::post('/shipper/freight-jobs',                             [FreightJobController::class, 'store']);
+    Route::post('/shipper/freight-jobs',                             [FreightJobController::class, 'store'])->middleware('shipper.subscribed');
     Route::get('/shipper/freight-jobs/{job}',                        [FreightJobController::class, 'show']);
     Route::post('/shipper/freight-jobs/{job}/optimise',              [FreightJobController::class, 'optimise']);
     Route::patch('/shipper/freight-jobs/{job}/billing',              [FreightJobController::class, 'saveBilling']);

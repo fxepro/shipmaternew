@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { paymentApi, profileApi, orgApi, shipperVerificationApi } from '@/lib/api';
 import { TeamManager } from '@/components/team/TeamManager';
+import { PaymentMethods } from '@/components/payments/PaymentMethods';
+import { ShipperSubscription } from '@/components/billing/ShipperSubscription';
 import { PlaidLinkButton } from '@/components/payments/PlaidLinkButton';
 import {
   User, Building2, CreditCard, Bell, Zap,
@@ -1108,163 +1110,10 @@ function ComplianceTab({ initialData }: { initialData: ShipperProfile }) {
   );
 }
 
-// ── Tab: Payment ──────────────────────────────────────────────────────────────
-
-const BRAND_COLORS: Record<string, string> = { Visa: '#1A1F71', Mastercard: '#EB001B' };
-
-function AddCardModal({ onClose, onAdd, isPending }: { onClose: () => void; onAdd: (p: NewCardPayload) => void; isPending: boolean }) {
-  const [num, setNum] = useState(''); const [name, setName] = useState('');
-  const [exp, setExp] = useState(''); const [cvv, setCvv]   = useState('');
-  const formatCardNum = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 16); return d.replace(/(.{4})(?=.)/g, '$1 '); };
-  const formatExp = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length > 2 ? d.slice(0, 2) + ' / ' + d.slice(2) : d; };
-  const rawNum = num.replace(/\s/g, '');
-  const brand  = rawNum.startsWith('4') ? 'Visa' : rawNum.startsWith('5') ? 'Mastercard' : 'Card';
-  const valid  = rawNum.length === 16 && name.trim().length > 1 && exp.length === 7 && cvv.length >= 3;
-  const handleAdd = () => { if (!valid || isPending) return; const [em, ey] = exp.replace(/\s/g, '').split('/'); onAdd({ type: 'card', brand, last4: rawNum.slice(-4), exp_month: em, exp_year: ey }); };
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl bg-[var(--color-white)] p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold text-[var(--color-text)]">Add credit / debit card</h3>
-          <button onClick={onClose} disabled={isPending} className="text-[var(--color-text-faint)] hover:text-[var(--color-text)] transition-colors"><X size={18} /></button>
-        </div>
-        <div className="mb-5 rounded-xl bg-gradient-to-br from-[var(--color-slate)] to-[#1e3a5f] p-4 text-white select-none">
-          <p className="font-mono text-lg tracking-widest">{num || '•••• •••• •••• ••••'}</p>
-          <div className="mt-3 flex items-end justify-between text-xs">
-            <div><p className="mb-0.5 opacity-50 uppercase tracking-wider text-xs">Cardholder</p><p className="font-medium">{name || 'Your name'}</p></div>
-            <div className="text-right"><p className="mb-0.5 opacity-50 uppercase tracking-wider text-xs">Expires</p><p className="font-medium">{exp || 'MM / YY'}</p></div>
-          </div>
-        </div>
-        <div className="space-y-4">
-          <div><Label>Card number</Label><input value={num} onChange={(e) => setNum(formatCardNum(e.target.value))} placeholder="1234 5678 9012 3456" maxLength={19} className="profile-input font-mono tracking-wider" /></div>
-          <div><Label>Cardholder name</Label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex Morgan" className="profile-input" /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Expiry</Label><input value={exp} onChange={(e) => setExp(formatExp(e.target.value))} placeholder="MM / YY" maxLength={7} className="profile-input font-mono" /></div>
-            <div><Label>CVV</Label><input value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="•••" maxLength={4} type="password" className="profile-input font-mono" /></div>
-          </div>
-        </div>
-        <div className="mt-5 flex gap-3">
-          <button onClick={onClose} disabled={isPending} className="flex-1 rounded-xl border border-[var(--color-cream-dark)] py-2.5 text-sm font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] transition-colors disabled:opacity-50">Cancel</button>
-          <button onClick={handleAdd} disabled={!valid || isPending} className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${valid && !isPending ? 'bg-[var(--color-teal)] text-white hover:bg-[var(--color-teal-dark)] shadow-sm' : 'bg-[var(--color-cream-dark)] text-[var(--color-text-faint)] cursor-not-allowed'}`}>
-            {isPending ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save card'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AddBankModal({ onClose, onAdd, isPending }: { onClose: () => void; onAdd: (p: NewBankPayload) => void; isPending: boolean }) {
-  const [holder, setHolder]   = useState(''); const [routing, setRouting] = useState('');
-  const [account, setAccount] = useState(''); const [confirm, setConfirm] = useState('');
-  const [type, setType] = useState<'Checking' | 'Savings'>('Checking');
-  const numMatch = account.length > 0 && confirm.length > 0 && account === confirm;
-  const numMismatch = confirm.length > 0 && account !== confirm;
-  const valid = holder.trim().length > 1 && routing.length === 9 && account.length >= 4 && numMatch;
-  const handleAdd = () => { if (!valid || isPending) return; onAdd({ type: 'bank', bank_name: 'Bank Account', last4: account.slice(-4), account_type: type.toLowerCase() as 'checking' | 'savings' }); };
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl bg-[var(--color-white)] p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold text-[var(--color-text)]">Add bank account (ACH)</h3>
-          <button onClick={onClose} disabled={isPending} className="text-[var(--color-text-faint)] hover:text-[var(--color-text)] transition-colors"><X size={18} /></button>
-        </div>
-        <div className="space-y-4">
-          <div><Label>Account holder name</Label><input value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Alex Morgan" className="profile-input" /></div>
-          <div><Label>Account type</Label>
-            <div className="flex gap-2">
-              {(['Checking', 'Savings'] as const).map((t) => (
-                <button key={t} onClick={() => setType(t)} className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all ${type === t ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)] text-[var(--color-teal)]' : 'border-[var(--color-cream-dark)] text-[var(--color-text-muted)] hover:border-[var(--color-teal)]'}`}>{t}</button>
-              ))}
-            </div>
-          </div>
-          <div><Label>Routing number</Label><input value={routing} onChange={(e) => setRouting(e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="9-digit ABA routing number" maxLength={9} className="profile-input font-mono" />{routing.length > 0 && routing.length < 9 && <p className="mt-1 text-xs text-amber-600">{9 - routing.length} more digit{9 - routing.length !== 1 ? 's' : ''} needed</p>}</div>
-          <div><Label>Account number</Label><input value={account} onChange={(e) => setAccount(e.target.value.replace(/\D/g, '').slice(0, 17))} placeholder="Account number" maxLength={17} className="profile-input font-mono" /></div>
-          <div><Label>Confirm account number</Label><input value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 17))} placeholder="Re-enter account number" maxLength={17} className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 bg-[var(--color-white)] ${numMismatch ? 'border-red-400 focus:border-red-400 focus:ring-red-400/20' : numMatch ? 'border-emerald-400 focus:border-emerald-400 focus:ring-emerald-400/20' : 'border-[var(--color-cream-dark)] focus:border-[var(--color-teal)] focus:ring-[var(--color-teal)]/20'}`} />{numMismatch && <p className="mt-1 text-xs text-red-500">Account numbers don&apos;t match</p>}{numMatch && <p className="mt-1 text-xs text-emerald-600">✓ Numbers match</p>}</div>
-        </div>
-        <div className="mt-4 rounded-xl bg-[var(--color-cream)] px-3.5 py-3 text-xs text-[var(--color-text-faint)]">🔒 Your bank details are encrypted end-to-end. ACH payments are processed via Stripe.</div>
-        <div className="mt-4 flex gap-3">
-          <button onClick={onClose} disabled={isPending} className="flex-1 rounded-xl border border-[var(--color-cream-dark)] py-2.5 text-sm font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] transition-colors disabled:opacity-50">Cancel</button>
-          <button onClick={handleAdd} disabled={!valid || isPending} className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${valid && !isPending ? 'bg-[var(--color-teal)] text-white hover:bg-[var(--color-teal-dark)] shadow-sm' : 'bg-[var(--color-cream-dark)] text-[var(--color-text-faint)] cursor-not-allowed'}`}>
-            {isPending ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save bank account'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Tab: Payment (cards and bank accounts saved at Stripe; docs/fees-and-billing.md) ──
 
 function PaymentTab() {
-  const queryClient = useQueryClient();
-  const [showAddCard, setShowAddCard] = useState(false);
-  const [showAddBank, setShowAddBank] = useState(false);
-  const { data: methods = [], isLoading } = useQuery<PaymentMethod[]>({ queryKey: ['payment-methods'], queryFn: () => paymentApi.list().then((r) => r.data.data) });
-  const cards = methods.filter((m) => m.type === 'card');
-  const banks = methods.filter((m) => m.type === 'bank');
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
-  const addMutation     = useMutation({ mutationFn: (p: NewCardPayload | NewBankPayload) => paymentApi.create(p as unknown as Record<string, unknown>) });
-  const deleteMutation  = useMutation({ mutationFn: (id: number) => paymentApi.destroy(id), onSuccess: invalidate });
-  const defaultMutation = useMutation({ mutationFn: (id: number) => paymentApi.setDefault(id), onSuccess: invalidate });
-  const handleAddCard = (p: NewCardPayload) => addMutation.mutate(p, { onSuccess: () => { invalidate(); setShowAddCard(false); } });
-  const handleAddBank = (p: NewBankPayload) => addMutation.mutate(p, { onSuccess: () => { invalidate(); setShowAddBank(false); } });
-  return (
-    <>
-      {showAddCard && <AddCardModal onClose={() => setShowAddCard(false)} onAdd={handleAddCard} isPending={addMutation.isPending} />}
-      {showAddBank && <AddBankModal onClose={() => setShowAddBank(false)} onAdd={handleAddBank} isPending={addMutation.isPending} />}
-      <div className="space-y-6">
-        <ProfileSection
-          icon={CreditCard}
-          title="Saved payment methods"
-          actions={
-            <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => setShowAddBank(true)} className="flex items-center gap-1.5 rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)] transition-colors"><Plus size={12} /> Add bank</button>
-              <button onClick={() => setShowAddCard(true)} className="flex items-center gap-1.5 rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)] transition-colors"><Plus size={12} /> Add card</button>
-            </div>
-          }
-        >
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 gap-2 text-[var(--color-text-faint)]"><Loader2 size={16} className="animate-spin" /><span className="text-sm">Loading payment methods…</span></div>
-          ) : (
-            <div className="space-y-3">
-              {cards.map((card) => (
-                <div key={card.id} className={`flex items-center gap-4 rounded-xl border p-4 ${card.is_default ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)]' : 'border-[var(--color-cream-dark)]'}`}>
-                  <div className="flex h-9 w-14 shrink-0 items-center justify-center rounded-lg text-xs font-extrabold text-white" style={{ background: BRAND_COLORS[card.brand ?? ''] ?? '#64748b' }}>{(card.brand ?? 'Card').toUpperCase().slice(0, 4)}</div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-[var(--color-text)]">{card.brand} •••• {card.last4}</p><p className="text-xs text-[var(--color-text-faint)]">Expires {card.exp_month} / {card.exp_year}</p></div>
-                  {!card.is_default && <button onClick={() => defaultMutation.mutate(card.id)} disabled={defaultMutation.isPending} title="Set as default" className="text-[var(--color-text-faint)] hover:text-[var(--color-teal)] transition-colors"><Star size={14} /></button>}
-                  {card.is_default && <span className="rounded-full bg-[var(--color-teal)] px-2.5 py-0.5 text-xs font-bold text-white">Default</span>}
-                  <button onClick={() => deleteMutation.mutate(card.id)} disabled={deleteMutation.isPending} className="text-[var(--color-text-faint)] hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                </div>
-              ))}
-              {banks.map((bank) => (
-                <div key={bank.id} className={`flex items-center gap-4 rounded-xl border p-4 ${bank.is_default ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)]' : 'border-[var(--color-cream-dark)]'}`}>
-                  <div className="flex h-9 w-14 shrink-0 items-center justify-center rounded-lg bg-[var(--color-slate)] text-white"><Landmark size={18} /></div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-[var(--color-text)]">{bank.bank_name} •••• {bank.last4}</p><p className="text-xs capitalize text-[var(--color-text-faint)]">{bank.account_type} account · ACH</p></div>
-                  <span className="rounded-full bg-[var(--color-cream)] px-2.5 py-0.5 text-xs font-semibold capitalize text-[var(--color-text-muted)]">{bank.account_type}</span>
-                  {!bank.is_default && <button onClick={() => defaultMutation.mutate(bank.id)} disabled={defaultMutation.isPending} title="Set as default" className="text-[var(--color-text-faint)] hover:text-[var(--color-teal)] transition-colors"><Star size={14} /></button>}
-                  {bank.is_default && <span className="rounded-full bg-[var(--color-teal)] px-2.5 py-0.5 text-xs font-bold text-white">Default</span>}
-                  <button onClick={() => deleteMutation.mutate(bank.id)} disabled={deleteMutation.isPending} className="text-[var(--color-text-faint)] hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                </div>
-              ))}
-              {!isLoading && methods.length === 0 && <p className="py-8 text-center text-sm text-[var(--color-text-faint)]">No payment methods saved yet.</p>}
-            </div>
-          )}
-        </ProfileSection>
-        {/* ACH via Plaid */}
-        <ProfileSection
-          icon={Shield}
-          title="ACH bank transfer (Plaid)"
-          subtitle="Pay freight invoices directly from your bank account"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
-              Connect your bank account to pay via ACH. Funds are verified instantly via Plaid and held in escrow until delivery is confirmed.
-            </p>
-            <PlaidLinkButton />
-          </div>
-        </ProfileSection>
-      </div>
-    </>
-  );
+  return <PaymentMethods purpose="shipper" />;
 }
 
 // ── Tab: Notifications ────────────────────────────────────────────────────────
@@ -1354,80 +1203,10 @@ function TeamTab() {
   return <TeamManager type="shipper" />;
 }
 
-// ── Tab: Subscription (static — Stripe not yet integrated) ────────────────────
-
-const PLANS = {
-  monthly: { price: 100, label: '$100', period: 'mo', total: '$100/mo', billedAs: '$100 billed monthly' },
-  yearly:  { price: 999, label: '$999', period: 'yr', total: '$83/mo',  billedAs: '$999 billed annually' },
-} as const;
-type BillingCycle = keyof typeof PLANS;
-const FEATURES = [
-  'Unlimited shipments', 'Live GPS tracking with 5-second updates', 'OSRM real-road route planning',
-  'Multi-stop route builder', 'Carrier marketplace access', 'Escrow payment protection',
-  'Dispute resolution support', 'Priority email & chat support',
-];
+// ── Tab: Subscription (required to post loads; docs/fees-and-billing.md) ──────
 
 function SubscriptionTab() {
-  const [cycle, setCycle] = useState<BillingCycle>('monthly');
-  const plan = PLANS[cycle];
-  const [currentCycle] = useState<BillingCycle>('monthly');
-  const isCurrentPlan = cycle === currentCycle;
-  const nextBilling = 'July 1, 2026'; const memberSince = 'June 1, 2026';
-  const yearlySaving = PLANS.monthly.price * 12 - PLANS.yearly.price;
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 rounded-2xl border border-[var(--color-teal)] bg-[var(--color-teal-pale)] p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-teal)] text-white"><Zap size={18} /></div>
-        <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-[var(--color-slate)]">Professional Plan — Active</p><p className="text-xs text-[var(--color-text-faint)]">Billed monthly · Next charge <strong>$100</strong> on {nextBilling}</p></div>
-        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">Active</span>
-      </div>
-      <ProfileSection icon={CalendarDays} title="Billing cycle">
-        <div className="flex gap-3">
-          {(['monthly', 'yearly'] as BillingCycle[]).map((c) => (
-            <button key={c} onClick={() => setCycle(c)} className={`relative flex-1 rounded-xl border-2 p-4 text-left transition-all ${cycle === c ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)]' : 'border-[var(--color-cream-dark)] hover:border-[var(--color-teal)]/50'}`}>
-              {c === 'yearly' && <span className="absolute -top-2.5 right-3 rounded-full bg-[var(--color-teal)] px-2.5 py-0.5 text-xs font-bold text-white">Save ${yearlySaving}</span>}
-              <p className="text-lg font-bold text-[var(--color-slate)]">{PLANS[c].label}<span className="text-sm font-normal text-[var(--color-text-faint)]">/{PLANS[c].period}</span></p>
-              <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">{c === 'yearly' ? `${PLANS.yearly.total} · billed yearly` : 'Billed monthly'}</p>
-              {c === currentCycle && <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-teal)]"><Check size={11} /> Current plan</span>}
-            </button>
-          ))}
-        </div>
-        <button disabled={isCurrentPlan} className={`mt-4 w-full rounded-xl py-3 text-sm font-semibold transition-all ${isCurrentPlan ? 'bg-[var(--color-cream-dark)] text-[var(--color-text-faint)] cursor-not-allowed' : 'bg-[var(--color-teal)] text-white hover:bg-[var(--color-teal-dark)] shadow-sm'}`}>
-          {isCurrentPlan ? 'This is your current plan' : cycle === 'yearly' ? `Switch to yearly — save $${yearlySaving}/yr` : 'Switch to monthly billing'}
-        </button>
-      </ProfileSection>
-      <ProfileSection icon={Zap} title="What's included">
-        <ul className="space-y-2.5">{FEATURES.map((f) => (<li key={f} className="flex items-center gap-3 text-sm text-[var(--color-text)]"><div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50"><Check size={11} className="text-emerald-600" /></div>{f}</li>))}</ul>
-      </ProfileSection>
-      <ProfileSection icon={CalendarDays} title="Billing details">
-        <div className="space-y-3">
-          {[
-            { label: 'Plan', value: 'Professional (Monthly)' }, { label: 'Amount', value: '$100.00 / month' },
-            { label: 'Next billing', value: nextBilling }, { label: 'Member since', value: memberSince },
-            { label: 'Payment method', value: 'Visa •••• 4242' },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-center justify-between py-1 border-b border-[var(--color-cream-dark)] last:border-0">
-              <span className="text-sm text-[var(--color-text-faint)]">{label}</span>
-              <span className="text-sm font-medium text-[var(--color-text)]">{value}</span>
-            </div>
-          ))}
-        </div>
-        <button className="mt-4 flex w-full items-center justify-between rounded-xl border border-[var(--color-cream-dark)] px-4 py-2.5 text-sm text-[var(--color-text-muted)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)] transition-colors">
-          <span className="flex items-center gap-2"><RefreshCw size={13} /> View billing history</span>
-          <ChevronRight size={14} />
-        </button>
-      </ProfileSection>
-      <ProfileSection
-        icon={AlertCircle}
-        title="Cancel subscription"
-        subtitle={`Your plan stays active until the end of the current billing period (${nextBilling}).`}
-        headVariant="danger"
-        className="border-red-100 bg-red-50/40"
-      >
-        <button className="rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors">Cancel subscription</button>
-      </ProfileSection>
-    </div>
-  );
+  return <ShipperSubscription />;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -1445,6 +1224,12 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 
 export default function ShipperProfilePage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
+
+  // Open the tab named in the URL (e.g. returning from Stripe Checkout)
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (TABS.some((x) => x.id === t)) setActiveTab(t as Tab);
+  }, []);
 
   const { data: profile, isLoading } = useQuery<ShipperProfile>({
     queryKey: ['shipper-profile'],

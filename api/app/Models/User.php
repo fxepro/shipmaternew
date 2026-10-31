@@ -136,6 +136,12 @@ class User extends Authenticatable implements MustVerifyEmail
             || $this->role === 'shipper';
     }
 
+    public function isFactor(): bool
+    {
+        return $this->currentOrg?->type === 'factor'
+            || $this->role === 'factor';
+    }
+
     public function isReceiver(): bool      { return $this->role === 'receiver'; }
     public function isPlatformAdmin(): bool { return $this->role === 'admin'; }
 

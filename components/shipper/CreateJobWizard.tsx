@@ -11,7 +11,7 @@ import {
   Briefcase, Sparkles, CheckCircle2, AlertCircle, Clock,
   DollarSign, Receipt, Tag,
 } from 'lucide-react';
-import { contractApi, locationApi, freightJobApi } from '@/lib/api';
+import { contractApi, locationApi, freightJobApi, feesApi } from '@/lib/api';
 import { RouteMap, type RouteMapStop } from '@/components/RouteMap';
 import { LocationSearch, type LocationOption } from '@/components/shipper/LocationSearch';
 import { loadPlannerHandoff } from '@/lib/route-planner-handoff';
@@ -215,7 +215,8 @@ function TermsToggle({ checked, onChange, label, desc }: {
 
 // ── Step Indicator ────────────────────────────────────────────────────────────
 
-const PLATFORM_FEE_RATE = 0.15;
+/** Fallback until the fee loads from /api/v1/fees (Platform → Fees) */
+const DEFAULT_FEE_RATE = 0.10;
 
 interface BillingLine { label: string; detail: string; amount: number; }
 interface BillingCalc {
@@ -230,7 +231,7 @@ function parseMoney(s: string | number): number {
   return parseFloat(s.replace(/[$,]/g, '')) || 0;
 }
 
-function calcBilling(contract: ContractRow | null, job: any): BillingCalc | null {
+function calcBilling(contract: ContractRow | null, job: any, feeRate = DEFAULT_FEE_RATE): BillingCalc | null {
   if (!contract || !job) return null;
 
   const rate        = parseMoney(contract.rate);
@@ -260,13 +261,13 @@ function calcBilling(contract: ContractRow | null, job: any): BillingCalc | null
     : '';
 
   const sumOfCosts  = baseAmount + fuelAmount;
-  const platformFee = PLATFORM_FEE_RATE * sumOfCosts;
-  const total       = sumOfCosts + platformFee;
+  // Shipmater's fee is paid by the carrier: deducted from what the carrier receives, never added for the shipper
+  const platformFee = feeRate * sumOfCosts;
+  const total       = sumOfCosts;
 
   const lines: BillingLine[] = [
     { label: 'Base charge', detail: '', amount: baseAmount },
     ...(fuelAmount > 0 ? [{ label: 'Fuel surcharge', detail: '', amount: fuelAmount }] : []),
-    { label: 'Platform fee', detail: '', amount: platformFee },
   ];
 
   return {
@@ -281,8 +282,10 @@ function calcBilling(contract: ContractRow | null, job: any): BillingCalc | null
       base_amount:       parseFloat(baseAmount.toFixed(2)),
       fuel_rate:         fuelRate,
       fuel_amount:       parseFloat(fuelAmount.toFixed(2)),
-      platform_fee_rate: PLATFORM_FEE_RATE,
+      platform_fee_rate: feeRate,
       platform_fee:      parseFloat(platformFee.toFixed(2)),
+      fee_paid_by:       'carrier',
+      carrier_receives:  parseFloat((sumOfCosts - platformFee).toFixed(2)),
       total:             parseFloat(total.toFixed(2)),
     },
   };
@@ -777,6 +780,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
+  const { data: fees } = useQuery({ queryKey: ['fees'], queryFn: () => feesApi.get().then((r) => r.data.data as { standard_rate: number }) });
   const { data: contractsRes, isLoading: contractsLoading } = useQuery({
     queryKey: ['contracts', 'active'],
     queryFn:  () => contractApi.list({ status: 'active' }),
@@ -1946,7 +1950,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
               );
             }
 
-            const billing = calcBilling(selectedContract, createdJob);
+            const billing = calcBilling(selectedContract, createdJob, fees?.standard_rate);
             return (
               <div className="space-y-5">
 
@@ -2165,7 +2169,6 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                   const bLines = [
                     { label: 'Base charge', amount: bd.base_amount as number },
                     ...(bd.fuel_amount > 0 ? [{ label: 'Fuel surcharge', amount: bd.fuel_amount as number }] : []),
-                    { label: 'Platform fee', amount: bd.platform_fee as number },
                   ];
                   return (
                     <div className="rounded-xl border border-[var(--color-cream-dark)] overflow-hidden">

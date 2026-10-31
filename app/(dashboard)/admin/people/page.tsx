@@ -16,7 +16,7 @@ interface PersonRow {
   name: string;
   email: string;
   company: { id: number; name: string } | null;
-  company_type: 'carrier' | 'shipper' | null;
+  company_type: 'carrier' | 'shipper' | 'factor' | null;
   role: string | null;
   account_status: string;
   approval_required: boolean;
@@ -28,7 +28,7 @@ interface PersonRow {
   created_at: string;
 }
 
-type CompanyType = 'all' | 'carrier' | 'shipper';
+type CompanyType = 'all' | 'carrier' | 'shipper' | 'factor';
 
 const selectCls =
   'bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]';
@@ -37,7 +37,7 @@ function People() {
   const router = useRouter();
   const params = useSearchParams();
   const initialType = params.get('type');
-  const [type, setType] = useState<CompanyType>(initialType === 'carrier' || initialType === 'shipper' ? initialType : 'all');
+  const [type, setType] = useState<CompanyType>(initialType === 'carrier' || initialType === 'shipper' || initialType === 'factor' ? initialType : 'all');
   const [role, setRole] = useState('all');
   const [status, setStatus] = useState(params.get('status') ?? 'all');
   const [search, setSearch] = useState('');
@@ -72,9 +72,10 @@ function People() {
           className="w-64 bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)] transition-colors"
         />
         <select value={type} onChange={(e) => { setType(e.target.value as CompanyType); setRole('all'); }} aria-label="Filter by company type" className={selectCls}>
-          <option value="all">Carriers and shippers</option>
+          <option value="all">All companies</option>
           <option value="carrier">Carrier people</option>
           <option value="shipper">Shipper people</option>
+          <option value="factor">Factor people</option>
         </select>
         <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Filter by role" className={selectCls}>
           <option value="all">All roles</option>

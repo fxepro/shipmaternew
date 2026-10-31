@@ -18,7 +18,7 @@ interface Credential {
 type Identity = Record<string, string | number | boolean | null>;
 interface MyChecks {
   company: { id: number; name: string; type: string; verification_status: string } | null;
-  company_type: 'carrier' | 'shipper' | null;
+  company_type: 'carrier' | 'shipper' | 'factor' | null;
   role: string | null;
   checklist: { approval_required: boolean; items: ChecklistItem[]; required_total: number; required_met: number; ready: boolean };
   verification: { status: string; notes: string | null; background_status: string };
@@ -100,7 +100,9 @@ export function MyVerification() {
             <p>
               {data.role === 'driver'
                 ? 'Drivers need verified identity, a clear background check, a valid CDL and DOT medical card, a clear Clearinghouse query and a clear driving record (MVR). Shipmater reviews these before you can be assigned loads.'
-                : 'Owners need a verified identity before Shipmater can approve you and your company.'}
+                : data.company_type === 'factor'
+                  ? 'Factoring company owners need a verified identity. Verify your ID with Stripe and you’re cleared automatically, with no wait for review.'
+                  : 'Owners need a verified identity before Shipmater can approve you and your company.'}
             </p>
             <p className="mt-2 font-medium text-[var(--color-text)]">
               {checklist.required_met} of {checklist.required_total} required items done
@@ -142,7 +144,7 @@ export function MyVerification() {
         </Section>
       )}
 
-      {showIdentity && <IdentitySection identity={data.identity} isCarrier={data.company_type === 'carrier'} onSaved={refresh} />}
+      {showIdentity && <IdentitySection identity={data.identity} isCarrier={data.company_type === 'carrier' || data.company_type === 'factor'} onSaved={refresh} />}
 
       <CredentialsSection credentials={data.credentials} types={data.credential_types} onSaved={refresh} />
     </div>

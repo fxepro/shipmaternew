@@ -60,7 +60,8 @@ export default function LoginPage() {
         try {
           await orgApi.acceptInvitation(inviteToken);
           const info = (await orgApi.showInvitation(inviteToken)).data.data as { company_type: string | null };
-          router.replace(`${getRolePath(user.role, info.company_type ?? undefined)}/verification`);
+          const home = getRolePath(user.role, info.company_type ?? undefined);
+          router.replace(info.company_type === 'factor' ? home : `${home}/verification`);
           return;
         } catch (e: unknown) {
           const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;

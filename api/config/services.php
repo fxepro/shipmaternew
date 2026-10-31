@@ -38,6 +38,8 @@ return [
     'stripe' => [
         'secret'         => env('STRIPE_SECRET_KEY'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        // Connected-account events (load payments on carrier and factor Stripe accounts)
+        'connect_webhook_secret' => env('STRIPE_CONNECT_WEBHOOK_SECRET'),
     ],
 
     'plaid' => [

@@ -35,6 +35,12 @@ class OrgController extends Controller
                 'phone'    => $org->phone,
                 'email'    => $org->email,
                 'website'  => $org->website,
+                'street'   => $org->street,
+                'city'     => $org->city,
+                'state'    => $org->state,
+                'zip'      => $org->zip,
+                'country'  => $org->country,
+                'tax_id'   => $org->tax_id,
             ],
         ]);
     }
@@ -53,6 +59,12 @@ class OrgController extends Controller
             'email'    => ['sometimes', 'nullable', 'email'],
             'website'  => ['sometimes', 'nullable', 'string', 'max:255'],
             'logo_url' => ['sometimes', 'nullable', 'string'],
+            'street'   => ['sometimes', 'nullable', 'string', 'max:255'],
+            'city'     => ['sometimes', 'nullable', 'string', 'max:120'],
+            'state'    => ['sometimes', 'nullable', 'string', 'max:60'],
+            'zip'      => ['sometimes', 'nullable', 'string', 'max:20'],
+            'country'  => ['sometimes', 'nullable', 'string', 'size:2'],
+            'tax_id'   => ['sometimes', 'nullable', 'string', 'max:20'],
         ]);
 
         $org->update($validated);

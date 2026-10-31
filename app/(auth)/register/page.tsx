@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Package, Truck } from 'lucide-react';
+import { Package, Truck, Landmark } from 'lucide-react';
 import { authApi, orgApi } from '@/lib/api';
 import { establishSession, getRolePath } from '@/lib/auth';
 import { getTenantConfigClient, type TenantConfig } from '@/lib/tenant';
@@ -33,7 +33,7 @@ const schema = z.object({
   email:                 z.string().email('Enter a valid email'),
   password:              z.string().min(8, 'At least 8 characters'),
   password_confirmation: z.string(),
-  role:                  z.enum(['shipper', 'carrier']),
+  role:                  z.enum(['shipper', 'carrier', 'factor']),
   company_name:          z.string().optional(),
 }).refine((d) => d.password === d.password_confirmation, {
   message: "Passwords don't match",
@@ -55,6 +55,12 @@ const ROLES = [
     icon:        Truck,
     description: 'Browse matching loads, bid or get hired direct, get paid fast.',
   },
+  {
+    value:       'factor' as const,
+    label:       'Factoring company',
+    icon:        Landmark,
+    description: 'Confirm NOAs and the loads you fund, and get paid for them directly.',
+  },
 ];
 
 const inputStyle = {
@@ -73,7 +79,7 @@ interface InviteInfo {
   email: string;
   role: string;
   company_name: string | null;
-  company_type: 'carrier' | 'shipper' | null;
+  company_type: 'carrier' | 'shipper' | 'factor' | null;
   expired: boolean;
   accepted: boolean;
 }
@@ -130,7 +136,7 @@ function RegisterForm() {
       const { token } = res.data as { token: string };
       establishSession(token);
       // Invited people start with their own verification checklist
-      router.replace(inviteUsable ? `${getRolePath(data.role)}/verification` : getRolePath(data.role));
+      router.replace(inviteUsable && data.role !== 'factor' ? `${getRolePath(data.role)}/verification` : getRolePath(data.role));
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Registration failed. Please try again.');
@@ -150,22 +156,18 @@ function RegisterForm() {
       padding: '40px 16px',
     }}>
 
-      {/* Wordmark / Logo */}
-      <Link href="/" style={{ textDecoration: 'none', marginBottom: 36 }}>
-        {tenant?.logo_url_dark ? (
-          // eslint-disable-next-line @next/next/no-img-element
+      {/* Tenant logo (white-label only; the site header already shows Shipmater) */}
+      {tenant?.logo_url_dark && (
+        <Link href="/" style={{ textDecoration: 'none', marginBottom: 36 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={tenant.logo_url_dark} alt={brandName} style={{ maxHeight: 40, maxWidth: 200, objectFit: 'contain' }} />
-        ) : (
-          <span style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 'var(--text-h5)', lineHeight: 'var(--lh-h5)', color: B.white, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>
-            {brandName}
-          </span>
-        )}
-      </Link>
+        </Link>
+      )}
 
       {/* Card */}
       <div style={{
         width: '100%',
-        maxWidth: 460,
+        maxWidth: 920,
         background: B.white,
         borderRadius: 10,
         padding: '40px 36px',
@@ -196,7 +198,7 @@ function RegisterForm() {
             <p style={{ fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 10 }}>
               I am a…
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 10 }}>
               {ROLES.map(({ value, label, icon: Icon, description }) => {
                 const active = selectedRole === value;
                 return (

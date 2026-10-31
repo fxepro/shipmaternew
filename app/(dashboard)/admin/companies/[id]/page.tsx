@@ -15,7 +15,7 @@ import { PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges'
 import { formatCurrency } from '@/lib/utils';
 
 interface CompanyDetail {
-  company: Row & { name: string; type: 'carrier' | 'shipper' };
+  company: Row & { name: string; type: 'carrier' | 'shipper' | 'factor' };
   company_profile: Row | null;
   verification: {
     status: string; notes: string | null; updated_at: string | null; updated_by: string | null;
@@ -115,6 +115,7 @@ export default function AdminCompanyDetailPage() {
   const c = data.company;
   const v = data.verification;
   const isCarrier = c.type === 'carrier';
+  const isFactor  = c.type === 'factor';
   const bgPassed = BACKGROUND_PASSED.includes(v.background_status);
   const act = data.activity;
   const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]';
@@ -127,12 +128,18 @@ export default function AdminCompanyDetailPage() {
         <div>
           <h1 className="page-title">{c.name}</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            {isCarrier ? 'Carrier company' : 'Shipper company'} · {data.members.length} member{data.members.length === 1 ? '' : 's'}
+            {isCarrier ? 'Carrier company' : isFactor ? 'Factoring company' : 'Shipper company'} · {data.members.length} member{data.members.length === 1 ? '' : 's'}
           </p>
         </div>
-        <CompanyStatusBadge status={v.status} />
+        {!isFactor && <CompanyStatusBadge status={v.status} />}
       </div>
 
+      {isFactor ? (
+        <Card title="Company details">
+          <Fields data={c as Row} fields={[['org_name', 'Legal name'], ['tax_id', 'EIN'], ['phone', 'Phone'], ['email', 'Email'], ['website', 'Website'], ['address', 'Address']]} />
+          <p className="mt-3 text-xs text-[var(--color-text-faint)]">Factoring companies don&apos;t need Shipmater approval. They confirm NOAs and loads themselves.</p>
+        </Card>
+      ) : (<>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card title="Company approval">
           <div className="space-y-3">
@@ -196,6 +203,7 @@ export default function AdminCompanyDetailPage() {
           </div>
         ))}
       </div>
+      </>)}
 
       <Card title={`Members (${data.members.length})`}>
         {data.members.length === 0 ? (
@@ -235,6 +243,7 @@ export default function AdminCompanyDetailPage() {
         </p>
       </Card>
 
+      {!isFactor && (<>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {data.company_profile ? (isCarrier ? CARRIER_FIELDS : SHIPPER_FIELDS).map((sec) => (
           <Card key={sec.title} title={sec.title}>
@@ -280,6 +289,7 @@ export default function AdminCompanyDetailPage() {
           </div>
         )}
       </Card>
+      </>)}
     </div>
   );
 }

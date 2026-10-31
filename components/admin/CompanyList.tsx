@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Truck } from 'lucide-react';
+import { Building2, Truck, Landmark } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { CompanyStatusBadge, BackgroundBadge, COMPANY_STATUSES } from '@/components/admin/CompanyBadges';
@@ -11,7 +11,7 @@ import { CompanyStatusBadge, BackgroundBadge, COMPANY_STATUSES } from '@/compone
 interface CompanyRow {
   id: number;
   name: string;
-  type: 'carrier' | 'shipper';
+  type: 'carrier' | 'shipper' | 'factor';
   members: number;
   owner: { id: number; name: string; email: string } | null;
   dot_number: string | null;
@@ -22,7 +22,10 @@ interface CompanyRow {
   created_at: string;
 }
 
-type CompanyType = 'all' | 'carrier' | 'shipper';
+type CompanyType = 'all' | 'carrier' | 'shipper' | 'factor';
+
+const TYPE_LABEL = { carrier: 'Carrier', shipper: 'Shipper', factor: 'Factor' } as const;
+const TYPE_ICON  = { carrier: Truck, shipper: Building2, factor: Landmark } as const;
 
 /** Table of carrier and shipper companies (organizations) with type and status filters. */
 export function CompanyList({ initialType = 'all' }: { initialType?: CompanyType }) {
@@ -63,9 +66,10 @@ export function CompanyList({ initialType = 'all' }: { initialType?: CompanyType
           aria-label="Filter by company type"
           className="bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]"
         >
-          <option value="all">Carriers and shippers</option>
+          <option value="all">All companies</option>
           <option value="carrier">Carriers</option>
           <option value="shipper">Shippers</option>
+          <option value="factor">Factors</option>
         </select>
         <select
           value={status}
@@ -105,8 +109,8 @@ export function CompanyList({ initialType = 'all' }: { initialType?: CompanyType
                   <td className="px-4 py-3 font-medium text-[var(--color-text)]">{c.name}</td>
                   <td className="px-4 py-3 text-[var(--color-text-muted)]">
                     <span className="inline-flex items-center gap-1.5">
-                      {c.type === 'carrier' ? <Truck size={13} /> : <Building2 size={13} />}
-                      {c.type === 'carrier' ? 'Carrier' : 'Shipper'}
+                      {(() => { const Icon = TYPE_ICON[c.type] ?? Building2; return <Icon size={13} />; })()}
+                      {TYPE_LABEL[c.type] ?? c.type}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -122,8 +126,8 @@ export function CompanyList({ initialType = 'all' }: { initialType?: CompanyType
                     ) : (c.ein ?? '—')}
                   </td>
                   <td className="px-4 py-3 text-[var(--color-text-muted)]">{c.members}</td>
-                  <td className="px-4 py-3"><BackgroundBadge status={c.background_check_status} /></td>
-                  <td className="px-4 py-3"><CompanyStatusBadge status={c.verification_status} /></td>
+                  <td className="px-4 py-3">{c.type === 'factor' ? <span className="text-xs text-[var(--color-text-faint)]">Not required</span> : <BackgroundBadge status={c.background_check_status} />}</td>
+                  <td className="px-4 py-3">{c.type === 'factor' ? <span className="text-xs text-[var(--color-text-faint)]">Not required</span> : <CompanyStatusBadge status={c.verification_status} />}</td>
                   <td className="px-4 py-3 text-[var(--color-text-muted)]">{new Date(c.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right text-sm font-medium text-[var(--color-teal)]">View</td>
                 </tr>

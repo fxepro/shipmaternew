@@ -1,6 +1,6 @@
-export type UserRole   = 'shipper' | 'carrier' | 'receiver' | 'admin';
-export type OrgType    = 'carrier' | 'shipper';
-export type OrgRole    = 'owner' | 'admin' | 'dispatcher' | 'driver' | 'viewer';
+export type UserRole   = 'shipper' | 'carrier' | 'receiver' | 'admin' | 'factor';
+export type OrgType    = 'carrier' | 'shipper' | 'factor';
+export type OrgRole    = 'owner' | 'staff' | 'dispatcher' | 'driver' | 'viewer';
 export type OrgPlan    = 'free' | 'pro' | 'enterprise';
 export type OrgStatus  = 'active' | 'suspended' | 'onboarding';
 export type StripeMode = 'platform' | 'connect';
@@ -82,10 +82,14 @@ export function isShipper(user: User): boolean {
   return user.org?.type === 'shipper' || user.role === 'shipper';
 }
 
+export function isFactor(user: User): boolean {
+  return user.org?.type === 'factor' || user.role === 'factor';
+}
+
 export function canDispatch(user: User): boolean {
-  return ['owner', 'admin', 'dispatcher'].includes(user.org_role ?? '');
+  return ['owner', 'staff', 'dispatcher'].includes(user.org_role ?? '');
 }
 
 export function canManageTeam(user: User): boolean {
-  return ['owner', 'admin'].includes(user.org_role ?? '');
+  return ['owner', 'staff'].includes(user.org_role ?? '');
 }

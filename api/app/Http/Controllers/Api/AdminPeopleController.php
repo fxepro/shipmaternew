@@ -27,15 +27,15 @@ class AdminPeopleController extends Controller
         abort_unless($request->user()->isPlatformAdmin(), 403);
 
         $data = $request->validate([
-            'type'   => ['nullable', 'in:all,carrier,shipper'],
+            'type'   => ['nullable', 'in:all,carrier,shipper,factor'],
             'role'   => ['nullable', 'string'],
             'status' => ['nullable', 'string'],
             'q'      => ['nullable', 'string', 'max:100'],
         ]);
 
-        $memberIds = OrgMember::whereHas('org', fn ($q) => $q->whereIn('type', ['carrier', 'shipper']))->pluck('user_id');
+        $memberIds = OrgMember::whereHas('org', fn ($q) => $q->whereIn('type', ['carrier', 'shipper', 'factor']))->pluck('user_id');
 
-        $query = User::where(fn ($q) => $q->whereIn('role', ['carrier', 'shipper'])->orWhereIn('id', $memberIds))
+        $query = User::where(fn ($q) => $q->whereIn('role', ['carrier', 'shipper', 'factor'])->orWhereIn('id', $memberIds))
             ->with(['personVerification', 'personIdentity'])
             ->latest();
 

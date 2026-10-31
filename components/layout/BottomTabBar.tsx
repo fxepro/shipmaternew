@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Package, Radio, User, Users, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Package, Radio, User, Users, BarChart2, FileSignature } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/user';
 
@@ -18,6 +18,11 @@ const TABS: Record<UserRole, { label: string; href: string; icon: React.ElementT
     { label: 'Jobs',    href: '/carrier/jobs',    icon: Package         },
     { label: 'My Jobs', href: '/carrier/my-jobs', icon: Radio           },
     { label: 'Account', href: '/carrier/profile', icon: User            },
+  ],
+  factor: [
+    { label: 'Home',    href: '/factor',         icon: LayoutDashboard },
+    { label: 'Factoring', href: '/factor/factoring', icon: FileSignature },
+    { label: 'Account', href: '/factor/profile', icon: User            },
   ],
   receiver: [
     { label: 'Home',       href: '/receiver',           icon: LayoutDashboard },

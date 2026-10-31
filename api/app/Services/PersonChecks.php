@@ -21,6 +21,7 @@ class PersonChecks
     public const ROLES = [
         'carrier' => ['owner', 'staff', 'dispatcher', 'driver', 'viewer'],
         'shipper' => ['owner', 'staff', 'viewer'],
+        'factor'  => ['owner', 'staff', 'viewer'],
     ];
 
     public const ROLE_LABELS = [
@@ -41,7 +42,7 @@ class PersonChecks
         'other'                    => 'Other certification',
     ];
 
-    private const NONE = ['approval' => false, 'identity' => false, 'background' => false, 'min_age' => null, 'required' => [], 'recorded' => []];
+    private const NONE = ['approval' => false, 'auto_approve' => false, 'identity' => false, 'background' => false, 'min_age' => null, 'required' => [], 'recorded' => []];
 
     /** Requirements by company type and role */
     public static function rules(?string $type, ?string $role): array
@@ -56,6 +57,8 @@ class PersonChecks
                 'approval' => true, 'identity' => true, 'background' => false, 'min_age' => 18,
                 'required' => [], 'recorded' => [],
             ],
+            // Factor owners: verified identity, cleared automatically with no Shipmater review (docs/noa-factoring.md)
+            'factor.owner' => array_merge(self::NONE, ['approval' => true, 'auto_approve' => true, 'identity' => true, 'min_age' => 18]),
             'carrier.dispatcher' => array_merge(self::NONE, ['recorded' => ['dispatcher_certification']]),
             'shipper.staff'      => array_merge(self::NONE, ['recorded' => ['hazmat_shipper_training']]),
             default              => self::NONE,
@@ -66,7 +69,7 @@ class PersonChecks
     public static function membership(User $user): array
     {
         $members = OrgMember::where('user_id', $user->id)->with('org')->get()
-            ->filter(fn ($m) => in_array($m->org?->type, ['carrier', 'shipper'], true));
+            ->filter(fn ($m) => in_array($m->org?->type, ['carrier', 'shipper', 'factor'], true));
 
         $m = $members->firstWhere('org_id', $user->current_org_id) ?? $members->first();
 
@@ -75,7 +78,7 @@ class PersonChecks
             return ['org' => $m->org, 'type' => $m->org->type, 'role' => $role];
         }
 
-        $type = in_array($user->role, ['carrier', 'shipper'], true) ? $user->role : null;
+        $type = in_array($user->role, ['carrier', 'shipper', 'factor'], true) ? $user->role : null;
         return ['org' => null, 'type' => $type, 'role' => $type ? 'owner' : null];
     }
 
@@ -83,6 +86,7 @@ class PersonChecks
     public static function companyName(?Organization $org): ?string
     {
         if (!$org) return null;
+        if ($org->type === 'factor') return $org->name;
         $profile = $org->type === 'carrier'
             ? CarrierProfile::where('user_id', $org->owner_id)->value('company_name')
             : \App\Models\ShipperProfile::where('user_id', $org->owner_id)->value('company_name');
@@ -183,6 +187,7 @@ class PersonChecks
             'company_type'      => $membership['type'],
             'role'              => $membership['role'],
             'approval_required' => $rules['approval'],
+            'auto_approve'      => $rules['auto_approve'] ?? false,
             'items'             => $items,
             'required_total'    => count($required),
             'required_met'      => count(array_filter($required, fn ($i) => $i['state'] === 'met')),
@@ -203,6 +208,9 @@ class PersonChecks
 
         if (!$checklist['approval_required']) {
             $status = 'not_required';
+        } elseif ($checklist['auto_approve']) {
+            // Cleared as soon as every required item is met; drops back when one lapses
+            $status = $checklist['ready'] ? 'approved' : 'incomplete';
         } elseif ($status === 'approved' && !$checklist['ready']) {
             $status = 'pending_review';
             $pv->notes = 'A required item expired or changed after approval.';

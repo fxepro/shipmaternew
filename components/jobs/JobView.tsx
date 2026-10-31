@@ -699,13 +699,17 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
               {job.cost_breakdown.fuel_amount > 0 && (
                 <BillingRow label="Fuel surcharge" amount={job.cost_breakdown.fuel_amount} />
               )}
-              <BillingRow label="Platform fee"  amount={job.cost_breakdown.platform_fee} />
               <div className="flex items-center justify-between pt-3 mt-1 border-t-2 border-[var(--color-slate)]">
                 <p className="text-sm font-bold text-[var(--color-slate)]">Total</p>
                 <p className="text-base font-bold text-[var(--color-slate)] tabular-nums">
                   {fmtAmt(job.cost_breakdown.total)}
                 </p>
               </div>
+              {job.cost_breakdown.platform_fee > 0 && (
+                <p className="mt-2 text-xs text-[var(--color-text-faint)]">
+                  Shipmater fee {fmtAmt(job.cost_breakdown.platform_fee)} is paid by the carrier, deducted from their payout.
+                </p>
+              )}
 
               {/* Payment status + invoice link */}
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-cream-dark)]">
