@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Payments\StripeNotice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Stripe\StripeClient;
@@ -27,15 +28,15 @@ class FactorStripeController extends Controller
         abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can connect Stripe.');
 
         if (!$org->stripe_connect_id) {
-            $account = $this->stripe()->accounts->create([
+            $account = StripeNotice::quiet(fn () => $this->stripe()->accounts->create([
                 'type'          => 'express',
                 'country'       => 'US',
                 'email'         => $org->email ?: $user->email,
                 'business_type' => 'company',
                 'company'       => array_filter(['name' => $org->name, 'tax_id' => $org->tax_id ? preg_replace('/\D/', '', $org->tax_id) : null]),
-                'capabilities'  => ['transfers' => ['requested' => true]],
+                'capabilities'  => ['card_payments' => ['requested' => true], 'transfers' => ['requested' => true]],
                 'metadata'      => ['platform' => 'shipmater', 'type' => 'factor', 'org_id' => (string) $org->id],
-            ]);
+            ]));
             $org->update(['stripe_connect_id' => $account->id]);
         }
 

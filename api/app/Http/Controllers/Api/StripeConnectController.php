@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CarrierProfile;
 use App\Services\CheckrService;
+use App\Services\Payments\StripeNotice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Stripe\StripeClient;
@@ -30,7 +31,7 @@ class StripeConnectController extends Controller
 
         // Create Stripe account if carrier doesn't have one yet
         if (!$profile?->stripe_account_id) {
-            $account = $stripe->accounts->create([
+            $account = StripeNotice::quiet(fn () => $stripe->accounts->create([
                 'type'         => 'express',
                 'country'      => 'US',
                 'email'        => $user->email,
@@ -39,7 +40,7 @@ class StripeConnectController extends Controller
                     'transfers'     => ['requested' => true],
                 ],
                 'metadata' => ['carrier_id' => $user->id],
-            ]);
+            ]));
 
             CarrierProfile::updateOrCreate(
                 ['user_id' => $user->id],

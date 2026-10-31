@@ -178,7 +178,6 @@ export function FinancialTab() {
   // Stripe Connect
   const [isConnecting, setIsConnecting] = useState(false);
   const stripeStatus    = profile?.stripe_account_status || 'not_connected';
-  const stripeAccountId = profile?.stripe_account_id;
 
   // Onboarding fee
   const [feeStep, setFeeStep]           = useState<'idle' | 'loading' | 'form' | 'confirming'>('idle');
@@ -191,14 +190,13 @@ export function FinancialTab() {
   async function handleStripeConnect() {
     try {
       setIsConnecting(true);
-      const res = await api.post('/api/v1/stripe/connect/create-account-link', {
-        stripe_account_id: stripeAccountId,
-      });
+      const res = await api.post('/api/v1/stripe/connect/onboard');
       window.open(res.data.url, '_blank', 'width=800,height=600');
 
+      // Ask Stripe directly; the account.updated webhook also updates the profile
       const pollInterval = setInterval(async () => {
-        const check = await api.get('/api/v1/carrier/profile');
-        if (check.data?.data?.stripe_account_status === 'verified') {
+        const check = await api.get('/api/v1/stripe/connect/status');
+        if (check.data?.status === 'verified') {
           clearInterval(pollInterval);
           refetch();
           toast.success('Stripe account connected!');
@@ -379,9 +377,17 @@ export function FinancialTab() {
             )}
 
             {stripeStatus === 'pending' && (
-              <div className="flex items-center gap-2 text-[var(--color-teal)]">
-                <Loader size={14} className="animate-spin" />
-                <span className="text-sm font-medium">Verification in progress…</span>
+              <div className="space-y-3">
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Your Stripe account is set up but not finished. If you already completed every step, Stripe may still be reviewing it.
+                </p>
+                <button
+                  onClick={handleStripeConnect}
+                  disabled={isConnecting}
+                  className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-4 py-2.5 text-sm font-medium hover:bg-[var(--color-teal-light)] disabled:opacity-60 transition-colors"
+                >
+                  {isConnecting ? <><Loader size={14} className="animate-spin" /> Waiting for Stripe…</> : <><ExternalLink size={14} /> Continue Stripe setup</>}
+                </button>
               </div>
             )}
 
@@ -397,7 +403,10 @@ export function FinancialTab() {
                 <AlertCircle size={14} className="text-orange-600 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-medium text-orange-900">Account restricted</p>
-                  <p className="text-xs text-orange-800">Please verify your identity in Stripe.</p>
+                  <p className="text-xs text-orange-800">Stripe needs more details before you can be paid.</p>
+                  <button onClick={handleStripeConnect} disabled={isConnecting} className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-orange-900 underline disabled:opacity-60">
+                    <ExternalLink size={12} /> {isConnecting ? 'Waiting for Stripe…' : 'Continue Stripe setup'}
+                  </button>
                 </div>
               </div>
             )}

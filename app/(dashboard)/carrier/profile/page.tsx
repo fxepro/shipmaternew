@@ -418,7 +418,8 @@ export default function CarrierProfilePage() {
 
     // Deep-link: ?tab=financial (or any valid tab)
     const validTabs: Tab[] = ['personal', 'services', 'certifications', 'insurance', 'medical', 'financial', 'background', 'vehicles', 'dot', 'reviews'];
-    if (tabParam && validTabs.includes(tabParam)) {
+    // Stripe returns with ?tab=financial&stripe=..., so the Stripe result is handled first
+    if (tabParam && validTabs.includes(tabParam) && !stripeResult && !identityResult) {
       setActiveTab(tabParam);
       router.replace('/carrier/profile');
       return;
@@ -426,9 +427,10 @@ export default function CarrierProfilePage() {
 
     if (stripeResult === 'success') {
       setActiveTab('financial');
-      api.get('/api/v1/stripe/connect/status').then(() => {
+      api.get('/api/v1/stripe/connect/status').then((r) => {
         qc.invalidateQueries({ queryKey: ['carrier-profile'] });
-        toast.success('Stripe account connected!');
+        if (r.data?.status === 'verified') toast.success('Stripe account connected!');
+        else toast('Stripe is still reviewing your details. This page updates when it finishes.');
       });
       router.replace('/carrier/profile');
     } else if (stripeResult === 'refresh') {
