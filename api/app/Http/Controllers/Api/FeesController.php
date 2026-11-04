@@ -25,6 +25,7 @@ class FeesController extends Controller
             'standard_rate'            => ['required', 'numeric', 'min:0', 'max:0.5'],
             'early_rate'               => ['required', 'numeric', 'min:0', 'max:0.5', 'lte:standard_rate'],
             'onboarding_fee'           => ['required', 'numeric', 'min:0', 'max:10000'],
+            'complete_fee'             => ['required', 'numeric', 'min:0', 'max:10000', 'gte:onboarding_fee'],
             'tiers'                    => ['required', 'array', 'min:1', 'max:10'],
             'tiers.*.key'              => ['required', 'string', 'max:20', 'distinct'],
             'tiers.*.label'            => ['required', 'string', 'max:60'],
@@ -32,6 +33,7 @@ class FeesController extends Controller
             'tiers.*.monthly_price'    => ['required', 'numeric', 'min:0', 'max:100000'],
         ], [
             'early_rate.lte' => 'The early-payment rate must not be higher than the standard rate.',
+            'complete_fee.gte' => 'The complete check must cost at least as much as the basic check.',
         ]);
 
         // Tiers must rise, and only the last may be open-ended

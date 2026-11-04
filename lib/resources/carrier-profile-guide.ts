@@ -76,10 +76,10 @@ export const CARRIER_PROFILE_TABS: GuideSection[] = [
     id: 'tab-background',
     title: 'Background',
     summary:
-      'Checkr background check and FMCSA Clearinghouse. Complete Personal (and CDL for Clearinghouse) first.',
+      'Background check (Basic $39, or Complete $99) and FMCSA Clearinghouse. Complete Personal (and CDL for Clearinghouse) first.',
     bullets: [
-      'Checkr needs first name, last name, and date of birth (18+) saved on Personal',
-      'You enter SSN on Checkr’s secure form — we never store full SSN',
+      'The background check needs first name, last name, and date of birth (18+) saved on Personal',
+      'You enter your SSN on the screening company’s secure form — we never store full SSN',
       'Clearinghouse needs CDL number and issuing state on Commercial',
     ],
   },
@@ -136,9 +136,9 @@ export const CARRIER_VERIFICATION_MATRIX: GuideMatrix = {
       'Age Verified',
     ],
     [
-      'Background (Checkr)',
+      'Background',
       'First + last name and DOB (18+) on Personal',
-      'Run Background Check → complete Checkr form (SSN on Checkr)',
+      'Pay for the check → open the secure form (SSN entered there, never stored by Shipmater)',
       'Background status clear / consider',
     ],
     [
@@ -168,7 +168,7 @@ export const CARRIER_REQUIREMENTS_MATRIX: GuideMatrix = {
     'Always-required Personal fields plus service-driven Insurance / Commercial fields. The amber banner lists missing items and links to the right tab.',
   columns: ['Item', 'Where', 'Rule', 'Shown in'],
   rows: [
-    ['First / last name', 'Personal', 'Required (Checkr)', 'Banner + save'],
+    ['First / last name', 'Personal', 'Required (background check)', 'Banner + save'],
     ['Email', 'Personal', 'Required (login)', 'Banner'],
     ['Phone + country code', 'Personal', 'Required; 6–12 local digits', 'Banner + save'],
     ['WhatsApp', 'Personal', 'Optional', '—'],
@@ -183,7 +183,7 @@ export const CARRIER_REQUIREMENTS_MATRIX: GuideMatrix = {
     ['FMCSA verify', 'Commercial', 'Number entered first', 'Toast on click'],
     ['Vehicle year/make/model', 'Vehicles', 'Required to add a unit', 'Toast on add'],
     ['≥1 vehicle', 'Vehicles', 'After services selected', 'Banner'],
-    ['Checkr', 'Background', 'Name + DOB first', 'Toast on click'],
+    ['Background check', 'Background', 'Name + DOB first', 'Toast on click'],
     ['Clearinghouse', 'Background', 'CDL + state first', 'Toast / disabled'],
     ['Onboarding fee / Stripe', 'Financial', 'Action flows', 'Toast / Stripe'],
   ],

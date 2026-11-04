@@ -52,9 +52,25 @@ return [
         'key' => env('FMCSA_API_KEY'),
     ],
 
+    // Background check providers (App\Services\Background). Admin → Settings picks the provider, the mode
+    // (test or live) and the package for each level; only the keys live here.
+    // Checkr signs webhooks with the API key itself, so there is no separate webhook secret.
     'checkr' => [
-        'key'            => env('CHECKR_API_KEY'),
-        'webhook_secret' => env('CHECKR_WEBHOOK_SECRET'),
+        'test_key' => env('CHECKR_TEST_KEY', env('CHECKR_API_KEY')),
+        'live_key' => env('CHECKR_LIVE_KEY'),
+        'test_url' => env('CHECKR_TEST_URL', 'https://api.checkr-staging.com/v1'),
+        'live_url' => env('CHECKR_LIVE_URL', 'https://api.checkr.com/v1'),
+        'package'  => env('CHECKR_PACKAGE'),
+    ],
+
+    // Foley's API is documented only to account holders; the URLs below are from Foley's integration notes.
+    'foley' => [
+        'test_key'       => env('FOLEY_TEST_KEY'),
+        'live_key'       => env('FOLEY_LIVE_KEY'),
+        'account_id'     => env('FOLEY_ACCOUNT_ID'),
+        'webhook_secret' => env('FOLEY_WEBHOOK_SECRET'),
+        'test_url'       => env('FOLEY_TEST_URL', 'https://api.sandbox.foley.io'),
+        'live_url'       => env('FOLEY_LIVE_URL', 'https://api.foley.io'),
     ],
 
     'clearinghouse' => [

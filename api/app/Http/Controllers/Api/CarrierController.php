@@ -37,7 +37,9 @@ class CarrierController extends Controller
 
             // Personal
             'date_of_birth'           => $profile?->date_of_birth?->toDateString(),
-            'ssn_last_4'              => $profile?->ssn_last_4,
+            // Never sent back to the browser; stored encrypted
+            'ssn_last_4'              => $profile?->ssn_last_4 ? '••••' : null,
+            'has_ssn_last_4'          => (bool) $profile?->ssn_last_4,
             'photo_url'               => $profile?->photo_url,
 
             // DOT-Commercial
@@ -228,7 +230,7 @@ class CarrierController extends Controller
 
             // Personal
             'date_of_birth'       => ['sometimes', 'nullable', 'date'],
-            'ssn_last_4'          => ['sometimes', 'nullable', 'string', 'max:4'],
+            'ssn_last_4'          => ['sometimes', 'nullable', 'digits:4'],
             'photo_url'           => ['sometimes', 'nullable', 'string'],
 
             // DOT-Commercial

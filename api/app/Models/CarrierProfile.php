@@ -77,8 +77,8 @@ class CarrierProfile extends Model
         'identity_verified_at',
         'age_verified',
         'age_verified_at',
-        'checkr_candidate_id',
-        'checkr_report_id',
+        'bg_candidate_id',
+        'bg_report_id',
 
         // Stripe
         'stripe_account_id',
@@ -126,6 +126,7 @@ class CarrierProfile extends Model
             'passenger_endorsement'     => 'boolean',
             'rating'                    => 'decimal:2',
             'date_of_birth'             => 'date',
+            'ssn_last_4'                => 'encrypted',
             'dl_expiry'                 => 'date',
             'cdl_expiry_date'           => 'date',
             'hazmat_expiry_date'        => 'date',

@@ -239,18 +239,18 @@ class ClearinghouseController extends Controller
         );
 
         // Gate: only set verification_status to 'approved' if BOTH
-        // Checkr (background_check_status=clear) AND Clearinghouse are clear.
-        // If Checkr hasn't run yet, leave verification_status alone.
+        // the background check (background_check_status=clear) AND Clearinghouse are clear.
+        // If the background check hasn't run yet, leave verification_status alone.
         if ($mappedStatus === 'clear') {
-            $checkrClear = $profile->background_check_status === 'clear';
+            $backgroundClear = $profile->background_check_status === 'clear';
 
-            if ($checkrClear && $profile->verification_status !== 'approved') {
+            if ($backgroundClear && $profile->verification_status !== 'approved') {
                 $profile->update([
                     'verification_status'            => 'approved',
                     'verification_status_updated_at' => now(),
                 ]);
             }
-            // else: Checkr still pending — Clearinghouse is clear but can't approve yet
+            // else: background check still pending — Clearinghouse is clear but can't approve yet
         }
 
         if ($mappedStatus === 'violations_found') {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, verificationApi, ratingApi } from '@/lib/api';
+import { api, verificationApi, ratingApi, payoutsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import {
   Upload, Check, Loader2, CheckCircle, AlertCircle, Clock, Plus, Trash2, Star,
@@ -13,12 +13,13 @@ import ServiceTypeSelector from '@/components/carrier/ServiceTypeSelector';
 import CertificationSelector from '@/components/carrier/CertificationSelector';
 import { certificationApi } from '@/lib/api';
 import { FinancialTab as FinancialTabComponent } from './components/tabs/FinancialTab';
+import { BusinessTab } from './components/tabs/BusinessTab';
+import { BackgroundCheckPanel } from '@/components/background/BackgroundCheckPanel';
 import { COUNTRIES, getCountry } from '@/lib/countries';
 import {
   collectCarrierFieldIssues,
   validateCarrierPersonalForm,
   carrierPersonalFieldErrors,
-  checkrPrereqError,
   validateCarrierInsuranceForm,
   validateCarrierCommercialForm,
   validateCarrierVehicleForm,
@@ -67,7 +68,7 @@ interface Vehicle {
   is_primary: boolean;
 }
 
-type Tab = 'personal' | 'services' | 'certifications' | 'dot' | 'financial' | 'background' | 'medical' | 'insurance' | 'vehicles' | 'reviews';
+type Tab = 'personal' | 'business' | 'services' | 'certifications' | 'dot' | 'financial' | 'background' | 'medical' | 'insurance' | 'vehicles' | 'reviews';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -399,8 +400,7 @@ export default function CarrierProfilePage() {
   // Stripe Identity state
   const [identityLoading, setIdentityLoading] = useState(false);
 
-  // Checkr background check state
-  const [bgCheckLoading, setBgCheckLoading]               = useState(false);
+  // Clearinghouse query state
   const [clearinghouseLoading, setClearinghouseLoading]   = useState(false);
   const [clearinghouseRefreshing, setClearinghouseRefreshing] = useState(false);
 
@@ -417,7 +417,7 @@ export default function CarrierProfilePage() {
     const tabParam       = searchParams.get('tab') as Tab | null;
 
     // Deep-link: ?tab=financial (or any valid tab)
-    const validTabs: Tab[] = ['personal', 'services', 'certifications', 'insurance', 'medical', 'financial', 'background', 'vehicles', 'dot', 'reviews'];
+    const validTabs: Tab[] = ['personal', 'business', 'services', 'certifications', 'insurance', 'medical', 'financial', 'background', 'vehicles', 'dot', 'reviews'];
     // Stripe returns with ?tab=financial&stripe=..., so the Stripe result is handled first
     if (tabParam && validTabs.includes(tabParam) && !stripeResult && !identityResult) {
       setActiveTab(tabParam);
@@ -427,15 +427,18 @@ export default function CarrierProfilePage() {
 
     if (stripeResult === 'success') {
       setActiveTab('financial');
-      api.get('/api/v1/stripe/connect/status').then((r) => {
+      payoutsApi.refresh().then((r) => {
+        qc.setQueryData(['payout-setup'], r.data.data);
         qc.invalidateQueries({ queryKey: ['carrier-profile'] });
-        if (r.data?.status === 'verified') toast.success('Stripe account connected!');
-        else toast('Stripe is still reviewing your details. This page updates when it finishes.');
-      });
+        const status = r.data.data?.stripe?.status;
+        if (status === 'verified') toast.success('Payouts are on.');
+        else if (status === 'reviewing') toast('Stripe is checking your details. This page updates when it finishes.');
+        else toast('Stripe still needs a few things. See Payouts below.');
+      }).catch(() => qc.invalidateQueries({ queryKey: ['payout-setup'] }));
       router.replace('/carrier/profile');
     } else if (stripeResult === 'refresh') {
       setActiveTab('financial');
-      toast.error('Stripe setup incomplete — please try again.');
+      toast('Stripe setup was not finished. Continue whenever you are ready.');
       router.replace('/carrier/profile');
     }
 
@@ -457,6 +460,7 @@ export default function CarrierProfilePage() {
     company_name: '',
     street: '', city: '', state: '', zip: '',
     id_type: 'dl', dl_number: '', dl_state: '', dl_expiry: '',
+    ssn_last_4: '',
   });
   const [personalErrors, setPersonalErrors] = useState<Record<string, string>>({});
 
@@ -695,22 +699,15 @@ export default function CarrierProfilePage() {
     vehicleCount: Array.isArray(vehiclesData) ? vehiclesData.length : 0,
   });
 
-  const checkrBlocked = checkrPrereqError({
-    first_name: personalForm.first_name || (profile.name || '').trim().split(/\s+/)[0] || '',
-    last_name: personalForm.last_name || (() => {
-      const parts = (profile.name || '').trim().split(/\s+/).filter(Boolean);
-      return parts.length > 1 ? parts[parts.length - 1] : '';
-    })(),
-    date_of_birth: personalForm.date_of_birth || profile.date_of_birth || '',
-  });
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'personal',        label: 'Personal' },
+    { id: 'business',        label: 'Business' },
+    { id: 'financial',       label: 'Financial' },
     { id: 'services',        label: 'Services' },
     { id: 'certifications',  label: 'Certifications' },
     { id: 'insurance',       label: 'Insurance' },
     { id: 'medical',         label: 'Medical' },
-    { id: 'financial',       label: 'Financial' },
     { id: 'background',      label: 'Background' },
     { id: 'vehicles',        label: 'Vehicles' },
     { id: 'dot',             label: 'Commercial' },
@@ -1035,6 +1032,24 @@ export default function CarrierProfilePage() {
               </div>
             </div>
 
+            <div className="border-t border-[var(--color-cream-dark)] pt-6">
+              <SectionTitle>Social Security Number</SectionTitle>
+              <div className="max-w-xs">
+                <Field
+                  label="Last 4 of SSN"
+                  value={personalForm.ssn_last_4}
+                  onChange={v => {
+                    setPersonalForm(p => ({ ...p, ssn_last_4: v.replace(/\D/g, '').slice(0, 4) }));
+                    setPersonalErrors(e => ({ ...e, ssn_last_4: '' }));
+                  }}
+                  placeholder={profile.has_ssn_last_4 ? '•••• saved' : '1234'}
+                  required={!profile.has_ssn_last_4}
+                  error={personalErrors.ssn_last_4}
+                  hint={profile.has_ssn_last_4 ? 'Saved and encrypted. Leave blank to keep it.' : 'Stored encrypted. Stripe uses it to confirm who you are for payouts.'}
+                />
+              </div>
+            </div>
+
             {/* ── Stripe Identity Verification ──────────────────────────── */}
             <div className="border-t border-[var(--color-cream-dark)] pt-6">
               <SectionTitle>Identity Verification</SectionTitle>
@@ -1082,6 +1097,11 @@ export default function CarrierProfilePage() {
                 toast.error(msg);
                 return;
               }
+              if (personalForm.ssn_last_4 ? !/^\d{4}$/.test(personalForm.ssn_last_4) : !profile.has_ssn_last_4) {
+                setPersonalErrors({ ssn_last_4: 'Enter the last 4 digits of your SSN.' });
+                toast.error('Enter the last 4 digits of your SSN.');
+                return;
+              }
               setPersonalErrors({});
               const fullName = [personalForm.first_name, personalForm.middle_name, personalForm.last_name, personalForm.suffix].filter(Boolean).join(' ');
               save({
@@ -1100,7 +1120,9 @@ export default function CarrierProfilePage() {
                 dl_number:     personalForm.dl_number,
                 dl_state:      personalForm.dl_state,
                 dl_expiry:     personalForm.dl_expiry || null,
+                ...(personalForm.ssn_last_4 ? { ssn_last_4: personalForm.ssn_last_4 } : {}),
               });
+              setPersonalForm(p => ({ ...p, ssn_last_4: '' }));
             }} isPending={updateMutation.isPending} />
           </div>
         )}
@@ -1355,8 +1377,12 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── FINANCIAL ─────────────────────────────────────────────────── */}
+        {activeTab === 'business' && (
+          <BusinessTab profile={profile} />
+        )}
+
         {activeTab === 'financial' && (
-          <FinancialTabComponent />
+          <FinancialTabComponent onGoTo={(tab) => setActiveTab(tab as Tab)} />
         )}
 
         {/* ── BACKGROUND ────────────────────────────────────────────────── */}
@@ -1365,86 +1391,36 @@ export default function CarrierProfilePage() {
             <div>
               <SectionTitle>Background Screening</SectionTitle>
               <p className="text-sm text-[var(--color-text-muted)]">
-                All carriers on Shipmater must pass a comprehensive background screen before platform access is granted.
-                Checks are run through <strong className="text-[var(--color-text)]">Checkr</strong> (criminal, MVR, watchlist, sex offender registry)
-                and the <strong className="text-[var(--color-text)]">FMCSA Drug &amp; Alcohol Clearinghouse</strong> (federal requirement for CDL holders).
+                Every carrier owner and every driver on Shipmater is background checked before platform access is granted.
+                The <strong className="text-[var(--color-text)]">Basic check</strong> is required. The <strong className="text-[var(--color-text)]">Complete check</strong> adds
+                county records, your driving record and the <strong className="text-[var(--color-text)]">FMCSA Drug &amp; Alcohol Clearinghouse</strong>; you can
+                add it yourself, or a shipper you have a contract with can pay for it.
               </p>
             </div>
 
-            {/* ── Check breakdown grid ─────────────────────────────────── */}
-            {(() => {
-              const bgStatus = profile.background_check_status;
-              const isDone   = bgStatus === 'clear';
-              const isFailed = bgStatus === 'suspended';
-              const isReview = bgStatus === 'consider';
-              const isPending = ['pending', 'invitation_sent'].includes(bgStatus ?? '');
-
-              const checks = [
-                {
-                  label: 'Criminal Background',
-                  detail: 'National, federal, and county-level criminal records',
-                  provider: 'Checkr',
-                },
-                {
-                  label: 'Motor Vehicle Record',
-                  detail: 'Driving history, violations, suspensions, DUI',
-                  provider: 'Checkr',
-                },
-                {
-                  label: 'Sex Offender Registry',
-                  detail: 'National sex offender registry — required for all carriers',
-                  provider: 'Checkr',
-                  highlight: true,
-                },
-                {
-                  label: 'OFAC / Watchlist',
-                  detail: 'Terrorist watchlist, sanctions, global watchlists',
-                  provider: 'Checkr',
-                },
-              ];
-
-              return (
-                <div className="rounded-xl border border-[var(--color-cream-dark)] divide-y divide-[var(--color-cream-dark)]">
-                  {checks.map((c) => (
-                    <div key={c.label} className={`flex items-center gap-4 px-4 py-3 ${c.highlight ? 'bg-[var(--color-cream-pale)]' : ''}`}>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                        isDone   ? 'bg-emerald-100' :
-                        isFailed ? 'bg-red-100' :
-                        isReview ? 'bg-amber-100' :
-                        isPending ? 'bg-blue-50' :
-                        'bg-[var(--color-cream)]'
-                      }`}>
-                        {isDone   ? <CheckCircle size={14} className="text-emerald-600" /> :
-                         isFailed ? <AlertCircle size={14} className="text-red-500" /> :
-                         isReview ? <AlertCircle size={14} className="text-amber-500" /> :
-                         isPending ? <Loader2 size={13} className="text-blue-500 animate-spin" /> :
-                         <Clock size={13} className="text-[var(--color-text-faint)]" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[var(--color-text)]">{c.label}</p>
-                        <p className="text-xs text-[var(--color-text-muted)] truncate">{c.detail}</p>
-                      </div>
-                      <span className="text-xs text-[var(--color-text-faint)] shrink-0">{c.provider}</span>
-                    </div>
-                  ))}
-
-                  {/* Clearinghouse — separate federal check */}
-                  <div className="flex items-center gap-4 px-4 py-3 bg-yellow-50">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 bg-yellow-100">
-                      <Clock size={13} className="text-yellow-600" />
-                    </div>
+            {/* ── What each level covers ──────────────────────────────── */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">What is checked</p>
+              <div className="rounded-xl border border-[var(--color-cream-dark)] divide-y divide-[var(--color-cream-dark)]">
+                {[
+                  { label: 'Criminal record search', detail: 'National and federal criminal records', level: 'Basic' },
+                  { label: 'Sex offender registry', detail: 'National sex offender registry', level: 'Basic' },
+                  { label: 'OFAC / Watchlist', detail: 'Terrorist watchlist, sanctions, global watchlists', level: 'Basic' },
+                  { label: 'Identity and carrier verification', detail: 'Photo ID with a selfie, and your FMCSA operating authority', level: 'Basic' },
+                  { label: 'County criminal records', detail: 'Court records in the counties where you have lived', level: 'Complete' },
+                  { label: 'Motor Vehicle Record', detail: 'Driving history, violations, suspensions, DUI', level: 'Complete' },
+                  { label: 'Drug & Alcohol Clearinghouse', detail: 'FMCSA federal database of CDL drug and alcohol violations', level: 'Complete' },
+                ].map((c) => (
+                  <div key={c.label} className="flex items-center gap-4 px-4 py-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-[var(--color-text)]">Drug &amp; Alcohol Clearinghouse</p>
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-200 text-yellow-800 uppercase tracking-wide">Federal — Required</span>
-                      </div>
-                      <p className="text-xs text-[var(--color-text-muted)]">FMCSA federal database — CDL drug/alcohol violations from all prior employers</p>
+                      <p className="text-sm font-medium text-[var(--color-text)]">{c.label}</p>
+                      <p className="text-xs text-[var(--color-text-muted)] truncate">{c.detail}</p>
                     </div>
-                    <span className="text-xs text-[var(--color-text-faint)] shrink-0">FMCSA</span>
+                    <span className={`text-xs shrink-0 ${c.level === 'Basic' ? 'text-[var(--color-text-faint)]' : 'text-[var(--color-teal)]'}`}>{c.level}</span>
                   </div>
-                </div>
-              );
-            })()}
+                ))}
+              </div>
+            </div>
 
             {/* ── Prerequisites ───────────────────────────────────────── */}
             <div>
@@ -1455,7 +1431,7 @@ export default function CarrierProfilePage() {
                   { label: "Driver's license number",                                done: !!(profile.cdl_number) },
                   { label: 'Date of birth',                                          done: !!(profile.date_of_birth) },
                   { label: 'Home address',                                           done: !!(personalForm.street && personalForm.city) },
-                  { label: "Full SSN — entered directly on Checkr's secure form",   done: false, note: 'Collected by Checkr only' },
+                  { label: "Full SSN — entered on the screening company's secure form", done: false, note: 'Never stored by Shipmater' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-3 px-4 py-3">
                     {item.done
@@ -1469,30 +1445,6 @@ export default function CarrierProfilePage() {
                 ))}
               </div>
             </div>
-
-            {/* ── Checkr status panel ──────────────────────────────────── */}
-            {profile.background_check_status === 'clear' && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-start gap-3 mb-3">
-                  <CheckCircle size={18} className="text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-800">Checkr Background Check — Passed</p>
-                    {profile.background_check_completed_at && (
-                      <p className="text-xs text-emerald-600 mt-0.5">
-                        Completed {new Date(profile.background_check_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {['Criminal — clear', 'MVR — clear', 'Sex offender registry — clear', 'OFAC / Watchlist — clear'].map(item => (
-                    <div key={item} className="flex items-center gap-1.5 text-xs text-emerald-700">
-                      <CheckCircle size={11} className="shrink-0" /> {item}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {profile.background_check_status === 'consider' && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
@@ -1510,36 +1462,6 @@ export default function CarrierProfilePage() {
                 <div>
                   <p className="text-sm font-semibold text-red-800">Background Check — Not Passed</p>
                   <p className="text-xs text-red-700 mt-0.5">Your background check did not meet our requirements. Contact support@shipmater.com if you believe this is in error.</p>
-                </div>
-              </div>
-            )}
-
-            {profile.background_check_status === 'pending' && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 flex items-start gap-3">
-                <Loader2 size={18} className="text-blue-600 shrink-0 mt-0.5 animate-spin" />
-                <div>
-                  <p className="text-sm font-semibold text-blue-800">Checkr Report In Progress</p>
-                  <p className="text-xs text-blue-700 mt-0.5">Processing your criminal, MVR, sex offender, and watchlist checks. Typically 3–5 business days.</p>
-                </div>
-              </div>
-            )}
-
-            {profile.background_check_status === 'invitation_sent' && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 flex items-start gap-3">
-                <Clock size={18} className="text-blue-600 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-blue-800">Action Required — Complete the Checkr Form</p>
-                  <p className="text-xs text-blue-700 mt-0.5 mb-3">Enter your SSN directly on Checkr's secure form — we never see or store it.</p>
-                  {profile.background_check_invitation_url && (
-                    <a
-                      href={profile.background_check_invitation_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 text-white px-4 py-2 text-xs font-semibold hover:bg-blue-700 transition-colors"
-                    >
-                      <ExternalLink size={12} /> Open Checkr Form
-                    </a>
-                  )}
                 </div>
               </div>
             )}
@@ -1575,7 +1497,7 @@ export default function CarrierProfilePage() {
                       </p>
                       <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
                         Required for all CDL drivers. Checks federal drug &amp; alcohol violations across every prior employer.
-                        Cost: $1.25 pre-employment query — covered by your platform fee.
+                        Part of the Complete check; required for CDL holders at that level.
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -1701,51 +1623,8 @@ export default function CarrierProfilePage() {
               );
             })()}
 
-            {/* ── Run Checkr button ────────────────────────────────────── */}
-            {['not_started', 'suspended'].includes(profile.background_check_status ?? 'not_started') && (
-              <div className="flex items-center justify-between pt-2 border-t border-[var(--color-cream-dark)]">
-                <div>
-                  <p className="text-sm font-medium text-[var(--color-text)]">
-                    {profile.background_check_status === 'suspended' ? 'Re-run Checkr Background Check' : 'Start Checkr Background Check'}
-                  </p>
-                  <p className="text-xs text-[var(--color-text-faint)] mt-0.5">Criminal · MVR · Sex offender registry · OFAC — results in 3–5 business days</p>
-                </div>
-                <button
-                  disabled={bgCheckLoading || !!checkrBlocked}
-                  className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-5 py-2.5 text-sm font-medium disabled:opacity-40 hover:bg-[var(--color-teal-light)] transition-colors"
-                  title={checkrBlocked || ''}
-                  onClick={async () => {
-                    const prereq = checkrPrereqError({
-                      first_name: personalForm.first_name,
-                      last_name: personalForm.last_name,
-                      date_of_birth: personalForm.date_of_birth || profile.date_of_birth || '',
-                    });
-                    if (prereq) {
-                      toast.error(prereq);
-                      setActiveTab('personal');
-                      return;
-                    }
-                    setBgCheckLoading(true);
-                    try {
-                      const res = await verificationApi.initiateBackgroundCheck();
-                      const { invitation_url } = res.data;
-                      await refetch();
-                      if (invitation_url) window.open(invitation_url, '_blank');
-                      toast.success('Background check initiated — complete the secure Checkr form.');
-                    } catch (err: unknown) {
-                      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-                      toast.error(msg ?? 'Failed to initiate background check. Try again.');
-                    } finally {
-                      setBgCheckLoading(false);
-                    }
-                  }}
-                >
-                  {bgCheckLoading
-                    ? <><Loader2 size={13} className="animate-spin" /> Starting…</>
-                    : 'Run Background Check'}
-                </button>
-              </div>
-            )}
+            {/* ── Background check levels and payment: last, once everything else is filled in ── */}
+            <BackgroundCheckPanel onChange={() => refetch()} />
           </div>
         )}
 

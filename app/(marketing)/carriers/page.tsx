@@ -119,7 +119,7 @@ const EARNINGS = [
 const FAQS = [
   {
     q: 'How long does carrier onboarding take?',
-    a: 'Most carriers complete onboarding within 24–48 hours. Identity verification (Stripe Identity) takes minutes. Background checks (Checkr) typically return within a few hours. FMCSA lookup is instant. Our trust team\'s human review is usually completed within one business day.',
+    a: 'Most carriers complete onboarding within 24–48 hours. Identity verification (Stripe Identity) takes minutes. Background checks typically return within a few hours to a few days. FMCSA lookup is instant. Our trust team\'s human review is usually completed within one business day.',
   },
   {
     q: 'Do I need a DOT number to sign up?',

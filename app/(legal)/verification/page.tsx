@@ -23,10 +23,10 @@ const SOLE_PROPRIETOR_CHECKS = [
     name: 'Background Check',
     description: 'Ensure safety and trust',
     items: [
-      { requirement: 'Criminal background check (national & county)', service: 'Checkr', required: true },
-      { requirement: 'Motor Vehicle Record (MVR) - driving history', service: 'Checkr', required: true },
-      { requirement: 'OFAC / Sanctions list screening', service: 'Checkr', required: true },
-      { requirement: 'Sex offender registry check', service: 'Checkr', required: true },
+      { requirement: 'Criminal background check (national; county in the Complete check)', service: 'Background screening', required: true },
+      { requirement: 'Motor Vehicle Record (MVR) - driving history', service: 'Background screening (Complete check)', required: false },
+      { requirement: 'OFAC / Sanctions list screening', service: 'Background screening', required: true },
+      { requirement: 'Sex offender registry check', service: 'Background screening', required: true },
     ]
   },
   {
@@ -102,7 +102,7 @@ const COMPANY_CHECKS = [
     items: [
       { requirement: 'Owner legal name & DOB', service: 'Manual entry', required: true },
       { requirement: 'Owner photo ID', service: 'Document upload', required: true },
-      { requirement: 'Owner background check', service: 'Checkr', required: true },
+      { requirement: 'Owner background check', service: 'Background screening', required: true },
       { requirement: 'Owner SSN (for Stripe payouts)', service: 'Secure collection', required: true },
     ]
   },
@@ -123,7 +123,7 @@ const COMPANY_CHECKS = [
     description: 'Your roster',
     items: [
       { requirement: 'CDL number, class, expiry for each driver', service: 'Manual entry', required: true },
-      { requirement: 'Background check for each driver', service: 'Checkr', required: true },
+      { requirement: 'Background check for each driver', service: 'Background screening', required: true },
       { requirement: 'DOT medical certificate for each driver', service: 'Document upload', required: true },
       { requirement: 'Driver assignment to vehicles', service: 'Manual assignment', required: true },
     ]

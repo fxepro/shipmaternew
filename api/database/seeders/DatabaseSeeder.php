@@ -83,7 +83,7 @@ class DatabaseSeeder extends Seeder
                 'dot_verified'            => true,
                 'mc_number'               => 'MC-291847',
                 'insurance_verified'      => true,
-                'background_check_status' => 'approved',
+                'background_check_status' => 'clear',
                 'rating'                  => 4.90,
                 'total_deliveries'        => 284,
             ]
@@ -98,7 +98,7 @@ class DatabaseSeeder extends Seeder
                 'dot_verified'            => true,
                 'mc_number'               => 'MC-482100',
                 'insurance_verified'      => true,
-                'background_check_status' => 'approved',
+                'background_check_status' => 'clear',
                 'rating'                  => 4.70,
                 'total_deliveries'        => 156,
             ]

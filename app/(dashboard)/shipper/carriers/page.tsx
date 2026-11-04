@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { preferredCarrierApi, carrierApi, api, serviceTypeApi } from '@/lib/api';
+import { ShipperCarrierChecks } from '@/components/background/ShipperCarrierChecks';
 import {
   Truck, Star, Search, Hash, Plus, X, Shield,
   CheckCircle2, Clock, Package, ChevronRight, Trash2,
@@ -169,6 +170,9 @@ function CarrierDrawer({ carrier, onClose, showAddToNetwork }: {
             )}
           </div>
         </div>
+
+        {/* Background check levels: shared with shippers that have an active contract */}
+        <ShipperCarrierChecks carrierUserId={carrier.carrierId ?? carrier.id} />
 
         {/* Stats */}
         <div className="p-6 border-b border-[var(--color-cream-dark)]">

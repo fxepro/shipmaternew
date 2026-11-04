@@ -14,7 +14,8 @@ class Fees
     private const DEFAULTS = [
         'standard_rate'  => 0.10,
         'early_rate'     => 0.075,
-        'onboarding_fee' => 99,
+        'onboarding_fee' => 39,   // basic background check level, paid by the carrier
+        'complete_fee'   => 99,   // complete level; a carrier or a contracted shipper pays the difference
         'tiers'          => [],
     ];
 

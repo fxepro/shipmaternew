@@ -117,7 +117,7 @@ function splitName(name?: string) {
 
 /**
  * Banner issues: always-required Personal fields + service-type required fields.
- * Stripe Identity / Checkr / FMCSA / fee messages toast on click — not listed here.
+ * Stripe Identity / background check / FMCSA / fee messages toast on click — not listed here.
  */
 export function collectCarrierFieldIssues(p: CarrierProfileValidationInput): CarrierValidationIssue[] {
   const issues: CarrierValidationIssue[] = [];
@@ -368,8 +368,8 @@ export function validateCarrierVehicleForm(form: {
   return null;
 }
 
-/** Preconditions for Checkr — first + last name and adult DOB. */
-export function checkrPrereqError(form: {
+/** Preconditions for a background check — first + last name and adult DOB. */
+export function backgroundPrereqError(form: {
   first_name: string;
   last_name: string;
   date_of_birth: string;

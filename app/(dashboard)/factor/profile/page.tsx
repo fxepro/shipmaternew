@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Landmark, Users, Loader2, Save, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Building2, Landmark, Users, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import { orgApi, factorStripeApi } from '@/lib/api';
+import { orgApi, payoutsApi } from '@/lib/api';
 import { TeamManager } from '@/components/team/TeamManager';
+import { BusinessDetailsForm, BankAccountForm, PayoutStatus } from '@/components/payouts/PayoutSetup';
 
 type Tab = 'company' | 'finance' | 'team';
 
@@ -61,18 +62,10 @@ function SaveBar({ pending, updatedAt }: { pending: boolean; updatedAt?: string 
 
 // ── Company ─────────────────────────────────────────────────────────────────
 
+// Legal name, EIN, address, phone and website are in the business details below (sent to Stripe for payouts)
 const COMPANY_FIELDS: Field[] = [
-  { key: 'name',    label: 'Legal company name', placeholder: 'Acme Capital LLC', wide: true },
-  { key: 'tax_id',  label: 'EIN', placeholder: '12-3456789' },
-  { key: 'phone',   label: 'Phone', placeholder: '(555) 123-4567', type: 'tel' },
+  { key: 'name',    label: 'Company name shown on Shipmater', placeholder: 'Acme Capital', wide: true },
   { key: 'email',   label: 'Company email', placeholder: 'ops@acmecapital.com', type: 'email' },
-  { key: 'website', label: 'Website', placeholder: 'acmecapital.com' },
-];
-const ADDRESS_FIELDS: Field[] = [
-  { key: 'street', label: 'Street address', wide: true },
-  { key: 'city',   label: 'City' },
-  { key: 'state',  label: 'State', placeholder: 'TX' },
-  { key: 'zip',    label: 'ZIP' },
 ];
 
 function CompanyTab() {
@@ -84,7 +77,7 @@ function CompanyTab() {
   const save = useMutation({
     mutationFn: () => {
       const payload: Values = {};
-      for (const f of [...COMPANY_FIELDS, ...ADDRESS_FIELDS]) payload[f.key] = form[f.key]?.trim() || null;
+      for (const f of COMPANY_FIELDS) payload[f.key] = form[f.key]?.trim() || null;
       if (!payload.name) delete payload.name;
       return orgApi.update(payload);
     },
@@ -96,50 +89,25 @@ function CompanyTab() {
   const set = (k: string, v: string) => setForm((s) => ({ ...s, [k]: v }));
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-5">
-      <FieldCard title="Company details" note="Carriers and shippers see these details on NOAs and on the loads you fund."
-        fields={COMPANY_FIELDS} values={form} onChange={set} />
-      <FieldCard title="Business address" fields={ADDRESS_FIELDS} values={form} onChange={set} />
-      <SaveBar pending={save.isPending} />
-    </form>
+    <div className="space-y-5">
+      <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-5">
+        <FieldCard title="Company" note="Carriers and shippers see these on NOAs and on the loads you fund."
+          fields={COMPANY_FIELDS} values={form} onChange={set} />
+        <SaveBar pending={save.isPending} />
+      </form>
+
+      <section className="card">
+        <div className="card-head card-head-tint px-5 py-3"><p className="card-title">Business details</p></div>
+        <div className="card-body">
+          <p className="mb-6 text-sm text-[var(--color-text-muted)]">What Stripe needs to open your payout account. Fields marked <span className="font-bold text-red-500">*</span> are required. They&apos;re sent to Stripe once, from the Finance tab.</p>
+          <BusinessDetailsForm />
+        </div>
+      </section>
+    </div>
   );
 }
 
 // ── Finance ─────────────────────────────────────────────────────────────────
-
-interface StripeStatus { connected: boolean; ready: boolean; requirements_due?: number; error?: string }
-
-/** The factor's own Stripe account: shippers pay factored loads into it through Shipmater */
-function StripeConnectCard() {
-  const { data, isLoading } = useQuery({ queryKey: ['factor-stripe'], queryFn: () => factorStripeApi.status().then((r) => r.data.data as StripeStatus) });
-  const connect = useMutation({
-    mutationFn: () => factorStripeApi.connect(),
-    onSuccess: (res) => { window.location.href = res.data.url; },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
-
-  return (
-    <section className="card">
-      <div className="card-head card-head-tint px-5 py-3"><p className="card-title">Get paid through Shipmater</p></div>
-      <div className="card-body space-y-3">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Shippers pay the loads you fund through Shipmater, straight into your own Stripe account. Connect it before you accept loads. Shipmater never holds the money.
-        </p>
-        {isLoading ? <div className="skeleton h-10 rounded-lg" /> : data?.ready ? (
-          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 size={16} /> Stripe connected and ready to receive payments.</p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="button" onClick={() => connect.mutate()} disabled={connect.isPending} className="btn btn-navy flex items-center gap-2 disabled:opacity-60">
-              {connect.isPending ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-              {data?.connected ? 'Finish Stripe setup' : 'Connect Stripe'}
-            </button>
-            {data?.connected && <span className="text-xs text-amber-700">{data.error ?? `Stripe needs ${data.requirements_due || 'a few'} more details before you can receive payments.`}</span>}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
 
 const ACH_FIELDS: Field[] = [
   { key: 'payee_name',     label: 'Account holder (pay to)', placeholder: 'Acme Capital LLC', wide: true },
@@ -166,7 +134,7 @@ const BILLING_FIELDS: Field[] = [
   { key: 'billing_phone', label: 'Billing phone', type: 'tel' },
 ];
 
-function FinanceTab() {
+function FinanceTab({ onGoTo }: { onGoTo: (tab: string) => void }) {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['org-remittance'], queryFn: () => orgApi.remittance().then((r) => r.data.data as Values) });
   const [form, setForm] = useState<Values>({});
@@ -190,15 +158,18 @@ function FinanceTab() {
   const set = (k: string, v: string) => setForm((s) => ({ ...s, [k]: v }));
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-5">
-      <StripeConnectCard />
+    <div className="space-y-5">
+    <section className="card">
+      <div className="card-body"><BankAccountForm /></div>
+    </section>
 
+    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-5">
       <div className="rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-cream)] px-5 py-4 text-sm text-[var(--color-text-muted)]">
-        The bank and check details below are for reference on your NOAs and invoices. Load payments go to your connected Stripe account.
+        The details below are printed on your NOAs and invoices. Load payments go to the payout bank account above.
       </div>
 
       <section className="card">
-        <div className="card-head card-head-tint px-5 py-3"><p className="card-title">Bank (ACH)</p></div>
+        <div className="card-head card-head-tint px-5 py-3"><p className="card-title">Bank (ACH) on NOAs</p></div>
         <div className="card-body">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {ACH_FIELDS.map((f) => (
@@ -260,6 +231,16 @@ function FinanceTab() {
 
       <SaveBar pending={save.isPending} updatedAt={form.updated_at} />
     </form>
+
+    <section className="card">
+      <div className="card-body">
+        <PayoutStatus
+          tabs={{ person: { id: 'company', label: 'Company' }, business: { id: 'company', label: 'Company' }, bank: { id: 'finance', label: 'Finance' } }}
+          onGoTo={onGoTo}
+        />
+      </div>
+    </section>
+    </div>
   );
 }
 
@@ -270,6 +251,20 @@ function Account() {
   const params = useSearchParams();
   const requested = params.get('tab') as Tab | null;
   const tab: Tab = TABS.some((t) => t.id === requested) ? (requested as Tab) : 'company';
+  const qc = useQueryClient();
+  const stripeResult = params.get('stripe');
+
+  // Back from Stripe's review page: read its answer
+  useEffect(() => {
+    if (!stripeResult) return;
+    router.replace('/factor/profile?tab=finance');
+    if (stripeResult !== 'success') { toast('Stripe setup was not finished. Continue whenever you are ready.'); return; }
+    payoutsApi.refresh().then((r) => {
+      qc.setQueryData(['payout-setup'], r.data.data);
+      const status = r.data.data?.stripe?.status;
+      toast(status === 'verified' ? 'Payouts are on.' : status === 'reviewing' ? 'Stripe is checking your details.' : 'Stripe still needs a few things. See Payouts below.');
+    }).catch(() => qc.invalidateQueries({ queryKey: ['payout-setup'] }));
+  }, [stripeResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -290,7 +285,7 @@ function Account() {
       </div>
 
       {tab === 'company' && <CompanyTab />}
-      {tab === 'finance' && <FinanceTab />}
+      {tab === 'finance' && <FinanceTab onGoTo={(t) => router.replace(`/factor/profile?tab=${t}`)} />}
       {tab === 'team'    && <TeamManager type="factor" />}
     </div>
   );

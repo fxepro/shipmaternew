@@ -15,7 +15,7 @@ function SkeletonCard() {
 
 // ── Approval pipeline step config ─────────────────────────────────────────
 const PIPELINE_STEPS = [
-  { key: 'payment',    label: 'Pay $99 fee' },
+  { key: 'payment',    label: 'Pay $39 check' },
   { key: 'background', label: 'Background check' },
   { key: 'review',     label: 'Approval' },
 ];
@@ -53,7 +53,7 @@ function ApprovalBanner({ status }: { status: string }) {
     incomplete: {
       icon: <CreditCard size={20} className="text-[var(--color-teal)]" />,
       title: 'Complete your profile to get started',
-      description: 'Fill in your personal info and DOT/MC numbers, then pay the $99 onboarding fee to unlock the platform.',
+      description: 'Fill in your personal info and DOT/MC numbers, then pay the $39 background check to unlock the platform.',
       action: { label: 'Go to Profile', href: '/carrier/profile' },
       color: 'bg-[var(--color-teal-pale)]',
       borderColor: 'border-[var(--color-teal)]',
@@ -61,15 +61,15 @@ function ApprovalBanner({ status }: { status: string }) {
     pending_payment: {
       icon: <CreditCard size={20} className="text-yellow-600" />,
       title: 'Platform fee required',
-      description: 'Pay the one-time $99 onboarding fee to initiate your background check and unlock all platform features.',
-      action: { label: 'Pay $99 Now →', href: '/carrier/profile?tab=financial' },
+      description: 'Pay the one-time $39 Basic background check to start it and unlock all platform features.',
+      action: { label: 'Pay $39 Now →', href: '/carrier/profile?tab=background' },
       color: 'bg-yellow-50',
       borderColor: 'border-yellow-200',
     },
     pending_background: {
       icon: <Loader size={20} className="text-blue-600 animate-spin" />,
       title: 'Background check in progress',
-      description: 'Your Checkr background check is underway. This typically takes 3–5 business days. You\'ll be notified when it\'s complete.',
+      description: 'Your background check is underway. This typically takes 3–5 business days. You\'ll be notified when it\'s complete.',
       color: 'bg-blue-50',
       borderColor: 'border-blue-200',
     },

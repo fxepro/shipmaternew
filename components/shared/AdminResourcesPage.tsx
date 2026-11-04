@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronRight, Shield } from 'lucide-react';
 import { getUser } from '@/lib/auth';
-import { ADMIN_TOPICS, type AdminManualTopic } from '@/lib/resources/admin-manual';
+import { topicsByCategory, type AdminManualTopic } from '@/lib/resources/admin-manual';
 
 const BASE = '/admin/resources';
 
@@ -79,22 +79,27 @@ function Shell({
               >
                 Overview
               </Link>
-              {ADMIN_TOPICS.map((t) => {
-                const on = t.slug === activeSlug;
-                return (
-                  <Link
-                    key={t.slug}
-                    href={`${BASE}/${t.slug}`}
-                    className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
-                      on
-                        ? 'bg-[var(--color-teal-pale)] text-[var(--color-teal)] font-semibold'
-                        : 'text-[var(--color-text-muted)] hover:bg-[var(--color-cream)] hover:text-[var(--color-text)]'
-                    }`}
-                  >
-                    {t.title}
-                  </Link>
-                );
-              })}
+              {topicsByCategory().map(({ category, topics }) => (
+                <div key={category}>
+                  <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">{category}</p>
+                  {topics.map((t) => {
+                    const on = t.slug === activeSlug;
+                    return (
+                      <Link
+                        key={t.slug}
+                        href={`${BASE}/${t.slug}`}
+                        className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
+                          on
+                            ? 'bg-[var(--color-teal-pale)] text-[var(--color-teal)] font-semibold'
+                            : 'text-[var(--color-text-muted)] hover:bg-[var(--color-cream)] hover:text-[var(--color-text)]'
+                        }`}
+                      >
+                        {t.title}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
             </nav>
           </div>
           <p className="mt-3 px-1 text-[11px] text-[var(--color-text-faint)] leading-relaxed">
@@ -117,8 +122,11 @@ export function AdminResourcesIndex() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 mb-4">
           Operator-only. Do not put live passwords or API keys in this guide — use host secret stores.
         </div>
+        {topicsByCategory().map(({ category, topics }) => (
+        <div key={category} className="mb-6">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">{category}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {ADMIN_TOPICS.map((t) => {
+          {topics.map((t) => {
             const Icon = t.icon;
             return (
               <Link
@@ -129,22 +137,26 @@ export function AdminResourcesIndex() {
                 <div className="card-head card-head-tint flex items-center justify-between gap-3 px-5 py-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Icon size={16} className="shrink-0 text-[var(--color-text-muted)]" />
-                    <h2 className="text-sm font-semibold text-[var(--color-text)] truncate">{t.title}</h2>
+                    <p className="text-sm font-semibold text-[var(--color-text)] truncate">{t.title}</p>
                   </div>
                   <ChevronRight size={14} className="shrink-0 text-[var(--color-text-faint)] group-hover:text-[var(--color-teal)]" />
                 </div>
                 <div className="px-5 py-4 space-y-3 flex-1">
                   <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{t.summary}</p>
-                  <ul className="list-disc pl-4 space-y-1 text-sm text-[var(--color-text)]">
-                    {t.bullets.map((b) => (
-                      <li key={b}>{b}</li>
-                    ))}
-                  </ul>
+                  {t.bullets.length > 0 && (
+                    <ul className="list-disc pl-4 space-y-1 text-sm text-[var(--color-text)]">
+                      {t.bullets.map((b) => (
+                        <li key={b}>{b}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </Link>
             );
           })}
         </div>
+        </div>
+        ))}
       </Shell>
     </AdminGate>
   );
@@ -158,21 +170,25 @@ export function AdminResourcesTopic({ topic }: { topic: AdminManualTopic }) {
         <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-faint)] mb-4">
           <Link href={BASE} className="hover:text-[var(--color-teal)]">Admin</Link>
           <ChevronRight size={12} />
+          <span>{topic.category ?? 'Platform setup'}</span>
+          <ChevronRight size={12} />
           <span className="text-[var(--color-text-muted)]">{topic.title}</span>
         </div>
 
         <div className="rounded-xl border border-[var(--color-cream-dark)] bg-white overflow-hidden mb-4">
           <div className="card-head card-head-tint flex items-center gap-2.5 px-5 py-3">
             <Icon size={16} className="text-[var(--color-text-muted)]" />
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">{topic.title}</h2>
+            <p className="text-sm font-semibold text-[var(--color-text)]">{topic.title}</p>
           </div>
           <div className="px-5 py-4 space-y-3">
             <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{topic.summary}</p>
-            <ul className="list-disc pl-4 space-y-1 text-sm text-[var(--color-text)]">
-              {topic.bullets.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
+            {topic.bullets.length > 0 && (
+              <ul className="list-disc pl-4 space-y-1 text-sm text-[var(--color-text)]">
+                {topic.bullets.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
@@ -184,7 +200,7 @@ export function AdminResourcesTopic({ topic }: { topic: AdminManualTopic }) {
               className="rounded-xl border border-[var(--color-cream-dark)] bg-white overflow-hidden"
             >
               <div className="card-head card-head-tint px-5 py-3">
-                <h3 className="text-sm font-semibold text-[var(--color-text)]">{s.title}</h3>
+                <p className="text-sm font-semibold text-[var(--color-text)]">{s.title}</p>
               </div>
               <div className="px-5 py-4 space-y-3 text-sm text-[var(--color-text)] leading-relaxed">
                 {s.paragraphs.map((p, i) => (

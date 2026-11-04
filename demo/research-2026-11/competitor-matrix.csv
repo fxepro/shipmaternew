@@ -1,0 +1,40 @@
+﻿Area,Feature,Shipmater,FleetWorks,Peer,Lanesurf,Manifold Freight,Cartage,GETASAP,TrueMile,chrt
+A. Getting a load booked,Shipper posts loads on the web,✅,—,✅,—,◐,✅,—,—,✅
+A. Getting a load booked,"Load created from email, PDF, Slack, Teams or ERP",❌,?,?,—,✅ (reads spot emails),✅,—,?,?
+A. Getting a load booked,Carrier offers and bidding,✅,✅,✅,✅ (by phone),✅ (automated spot bids),✅,—,—,?
+A. Getting a load booked,Instant quote or market rate guidance,❌,?,✅,✅ (negotiates),◐ (sales insights),✅,—,?,?
+A. Getting a load booked,Loads pulled in from many shippers and brokers,❌,✅ (40+ brokers),—,—,✅ (core product),—,—,✅,—
+A. Getting a load booked,"AI calls, texts or emails carriers to cover loads",❌,✅,✅,✅ (parallel calls),❌,✅ (email),—,—,❌
+A. Getting a load booked,AI dispatcher that finds a carrier its next load,❌,✅ (core product),—,—,◐ (fit against fleet),—,—,✅,❌
+A. Getting a load booked,Equipment stated on jobs and matched to trucks,"◐ (vehicles listed, no matching)",✅,"✅ (dry van, reefer, flatbed, hazmat, drayage)",?,✅,?,—,✅,?
+A. Getting a load booked,Preferred carriers and contracted lanes,✅,?,?,?,?,✅ (lane coverage),—,—,?
+A. Getting a load booked,Tender waterfall (offer to carriers in order),❌,?,?,?,?,?,—,—,?
+B. Running the load,Live GPS tracking,"◐ (endpoint exists, nothing feeds it)",?,✅,◐,◐,✅,✅ (own delivery),?,✅
+B. Running the load,Driver mobile app,❌,"❌ (phone, text, email)",?,—,◐ (one source),?,?,?,✅
+B. Running the load,"Automatic exception handling (late, stuck, missed appointment)",❌,?,✅,?,?,✅,?,✅,?
+B. Running the load,Status updates to shipper or customer,◐ (receiver tracking page),—,✅,?,—,✅,?,?,✅
+B. Running the load,"Event notifications (email, SMS, push)",❌ (invites only),✅,?,?,?,✅,?,?,?
+B. Running the load,Multi-stop routes and route optimisation,✅,?,?,?,?,?,✅ (own),?,✅ (dispatch)
+B. Running the load,"BOL, POD with signature and photos, rate confirmations",✅,?,✅ (paperwork),?,?,?,?,?,◐
+B. Running the load,Connects to the customer's TMS or ERP,❌,✅,?,✅ (claims <10 days),✅,✅,—,?,— (is a TMS)
+B. Running the load,"Works inside email, Slack and Teams",❌,"✅ (email, text)",?,❌,◐ (email),✅,—,?,❌
+B. Running the load,Air or courier hand-offs for time-critical freight,❌,❌,❌,❌,❌,❌,❌,❌,✅
+C. Trust and compliance,Carrier authority and insurance check (FMCSA),✅,✅ (via Highway),✅,✅ (during the call),?,✅,—,—,?
+C. Trust and compliance,Identity verification of the person,✅ (Stripe Identity),?,?,?,?,?,—,—,?
+C. Trust and compliance,Driver background check (Checkr),✅,❌,❌,❌,❌,❌,—,? (own drivers),❌
+C. Trust and compliance,Drug and Alcohol Clearinghouse query,✅,❌,❌,❌,❌,❌,—,? (own drivers),❌
+C. Trust and compliance,Ongoing re-checks after onboarding,❌,◐ (Highway),?,◐ (each call),?,?,—,—,?
+C. Trust and compliance,Carriers can see that a broker or shipper is verified,"◐ (shippers verified, not shown)",✅ (brokers pre-vetted),—,—,?,—,—,—,—
+C. Trust and compliance,Companies and people with roles and invitations,✅,?,?,?,?,?,—,—,✅ (fleets)
+D. Money,Payments collected in the platform,"✅ (Stripe, Plaid)",—,✅ (broker bills),—,?,?,✅,✅,✅ (card and wire)
+D. Money,"Carrier payouts, with pay-early",✅,—,?,—,?,?,—,—,✅ (same-day driver pay)
+D. Money,Factoring network with NOAs,✅,❌,❌,❌,❌,❌,—,—,❌
+D. Money,Invoices,✅,—,✅,—,?,?,✅,✅,✅
+D. Money,"Accessorials measured with evidence (detention, lumper)","◐ (in quotes, not measured)",?,?,?,?,?,—,?,?
+D. Money,"Accounting sync (QuickBooks, Xero)",❌,❌,?,❌,?,✅ (ERP),?,?,?
+E. Platform,White-label tenants with branding,✅,❌,❌,❌,❌,❌,❌,❌,?
+E. Platform,Shipper subscriptions,✅,—,❌,✅ (SaaS),✅ (SaaS),✅,—,—,✅ (SaaS)
+E. Platform,Ratings and reviews,✅,?,?,?,?,?,—,—,?
+E. Platform,Measured performance scorecards,❌,?,?,?,◐ (insights),✅ (visibility),—,?,?
+E. Platform,Public API and webhooks,❌,✅,?,✅,✅,✅,—,?,?
+E. Platform,Any AI in the product,❌,✅,✅,✅,◐,✅,✅ (Ozai order agent),✅,?

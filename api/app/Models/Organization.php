@@ -23,7 +23,14 @@ class Organization extends Model
         // Company-level approval (admin)
         'verification_status', 'verification_notes', 'verification_updated_at', 'verification_updated_by',
         'background_check_status', 'background_check_reference', 'background_check_notes', 'background_checked_at',
+        // Payout account details sent to Stripe (StripeOnboarding)
+        'business_structure', 'legal_name', 'representative_title', 'representative_ownership', 'statement_descriptor',
+        'product_description', 'bank_token', 'bank_name', 'bank_last4', 'bank_routing', 'bank_holder_name', 'bank_holder_type',
+        'stripe_requirements', 'stripe_submitted_at',
     ];
+
+    // Single-use Stripe bank token, only ever sent to Stripe
+    protected $hidden = ['bank_token'];
 
     protected function casts(): array
     {
@@ -33,6 +40,9 @@ class Organization extends Model
             'is_platform_tenant'=> 'boolean',
             'verification_updated_at' => 'datetime',
             'background_checked_at'   => 'datetime',
+            'representative_ownership' => 'float',
+            'stripe_requirements'     => 'array',
+            'stripe_submitted_at'     => 'datetime',
         ];
     }
 
@@ -48,6 +58,12 @@ class Organization extends Model
         return $this->belongsToMany(User::class, 'org_members')
                     ->withPivot('role', 'status', 'joined_at')
                     ->withTimestamps();
+    }
+
+    /** Representative (factors) and owners with 25%+, sent to Stripe */
+    public function people(): HasMany
+    {
+        return $this->hasMany(BusinessPerson::class);
     }
 
     public function orgMembers(): HasMany

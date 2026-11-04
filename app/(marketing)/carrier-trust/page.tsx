@@ -68,17 +68,17 @@ const STEPS = [
     icon:  FileSearch,
     step:  '03',
     title: 'Criminal Background Check',
-    badge: 'Powered by Checkr',
+    badge: 'Basic or Complete',
     badgeColor: '#1a56db',
-    desc:  'A comprehensive background check through Checkr screens for criminal history, sex offender registry, global watchlist hits, and county-level court records — the same standard used by major gig economy platforms.',
+    desc:  'Every carrier owner and every driver is background checked through an accredited screening company. The Basic check screens criminal history, the sex offender registry and global watchlists; the Complete check adds county court records, the driving record and the FMCSA Clearinghouse.',
     bullets: [
       'SSN trace, criminal history, sex offender registry',
-      'County courthouse records search',
+      'County courthouse records and driving record (Complete check)',
       'Global watchlist screening',
       'FCRA-compliant — carriers notified and have dispute rights',
     ],
-    link:     'https://checkr.com',
-    linkText: 'Checkr',
+    link:     '/verification',
+    linkText: 'Verification requirements',
     color: '#1a56db',
   },
   {
@@ -182,7 +182,7 @@ export default function CarrierTrustPage() {
         </h2>
         <p style={{ fontSize: T.body, color: B.gray70, lineHeight: 1.75 }}>
           Most load boards accept carrier information at face value. An MC number typed into a form field
-          is not a verification. Shipmater connects directly to FMCSA, Stripe, and Checkr APIs — every
+          is not a verification. Shipmater connects directly to FMCSA, Stripe, and an accredited background screening company — every
           check is live, authoritative, and cannot be falsified by the carrier.
         </p>
       </section>
@@ -255,7 +255,7 @@ export default function CarrierTrustPage() {
               What this means for shippers
             </h2>
             <p style={{ fontSize: T.body, color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, margin: '0 0 28px' }}>
-              Every carrier on Shipmater has been personally verified through five independent layers. You're not relying on a self-reported MC number — you're relying on FMCSA, Stripe, Checkr, and a human approval.
+              Every carrier on Shipmater has been personally verified through five independent layers. You're not relying on a self-reported MC number — you're relying on FMCSA, Stripe, a background screening company, and a human approval.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
@@ -282,7 +282,7 @@ export default function CarrierTrustPage() {
               { label: 'Identity (Stripe)', status: 'Required', ok: true },
               { label: 'Age Verification (18+)', status: 'Required', ok: true },
               { label: 'FMCSA DOT/MC', status: 'Required', ok: true },
-              { label: 'Background Check (Checkr)', status: 'Required', ok: true },
+              { label: 'Background Check (owner and every driver)', status: 'Required', ok: true },
               { label: 'Drug & Alcohol Clearinghouse', status: 'Required', ok: true },
               { label: 'Human Approval', status: 'Required', ok: true },
             ].map(row => (
@@ -318,8 +318,7 @@ export default function CarrierTrustPage() {
       <div style={{ textAlign: 'center', padding: '24px', borderTop: `1px solid ${B.gray20}`, fontSize: 12, color: B.gray70 }}>
         Stripe Identity verification powered by{' '}
         <a href="https://stripe.com/identity" target="_blank" rel="noopener noreferrer" style={{ color: B.tealDark }}>stripe.com/identity</a>.
-        Background checks by{' '}
-        <a href="https://checkr.com" target="_blank" rel="noopener noreferrer" style={{ color: B.tealDark }}>Checkr</a>.
+        Background checks by an accredited, FCRA-compliant screening company.
         All carrier verification is conducted in accordance with applicable federal and state law.
       </div>
     </div>

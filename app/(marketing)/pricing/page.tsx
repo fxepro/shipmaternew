@@ -38,7 +38,7 @@ interface Fees { standard_rate: number; early_rate: number; onboarding_fee: numb
 const DEFAULT_FEES: Fees = {
   standard_rate: 0.10,
   early_rate: 0.075,
-  onboarding_fee: 99,
+  onboarding_fee: 39,
   tiers: [
     { key: 'small',  label: 'Up to $10,000',          max_annual_value: 10000,    monthly_price: 35  },
     { key: 'medium', label: '$10,000 to $10,000,000', max_annual_value: 10000000, monthly_price: 75  },
@@ -208,7 +208,7 @@ export default function PricingPage() {
               <strong>{pct(fees.early_rate)}</strong> when the shipper pays at booking
             </div>
             <Bullets items={[
-              `${money(fees.onboarding_fee)} one-time onboarding (verification and background check)`,
+              `${money(fees.onboarding_fee)} one-time Basic background check, per person (owner and each driver)`,
               'No subscription',
               'Paid through Stripe; Shipmater never holds your money',
               'Factor a load and the factor is paid directly',

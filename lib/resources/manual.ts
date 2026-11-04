@@ -450,7 +450,7 @@ export const CARRIER_TOPICS: ManualTopic[] = [
           'Carrier identity and compliance: who you are, authority numbers, insurance, equipment, and required documents. See the validation matrices below for what is required on each tab.',
         bullets: [
           'Ten tabs: Personal through Reviews',
-          'Complete Personal before Identity and Checkr',
+          'Complete Personal before Identity and the background check',
           'Service types drive Insurance and Commercial requirements',
           'Clear verification gaps that block Available jobs',
         ],

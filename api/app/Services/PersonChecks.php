@@ -53,8 +53,9 @@ class PersonChecks
                 'required' => ['cdl', 'dot_medical', 'clearinghouse', 'mvr'],
                 'recorded' => ['hazmat_endorsement', 'tanker_endorsement', 'passenger_endorsement', 'drug_test'],
             ],
+            // Owners and every driver are background checked (App\Services\Background\BackgroundChecks)
             'carrier.owner' => [
-                'approval' => true, 'identity' => true, 'background' => false, 'min_age' => 18,
+                'approval' => true, 'identity' => true, 'background' => true, 'min_age' => 18,
                 'required' => [], 'recorded' => [],
             ],
             // Factor owners: verified identity, cleared automatically with no Shipmater review (docs/noa-factoring.md)
@@ -230,6 +231,8 @@ class PersonChecks
             }
         }
 
+        \App\Services\Background\BackgroundChecks::refreshLevel($user);
+
         return $pv;
     }
 
@@ -247,7 +250,7 @@ class PersonChecks
         'date_of_birth', 'street', 'city', 'state', 'zip', 'country', 'phone', 'id_type', 'dl_number', 'dl_state', 'dl_expiry', 'ssn_last_4',
         'cdl_number', 'cdl_issuing_state', 'cdl_class', 'cdl_expiry_date', 'dot_medical_expiry', 'drug_test_date', 'drug_test_result',
         'hazmat_endorsement', 'hazmat_expiry_date', 'tanker_endorsement', 'passenger_endorsement',
-        'clearinghouse_query_id', 'clearinghouse_query_status', 'clearinghouse_completed_at',
+        'clearinghouse_query_id', 'clearinghouse_query_status', 'clearinghouse_completed_at', 'dot_verified',
     ];
 
     /** Copy what the carrier profile collects into the person's records. Called whenever a carrier profile is saved. */
@@ -323,15 +326,16 @@ class PersonChecks
     }
 
     /**
-     * carrier_profiles.background_check_status only allows not_submitted | pending | approved | rejected.
+     * carrier_profiles.background_check_status holds the provider's states:
+     * not_started | invitation_sent | pending | clear | consider | suspended ('suspended' = not passed).
      * Person records use not_started | pending | clear | consider | failed.
      */
     public static function backgroundForProfile(string $result): string
     {
         return match ($result) {
-            'clear', 'approved', 'passed' => 'approved',
-            'failed'                      => 'rejected',
-            'not_started'                 => 'not_submitted',
+            'clear', 'approved', 'passed' => 'clear',
+            'failed'                      => 'suspended',
+            'not_started', 'consider'     => $result,
             default                       => 'pending',
         };
     }
@@ -341,7 +345,7 @@ class PersonChecks
         return match ($status) {
             null, '', 'not_submitted' => 'not_started',
             'approved'                => 'clear',
-            'rejected'                => 'failed',
+            'rejected', 'suspended'   => 'failed',
             default                   => $status,
         };
     }

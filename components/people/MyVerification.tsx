@@ -8,6 +8,7 @@ import { ShieldCheck, Upload, Pencil, Trash2, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { myChecksApi, kycApi } from '@/lib/api';
 import { CheckChip, PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
+import { BackgroundCheckPanel } from '@/components/background/BackgroundCheckPanel';
 
 interface ChecklistItem { key: string; label: string; required: boolean; state: string; detail: string | null }
 interface Credential {
@@ -102,7 +103,7 @@ export function MyVerification() {
                 ? 'Drivers need verified identity, a clear background check, a valid CDL and DOT medical card, a clear Clearinghouse query and a clear driving record (MVR). Shipmater reviews these before you can be assigned loads.'
                 : data.company_type === 'factor'
                   ? 'Factoring company owners need a verified identity. Verify your ID with Stripe and you’re cleared automatically, with no wait for review.'
-                  : 'Owners need a verified identity before Shipmater can approve you and your company.'}
+                  : 'Owners need a verified identity and a clear background check before Shipmater can approve you and your company.'}
             </p>
             <p className="mt-2 font-medium text-[var(--color-text)]">
               {checklist.required_met} of {checklist.required_total} required items done
@@ -136,11 +137,12 @@ export function MyVerification() {
               </li>
             ))}
           </ul>
-          {data.background_required && (
-            <p className="mt-3 text-xs text-[var(--color-text-faint)]">
-              Shipmater runs the background check and records the result; you&apos;ll get an email if anything is needed from you.
-            </p>
-          )}
+        </Section>
+      )}
+
+      {data.background_required && data.company_type === 'carrier' && (
+        <Section title="Background check">
+          <BackgroundCheckPanel onChange={refresh} />
         </Section>
       )}
 

@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { Mail, MessageSquare, ShieldCheck, Server, KeyRound } from 'lucide-react';
+import { PROFILE_VERIFICATION_TOPIC } from './dev/profile-verification';
 
 /**
  * Admin / Dev technical manual — platform operators only.
@@ -8,6 +9,8 @@ import { Mail, MessageSquare, ShieldCheck, Server, KeyRound } from 'lucide-react
 
 export interface AdminManualTopic {
   slug: string;
+  /** Grouping on the overview and sidebar; training write-ups of each build go under "Contents" */
+  category?: string;
   title: string;
   summary: string;
   icon: LucideIcon;
@@ -218,7 +221,22 @@ TWILIO_VERIFY_SID=<verify-service-sid>
       },
     ],
   },
+  PROFILE_VERIFICATION_TOPIC,
 ];
+
+export const DEFAULT_CATEGORY = 'Platform setup';
+
+/** Topics grouped by category, in first-seen order */
+export function topicsByCategory(): { category: string; topics: AdminManualTopic[] }[] {
+  const groups: { category: string; topics: AdminManualTopic[] }[] = [];
+  for (const t of ADMIN_TOPICS) {
+    const category = t.category ?? DEFAULT_CATEGORY;
+    const g = groups.find((x) => x.category === category);
+    if (g) g.topics.push(t);
+    else groups.push({ category, topics: [t] });
+  }
+  return groups;
+}
 
 export function getAdminTopic(slug: string): AdminManualTopic | undefined {
   return ADMIN_TOPICS.find((t) => t.slug === slug);

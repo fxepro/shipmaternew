@@ -46,8 +46,11 @@ Route::post('/stripe/webhook', [StripeConnectController::class, 'webhook']);
 // ── Shipmater's fees (public: pricing page, job wizard) ───────────────
 Route::get('/fees', [\App\Http\Controllers\Api\FeesController::class, 'show']);
 
-// ── Checkr webhook (public — Checkr signs it) ─────────────────────────
-Route::post('/checkr/webhook', [CarrierVerificationController::class, 'checkrWebhook']);
+// ── Background check provider webhooks (public — each provider signs its own) ──
+Route::post('/background/webhook/{provider}', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'webhook']);
+Route::post('/checkr/webhook', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'webhook']);   // older address, still set in Checkr
+// The test provider's form: a signed link, refused in production
+Route::get('/background/fake/{check}', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'fake'])->name('background.fake')->middleware('signed');
 
 // ── Clearinghouse webhook (public — FMCSA signs it) ───────────────────
 Route::post('/clearinghouse/webhook', [ClearinghouseController::class, 'webhook']);
@@ -128,6 +131,13 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/carrier/profile',             [CarrierController::class, 'show']);
     Route::put('/carrier/profile',             [CarrierController::class, 'update']);
 
+    // Payout account setup (carriers and factors): details collected here, sent to Stripe once
+    Route::get('/payouts/setup',     [\App\Http\Controllers\Api\PayoutSetupController::class, 'show']);
+    Route::put('/payouts/business',  [\App\Http\Controllers\Api\PayoutSetupController::class, 'business']);
+    Route::put('/payouts/bank',      [\App\Http\Controllers\Api\PayoutSetupController::class, 'bank']);
+    Route::post('/payouts/submit',   [\App\Http\Controllers\Api\PayoutSetupController::class, 'submit']);
+    Route::post('/payouts/refresh',  [\App\Http\Controllers\Api\PayoutSetupController::class, 'refresh']);
+
     // Stripe Connect
     Route::post('/stripe/connect/onboard',     [StripeConnectController::class, 'onboard']);
     Route::get('/stripe/connect/status',       [StripeConnectController::class, 'status']);
@@ -135,13 +145,16 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     // Stripe Identity
     Route::post('/stripe/identity/session',    [StripeConnectController::class, 'identitySession']);
 
-    // Carrier onboarding fee ($99)
-    Route::post('/stripe/onboarding-fee',      [StripeConnectController::class, 'onboardingFee']);
+    // Background checks: basic and complete levels, for carrier owners and drivers (App\Services\Background)
+    Route::get('/background',                         [\App\Http\Controllers\Api\BackgroundCheckController::class, 'show']);
+    Route::post('/background/pay',                    [\App\Http\Controllers\Api\BackgroundCheckController::class, 'pay']);
+    Route::post('/background/checks/{check}/start',   [\App\Http\Controllers\Api\BackgroundCheckController::class, 'start']);
+    Route::get('/shipper/carriers/{carrier}/background',  [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperShow']);
+    Route::post('/shipper/carriers/{carrier}/background', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperOrder']);
 
-    // Carrier verification (FMCSA live lookup + Checkr background check)
+    // Carrier verification (FMCSA live lookup)
     Route::post('/carrier/verify/dot',         [CarrierVerificationController::class, 'verifyDot']);
     Route::post('/carrier/verify/mc',          [CarrierVerificationController::class, 'verifyMc']);
-    Route::post('/carrier/background-check',   [CarrierVerificationController::class, 'initiateBackgroundCheck']);
     Route::get('/carrier/verifications',       [CarrierVerificationController::class, 'index']);
 
     // FMCSA Drug & Alcohol Clearinghouse
@@ -209,6 +222,9 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
 
     // Admin: fees (Platform settings)
     Route::put('/admin/settings/fees',    [\App\Http\Controllers\Api\FeesController::class, 'update']);
+    Route::get('/admin/settings/background',       [\App\Http\Controllers\Api\BackgroundCheckController::class, 'settings']);
+    Route::put('/admin/settings/background',       [\App\Http\Controllers\Api\BackgroundCheckController::class, 'updateSettings']);
+    Route::post('/admin/settings/background/test', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'testConnection']);
 
     // Load payments and Shipmater revenue (docs/fees-and-billing.md)
     Route::get('/payments',                      [\App\Http\Controllers\Api\PaymentsController::class, 'index']);

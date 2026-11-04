@@ -109,6 +109,15 @@ export const factorStripeApi = {
 };
 
 // ── Factoring: NOAs and factored loads (carrier, factor, shipper, admin) ──
+// Payout account setup for carriers and factors (PayoutSetupController): collected here, sent to Stripe once
+export const payoutsApi = {
+  setup:    ()                               => api.get('/api/v1/payouts/setup'),
+  business: (data: Record<string, unknown>)  => api.put('/api/v1/payouts/business', data),
+  bank:     (data: Record<string, unknown>)  => api.put('/api/v1/payouts/bank', data),
+  submit:   ()                               => api.post('/api/v1/payouts/submit'),
+  refresh:  ()                               => api.post('/api/v1/payouts/refresh'),
+};
+
 export const factoringApi = {
   noas:           ()                                   => api.get('/api/v1/factoring/noas'),
   loads:          ()                                   => api.get('/api/v1/factoring/loads'),
@@ -401,7 +410,7 @@ export const ratingApi = {
   orgRatings:  (orgId: number, page = 1) => api.get(`/api/v1/orgs/${orgId}/ratings?page=${page}`),
 };
 
-// ── Carrier Verification (FMCSA + Stripe Identity + Checkr) ─────────────
+// ── Carrier Verification (FMCSA + Stripe Identity + Clearinghouse) ──────
 export const verificationApi = {
   verifyDot:             (dotNumber: string) =>
                            api.post('/api/v1/carrier/verify/dot', { dot_number: dotNumber }),
@@ -409,10 +418,35 @@ export const verificationApi = {
                            api.post('/api/v1/carrier/verify/mc', { mc_number: mcNumber }),
   list:                  () => api.get('/api/v1/carrier/verifications'),
   identitySession:       () => api.post('/api/v1/stripe/identity/session'),
-  initiateBackgroundCheck: () => api.post('/api/v1/carrier/background-check'),
-  onboardingFee:           () => api.post('/api/v1/stripe/onboarding-fee'),
   clearinghouseInitiate:   () => api.post('/api/v1/carrier/clearinghouse'),
   clearinghouseStatus:     () => api.get('/api/v1/carrier/clearinghouse/status'),
+};
+
+// ── Background checks: basic and complete levels, owners and drivers ─────
+export type CheckLevel = 'basic' | 'complete';
+export interface BackgroundForm {
+  status: 'paid' | 'invitation_sent' | 'pending' | 'clear' | 'consider' | 'suspended' | 'expired';
+  paid_by: 'carrier' | 'shipper'; payer: string | null;
+  invitation_url: string | null; check_id: number | null; completed_at: string | null;
+}
+export interface BackgroundSummary {
+  user_id: number; name: string; role: string | null;
+  level: CheckLevel | null; complete_expires_at: string | null;
+  basic: BackgroundForm | null; complete: BackgroundForm | null;
+  next_complete_kind: 'upgrade' | 'full';
+  prices?: { basic: number; complete: number; upgrade: number };
+}
+export const backgroundApi = {
+  get:   (userId?: number) => api.get('/api/v1/background', { params: userId ? { user_id: userId } : {} }),
+  pay:   (level: CheckLevel, userId?: number) => api.post('/api/v1/background/pay', { level, ...(userId ? { user_id: userId } : {}) }),
+  start: (checkId: number) => api.post(`/api/v1/background/checks/${checkId}/start`),
+  // Shippers, for carriers they have an active contract with
+  shipperGet:   (carrierUserId: number) => api.get(`/api/v1/shipper/carriers/${carrierUserId}/background`),
+  shipperOrder: (carrierUserId: number) => api.post(`/api/v1/shipper/carriers/${carrierUserId}/background`),
+  // Admin → Settings
+  settings:       () => api.get('/api/v1/admin/settings/background'),
+  updateSettings: (data: Record<string, unknown>) => api.put('/api/v1/admin/settings/background', data),
+  test:           (provider: string) => api.post('/api/v1/admin/settings/background/test', { provider }),
 };
 
 // ── Admin: financial reporting ─────────────────────────────────────────

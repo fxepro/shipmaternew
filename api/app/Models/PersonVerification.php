@@ -14,6 +14,7 @@ class PersonVerification extends Model
     protected $fillable = [
         'user_id', 'status', 'notes', 'reviewed_at', 'reviewed_by',
         'background_check_status', 'background_check_reference', 'background_check_notes', 'background_checked_at',
+        'bg_provider', 'bg_candidate_id', 'complete_check_status', 'check_level', 'check_level_at', 'complete_expires_at',
     ];
 
     protected function casts(): array
@@ -21,6 +22,8 @@ class PersonVerification extends Model
         return [
             'reviewed_at'           => 'datetime',
             'background_checked_at' => 'datetime',
+            'check_level_at'        => 'datetime',
+            'complete_expires_at'   => 'datetime',
         ];
     }
 

@@ -1,0 +1,51 @@
+﻿Company,Batch,Location,Employees,What they do,Relevance to Shipmater,Category,YC page
+Odeko,S2019,New York City,371,Supplies and back-office tools for small cafés,Not relevant,E-commerce / SMB,https://www.ycombinator.com/companies/odeko
+ShipBob,S2014,"Chicago, IL",-,E-commerce fulfilment and warehousing for SMB brands,Not relevant,E-commerce fulfilment,https://www.ycombinator.com/companies/shipbob
+Flexport,W2014,San Francisco,"3,000",Global freight forwarding and trade platform,Adjacent,International trade,https://www.ycombinator.com/companies/flexport
+OpEra,F2026,San Francisco,2,"AI decision engine for planning, scheduling, allocation and routing",Adjacent,AI operations,https://www.ycombinator.com/companies/opera
+TrueMile,F2026,San Francisco,2,AI-native trucking company running its own fleet,Direct,Carrier / marketplace,https://www.ycombinator.com/companies/truemile
+Aviern,F2026,Los Angeles,4,Unmanned autonomous cargo aircraft,Not relevant,Aerospace,https://www.ycombinator.com/companies/aviern
+Waybill,S2026,Bengaluru,3,Hardware procurement loop including freight and customs,Not relevant,Procurement,https://www.ycombinator.com/companies/waybill
+Peer,S2026,San Francisco,2,AI-native freight brokerage for shippers,Direct,Carrier / marketplace,https://www.ycombinator.com/companies/peer
+SpaceFlow Technologies,S2026,San Francisco,4,AI procurement services for physical-goods companies,Not relevant,Procurement,https://www.ycombinator.com/companies/spaceflow-technologies-inc
+Derya,S2026,San Francisco,2,Supply chain automation from procurement to distribution,Not relevant,Procurement,https://www.ycombinator.com/companies/derya
+Manifold,S2026,Los Angeles,2,Warehouse robots priced per pick,Not relevant,Robotics,https://www.ycombinator.com/companies/manifold-2
+Donkey,S2026,San Francisco,5,"AI trading company: landed, delivered container pricing for importers",Not relevant,International trade,https://www.ycombinator.com/companies/donkey
+Pango,S2026,New York City,5,Natural-language agents for e-commerce delivery and returns,Not relevant,E-commerce,https://www.ycombinator.com/companies/pango
+Remy AI,W2026,San Francisco,2,Warehouse manipulation robots for 3PLs,Not relevant,Robotics,https://www.ycombinator.com/companies/remy-ai
+Servo7,W2026,Amsterdam,3,Robots that unload loose-loaded containers,Not relevant,Robotics,https://www.ycombinator.com/companies/servo7
+Haladir,W2026,San Francisco,4,"Optimisation and AI agents on top of WMS, TMS and ERP",Adjacent,AI operations,https://www.ycombinator.com/companies/haladir
+Lunavo,F2025,Munich,2,AI assistant that runs carrier back-office operations,Adjacent,Carrier back office (AI),https://www.ycombinator.com/companies/lunavo
+Norra,F2025,New York City,3,Equipment tracking for nursing facilities,Not relevant,Healthcare,https://www.ycombinator.com/companies/norra
+GETASAP,S2025,San Francisco,30,Fresh produce distribution plus AI-native carrier and brokerage,Direct,Carrier / marketplace,https://www.ycombinator.com/companies/getasap
+Maximal,S2025,San Francisco,3,Algorithmic load planning for truckload carriers,Adjacent,Carrier planning (AI),https://www.ycombinator.com/companies/maximal
+Fleetline,S2025,New York City,11,Algorithmic load planner for mid-to-large fleets,Adjacent,Carrier planning (AI),https://www.ycombinator.com/companies/fleetline
+Lanesurf,S2025,San Francisco,14,"Voice AI agents that call carriers, negotiate and book loads",Direct,Broker AI,https://www.ycombinator.com/companies/lanesurf
+Rebulk,S2025,"Olathe, KS",3,"AI software for rail, transload and bulk operations",Not relevant,Rail / bulk,https://www.ycombinator.com/companies/rebulk
+Hemut,Spring 2025,"Fresno, CA",3,"Truck management software with AI calls, document entry, load sourcing, accounting",Adjacent,Carrier back office (AI),https://www.ycombinator.com/companies/hemut
+chrt,Spring 2025,"San Clemente, CA",5,Same-day time-critical shipping platform,Direct,Carrier / marketplace,https://www.ycombinator.com/companies/chrt
+Flott HQ,Spring 2025,Paris,2,"AI control centre for transport companies: planning, tracking, invoicing, payments",Adjacent,Carrier back office (AI),https://www.ycombinator.com/companies/flott-hq
+Rally,W2025,Berlin,5,"Financial platform for vehicle fleets: fuel, maintenance, payroll",Adjacent,Fleet finance,https://www.ycombinator.com/companies/rally-3
+Trava,W2025,San Francisco,1,AI agents for customs audit and tariff classification,Not relevant,International trade,https://www.ycombinator.com/companies/trava
+Getcho,F2024,New York City,3,Local delivery network for high-value goods,Not relevant,Last mile,https://www.ycombinator.com/companies/getcho
+Lighthouz AI,S2024,"Atlanta, GA",8,"Back-office AI for brokers: freight bill audit, AR, AP, collections",Adjacent,Broker AI,https://www.ycombinator.com/companies/lighthouz-ai
+Ultra,S2024,New York City,4,General-purpose industrial robots,Not relevant,Robotics,https://www.ycombinator.com/companies/ultra
+Handled,S2024,New York City,3,AI for finance and operations at consumer brands,Not relevant,E-commerce,https://www.ycombinator.com/companies/handled
+Cartage,S2024,San Francisco,12,AI freight coordination without human coordinators,Direct,Carrier / marketplace,https://www.ycombinator.com/companies/cartage
+Yondu,W2024,Los Angeles,7,Humanoid picking robots for 3PLs,Not relevant,Robotics,https://www.ycombinator.com/companies/yondu
+Indemni,W2024,San Francisco,7,Cargo theft and freight fraud prevention; Lloyd's-backed cargo insurance (Oct 2026),Adjacent,Trust / fraud,https://www.ycombinator.com/companies/indemni
+Manifold Freight,W2024,Seattle,5,"Spot freight aggregation for carriers, brokers and shippers",Direct,Carrier / marketplace,https://www.ycombinator.com/companies/manifold-freight
+Reform,W2024,San Francisco,13,Platform for AI agents doing operational work,Adjacent,AI operations,https://www.ycombinator.com/companies/reform
+Forge,W2024,New York City,7,AI-native freight forwarder and customs broker,Not relevant,International trade,https://www.ycombinator.com/companies/forge
+RetailReady,W2024,San Francisco,16,Tablet app for warehouse packing compliance,Not relevant,Warehouse,https://www.ycombinator.com/companies/retailready
+FleetWorks,S2023,San Francisco,20,"AI freight marketplace matching trucks with loads ($17M Series A, Oct 2025)",Direct,Carrier / marketplace,https://www.ycombinator.com/companies/fleetworks
+Mandel AI,S2023,Sofia,9,AI procurement operations from RFQ to invoice,Not relevant,Procurement,https://www.ycombinator.com/companies/mandel-ai
+truemetrics,S2023,Berlin,5,Maps entrances and parking for couriers,Not relevant,Last mile,https://www.ycombinator.com/companies/truemetrics
+Nowadays,S2023,San Francisco,12,AI platform for corporate meetings and events,Not relevant,Other,https://www.ycombinator.com/companies/nowadays
+HappyRobot,S2023,San Francisco,80,"AI workers (voice, email, text) for freight brokers; reported ~$1.2B valuation (Aug 2026)",Direct,Broker AI,https://www.ycombinator.com/companies/happyrobot
+Terminal,S2023,Toronto,17,"One API into 300+ telematics providers ($20M Series A, Jul 2026)",Adjacent,Data infrastructure,https://www.ycombinator.com/companies/terminal
+Conduit,W2023,San Francisco,15,Software for loading docks and yards,Adjacent,Shipping / receiving,https://www.ycombinator.com/companies/conduit
+Supadock,W2021,San Francisco,1,AI gate and yard access control against cargo theft,Adjacent,Trust / fraud,https://www.ycombinator.com/companies/supadock
+Trackstar,W2023,New York City,10,Universal API across warehouse management systems,Not relevant,Warehouse,https://www.ycombinator.com/companies/trackstar
+Sirdab,W2023,Riyadh,-,Cloud warehousing and transport platform,Not relevant,Warehouse,https://www.ycombinator.com/companies/sirdab
+Tank Payments,S2022,"Austin, TX",10,Payables automation for paying carriers; banking for trucking,Adjacent,Fleet finance,https://www.ycombinator.com/companies/tank-payments
