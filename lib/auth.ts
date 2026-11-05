@@ -30,7 +30,6 @@ export async function getUser(): Promise<User | null> {
         const user = res.data.data as User;
         // Stale demo cookie must not outlive a real login
         clearDemoUser();
-        console.log('[auth] me() OK – user:', user?.email, 'role:', user?.role);
         return user;
       } catch (e: unknown) {
         const status = (e as { response?: { status?: number } })?.response?.status;
@@ -42,7 +41,7 @@ export async function getUser(): Promise<User | null> {
         }
 
         // Network errors, timeouts and 5xx are temporary: keep the token and retry
-        console.error('[auth] me() FAILED – status:', status, e);
+        console.error('[auth] me() failed, status', status ?? 'network error');
         if (attempt >= ME_RETRY_DELAYS_MS.length) throw new AuthUnavailableError(status);
         await new Promise((r) => setTimeout(r, ME_RETRY_DELAYS_MS[attempt]));
       }
@@ -51,7 +50,6 @@ export async function getUser(): Promise<User | null> {
 
   const demoUser = getDemoUser();
   if (demoUser) {
-    console.log('[auth] demo mode – user:', demoUser.email);
     return demoUser;
   }
 
@@ -59,17 +57,13 @@ export async function getUser(): Promise<User | null> {
 }
 
 export async function login(email: string, password: string): Promise<User> {
-  console.log('[auth] login attempt for', email);
   const res = await authApi.login({ email, password });
-  console.log('[auth] login raw response:', res.data);
   const { token, data } = res.data as { token: string; data: User };
-  console.log('[auth] token received:', token ? `${token.slice(0, 30)}…` : 'MISSING');
   if (!token) {
     throw new Error('Login succeeded but no token was returned.');
   }
   resetClientSession();
   setStoredToken(token);
-  console.log('[auth] token stored. Reading back:', getStoredToken()?.slice(0, 30));
   return data;
 }
 
@@ -86,7 +80,6 @@ export async function logout(): Promise<void> {
   try { await authApi.logout(); } catch { /* ignore */ }
   clearStoredToken();
   resetClientSession();
-  console.log('[auth] logged out – token cleared');
 }
 
 export function getRolePath(role: string, orgType?: string): string {
