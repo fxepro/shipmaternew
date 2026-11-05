@@ -288,7 +288,7 @@ class FactoringController extends Controller
     {
         [$user, $org] = $this->ctx($request);
         abort_unless($org?->type === 'carrier', 403, 'Factoring is managed by the carrier company.');
-        if ($manage) abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can manage factoring.');
+        if ($manage) abort_unless($user->canDo('money.factoring'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         return [$user, $org];
     }
 
@@ -297,7 +297,7 @@ class FactoringController extends Controller
     {
         [$user, $org] = $this->ctx($request);
         abort_unless($org?->type === 'factor', 403);
-        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can confirm NOAs and loads.');
+        // The route checks the role (noas.decide or loads.decide in the role matrix)
         if (!$this->factorVerified($org)) {
             abort(response()->json(['error' => 'Your company owner must verify their identity (Verification) before you can confirm NOAs or loads.', 'code' => 'owner_not_verified'], 422));
         }

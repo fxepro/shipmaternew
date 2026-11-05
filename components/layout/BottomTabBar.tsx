@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Package, Radio, User, Users, BarChart2, FileSignature } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/user';
+import { canOpen, type Permissions } from '@/lib/permissions';
 
 const TABS: Record<UserRole, { label: string; href: string; icon: React.ElementType }[]> = {
   shipper: [
@@ -37,9 +38,9 @@ const TABS: Record<UserRole, { label: string; href: string; icon: React.ElementT
   ],
 };
 
-export function BottomTabBar({ role }: { role: UserRole }) {
+export function BottomTabBar({ role, permissions }: { role: UserRole; permissions?: Permissions }) {
   const pathname = usePathname();
-  const tabs = TABS[role];
+  const tabs = (TABS[role] ?? []).filter((t) => canOpen(permissions, t.href));
 
   return (
     <nav

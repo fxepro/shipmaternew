@@ -160,7 +160,7 @@ class ShipperVerificationController extends Controller
         $user = $request->user();
         $org = $this->shipper($user);
         abort_unless($org, 422, 'You are not part of a shipper company.');
-        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can upload company documents.');
+        abort_unless($user->canDo('company.profile'), 403, "Your role can't do this. Ask your company's owner if you need it.");
 
         $file = $request->file('document');
         $disk = $this->documentDisk();
@@ -200,7 +200,7 @@ class ShipperVerificationController extends Controller
         if (!$org) {
             return response()->json(['message' => 'Save your business profile first.'], 422);
         }
-        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can submit the business for verification.');
+        abort_unless($user->canDo('company.profile'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         if (!$org->name || !$org->tax_id) {
             return response()->json(['message' => 'Save legal business name and tax ID (EIN) first.'], 422);
         }

@@ -9,6 +9,7 @@ import {
 import Link from 'next/link';
 import { freightJobApi } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 type Status = 'all' | 'draft' | 'posted' | 'in_progress' | 'completed';
 
@@ -40,6 +41,7 @@ const FILTERS: { key: Status; label: string }[] = [
 ];
 
 export default function MyJobsPage() {
+  const can = useCan();
   const [filter, setFilter] = useState<Status>('all');
 
   const { data: res, isLoading } = useQuery({
@@ -69,12 +71,12 @@ export default function MyJobsPage() {
             Open-market jobs — carriers bid, you choose
           </p>
         </div>
-        <Link
+        {can.do('loads.post') && <Link
           href="/shipper/jobs/contracted/new"
           className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] shadow-sm transition-colors"
         >
           <Plus size={15} /> New job
-        </Link>
+        </Link>}
       </div>
 
       {/* Filter tabs */}

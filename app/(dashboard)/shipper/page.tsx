@@ -11,12 +11,14 @@ import { ShipmentTable } from '@/components/shipments/ShipmentTable';
 import { ShipmentPanel } from '@/components/shipments/ShipmentPanel';
 import { ActivityFeed } from '@/components/shared/ActivityFeed';
 import type { Shipment } from '@/types/shipment';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 function SkeletonCard() {
   return <div className="skeleton h-[104px] rounded-xl" />;
 }
 
 export default function ShipperDashboard() {
+  const can = useCan();
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const { data: shipmentsRes, isLoading } = useQuery({
@@ -57,9 +59,9 @@ export default function ShipperDashboard() {
         {/* Header */}
         <div className="page-header">
           <h1 className="page-title">Dashboard</h1>
-          <Link href="/shipper/shipments/new" className="btn btn-primary">
+          {can.do('loads.post') && <Link href="/shipper/shipments/new" className="btn btn-primary">
             <Plus size={15} /> New Shipment
-          </Link>
+          </Link>}
         </div>
 
         {/* Stats */}

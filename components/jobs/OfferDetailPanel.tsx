@@ -21,6 +21,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { freightJobApi, contractApi } from '@/lib/api';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ interface Props {
 
 export function OfferDetailPanel({ offer, onClose, onUpdated }: Props) {
   const job = offer.job;
+  const can = useCan();
 
   // Accept / decline state
   const [stage, setStage] = useState<'view' | 'contract' | 'done'>('view');
@@ -435,7 +437,7 @@ export function OfferDetailPanel({ offer, onClose, onUpdated }: Props) {
         {/* Footer */}
         <div className="shrink-0 px-6 py-4 border-t border-[var(--color-cream-dark)] bg-[var(--color-white)]">
 
-          {stage === 'view' && offer.status === 'pending' && (
+          {stage === 'view' && offer.status === 'pending' && can.do('loads.decide') && (
             <div className="flex gap-3">
               <button onClick={() => declineMutation.mutate()} disabled={declineMutation.isPending}
                 className="flex-1 rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50">

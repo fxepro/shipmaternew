@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { BottomTabBar } from '@/components/layout/BottomTabBar';
+import { PermissionsProvider } from '@/components/layout/PermissionsContext';
 import { getUser, logout, AuthUnavailableError } from '@/lib/auth';
 import { getTenantConfigClient, applyTenantBranding, resetTenantBranding } from '@/lib/tenant';
 import type { User } from '@/types/user';
@@ -73,12 +74,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const logoUrl    = tenant?.logo_url_dark ?? undefined;
 
   return (
+    <PermissionsProvider value={user.permissions}>
     <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
       <Sidebar
         role={user.role}
         isPlatformTenant={user.org?.is_platform_tenant ?? false}
         brandName={brandName}
         logoUrl={logoUrl}
+        permissions={user.permissions}
       />
       <div className="flex flex-1 flex-col min-w-0">
         <Topbar role={user.role} userName={user.name} onLogout={handleLogout} />
@@ -86,7 +89,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
-      <BottomTabBar role={user.role} />
+      <BottomTabBar role={user.role} permissions={user.permissions} />
     </div>
+    </PermissionsProvider>
   );
 }

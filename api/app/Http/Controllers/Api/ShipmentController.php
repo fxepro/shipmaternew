@@ -40,7 +40,7 @@ class ShipmentController extends Controller
         elseif ($user->isReceiver())    $query = Shipment::where('receiver_id', $user->id);
         elseif ($user->isCarrier()) {
             $query = Shipment::where('carrier_id', $user->current_org_id);
-            if ($user->isDriver()) $query->forPerson($user->id);
+            if ($user->onlyAssignedLoads()) $query->forPerson($user->id);
         } else                          $query = Shipment::where('shipper_id', $user->current_org_id);
 
         if ($request->filled('phase')) {

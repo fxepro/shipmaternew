@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { orgApi } from '@/lib/api';
 import { validateTeamInvite } from '@/lib/shipper-profile-validation';
 import { PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 interface Member {
   id: number; user_id: number; name: string; email: string; role: string; is_owner: boolean;
@@ -54,7 +55,9 @@ export function TeamManager({ type }: { type: 'carrier' | 'shipper' | 'factor' }
   const [showInvite, setShowInvite] = useState(false);
 
   const { data: members = [], isLoading } = useQuery({ queryKey: ['org-members'], queryFn: () => orgApi.members().then((r) => r.data.data as Member[]) });
-  const { data: invitations = [] } = useQuery({ queryKey: ['org-invitations'], queryFn: () => orgApi.invitations().then((r) => r.data.data as Invitation[]) });
+  const can = useCan();
+  const manage = can.do('team.manage');
+  const { data: invitations = [] } = useQuery({ queryKey: ['org-invitations'], enabled: manage, queryFn: () => orgApi.invitations().then((r) => r.data.data as Invitation[]) });
 
   const invite = useMutation({
     mutationFn: () => orgApi.invite(inviteEmail, inviteRole),
@@ -91,10 +94,10 @@ export function TeamManager({ type }: { type: 'carrier' | 'shipper' | 'factor' }
       <section className="card">
         <div className="card-head card-head-tint flex items-center justify-between gap-3 px-5 py-3">
           <p className="card-title">Team members ({members.length})</p>
-          <button onClick={() => setShowInvite(true)}
+          {manage && <button onClick={() => setShowInvite(true)}
             className="flex items-center gap-1.5 rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)]">
             <Plus size={12} /> Invite
-          </button>
+          </button>}
         </div>
         <div className="card-body">
           {type === 'carrier' && (
@@ -126,13 +129,15 @@ export function TeamManager({ type }: { type: 'carrier' | 'shipper' | 'factor' }
                     <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS.owner}`}>
                       <Crown size={10} /> Owner
                     </span>
+                  ) : !manage ? (
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS[m.role] ?? ''}`}>{ROLE_LABELS[m.role] ?? m.role}</span>
                   ) : (
                     <select value={m.role} onChange={(e) => updateRole.mutate({ id: m.id, role: e.target.value })} aria-label={`Role for ${m.name}`}
                       className="rounded-lg border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-2.5 py-1 text-xs text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                       {roles.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                     </select>
                   )}
-                  {!m.is_owner && (
+                  {!m.is_owner && manage && (
                     <button onClick={() => { if (confirm(`Remove ${m.name} from the team?`)) remove.mutate(m.id); }} disabled={remove.isPending}
                       title="Remove" className="text-[var(--color-text-faint)] hover:text-red-500"><UserMinus size={14} /></button>
                   )}

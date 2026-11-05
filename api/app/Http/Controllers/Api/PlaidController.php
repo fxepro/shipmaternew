@@ -144,7 +144,7 @@ class PlaidController extends Controller
 
         $org = \App\Services\PersonChecks::companyOf($user, 'shipper');
         if (!$org) return response()->json(['disconnected' => true]);
-        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can disconnect the company bank account.');
+        abort_unless($user->canDo('money.methods'), 403, "Your role can't do this. Ask your company's owner if you need it.");
 
         // Remove Stripe bank source
         if ($org->shipper_stripe_bank_source_id && $user->stripe_customer_id) {

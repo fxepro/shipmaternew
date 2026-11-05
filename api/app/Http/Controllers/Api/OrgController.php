@@ -51,7 +51,7 @@ class OrgController extends Controller
         $user = $request->user();
         $org  = $user->currentOrg;
         abort_if(!$org, 404);
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('company.profile'), 403);
 
         $validated = $request->validate([
             'name'     => ['sometimes', 'string', 'max:255'],
@@ -108,7 +108,7 @@ class OrgController extends Controller
     public function updateMember(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('team.manage'), 403);
 
         $member = OrgMember::where('org_id', $user->current_org_id)
                             ->where('id', $id)
@@ -131,7 +131,7 @@ class OrgController extends Controller
     public function removeMember(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('team.manage'), 403);
 
         $member = OrgMember::where('org_id', $user->current_org_id)
                             ->where('id', $id)
@@ -172,7 +172,7 @@ class OrgController extends Controller
         $user = $request->user();
         $org  = $user->currentOrg;
         abort_if(!$org, 404);
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('team.manage'), 403);
 
         $validated = $request->validate([
             'email' => ['required', 'email'],
@@ -240,7 +240,7 @@ class OrgController extends Controller
     public function cancelInvitation(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('team.manage'), 403);
 
         OrgInvitation::where('org_id', $user->current_org_id)
                      ->where('id', $id)

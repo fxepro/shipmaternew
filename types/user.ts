@@ -61,6 +61,8 @@ export interface User {
   // Multi-org
   org?: Org;
   org_role?: OrgRole;
+  /** Level for each action in the role matrix (lib/permissions.ts); empty without a company */
+  permissions?: Record<string, 'full' | 'view' | 'assigned' | 'self' | 'none'>;
 }
 
 export interface CarrierProfile {

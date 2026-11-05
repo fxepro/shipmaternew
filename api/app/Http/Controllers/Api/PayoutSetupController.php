@@ -153,7 +153,7 @@ class PayoutSetupController extends Controller
         $user = $request->user();
         $org = $user->currentOrg;
         abort_unless($org && in_array($org->type, ['carrier', 'factor'], true), 403);
-        if ($manage) abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can set up payouts.');
+        if ($manage) abort_unless($user->canDo('company.payouts'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         return $org;
     }
 

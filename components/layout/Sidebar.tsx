@@ -11,6 +11,7 @@ import {
   Settings, UserCog, Repeat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { canOpen, type Permissions } from '@/lib/permissions';
 import type { UserRole } from '@/types/user';
 
 interface NavItem {
@@ -26,7 +27,7 @@ interface NavSection {
   collapsible?: boolean;
 }
 
-const NAV: Record<UserRole, NavSection[]> = {
+export const NAV: Record<UserRole, NavSection[]> = {
   shipper: [
     {
       section: 'Overview',
@@ -187,7 +188,7 @@ const NAV: Record<UserRole, NavSection[]> = {
       items: [
         { label: 'Integrations',   href: '/admin/integrations', icon: Plug     },
         { label: 'Platform',       href: '/admin/settings',     icon: Settings },
-        { label: 'Admins & Roles', href: '/admin/roles',        icon: UserCog  },
+        { label: 'Roles & Permissions', href: '/admin/roles',   icon: UserCog  },
       ],
     },
     {
@@ -242,21 +243,27 @@ interface SidebarProps {
   brandName?: string;
   /** Tenant's logo URL for dark backgrounds */
   logoUrl?: string;
+  /** Role matrix levels; pages the role can't open are hidden */
+  permissions?: Permissions;
 }
 
-export function Sidebar({ role, isPlatformTenant, brandName, logoUrl }: SidebarProps) {
+export function Sidebar({ role, isPlatformTenant, brandName, logoUrl, permissions }: SidebarProps) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const baseSections = NAV[role] ?? [];
   // For platform tenants, inject Branding into the Account section
-  const sections = isPlatformTenant && role === 'shipper'
+  const withBranding = isPlatformTenant && role === 'shipper'
     ? baseSections.map((s) =>
         s.section === 'Account'
           ? { ...s, items: [...s.items, { label: 'Branding', href: '/shipper/branding', icon: Palette }] }
           : s
       )
     : baseSections;
+  // Hide pages this person's role can't open (the API enforces it either way)
+  const sections = withBranding
+    .map((s) => ({ ...s, items: s.items.filter((i) => canOpen(permissions, i.href)) }))
+    .filter((s) => s.items.length > 0);
 
   const allItems = sections.flatMap((s) => s.items);
 

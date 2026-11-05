@@ -139,7 +139,7 @@ class PaymentsController extends Controller
     {
         [$view, $org] = $this->view($request);
         abort_unless($view === 'carrier' && $fee->carrier_id === $org->id, 403);
-        abort_unless($request->user()->isOrgAdmin(), 403, 'Only the owner or staff can pay fees.');
+        abort_unless($request->user()->canDo($request->user()->currentOrg?->type === 'shipper' ? 'money.pay' : 'money.payments'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         abort_unless($fee->status === 'failed', 422, 'This fee is not due.');
 
         $fee = $this->payments->collectFee($fee);
@@ -173,7 +173,7 @@ class PaymentsController extends Controller
     {
         [$view, $org] = $this->view($request);
         abort_unless($view === 'shipper' && $p->shipper_id === $org->id, 403);
-        abort_unless($request->user()->isOrgAdmin(), 403, 'Only the owner or staff can manage payments.');
+        abort_unless($request->user()->canDo('money.pay'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         // user_id is the shipper's person who paid
         $p->forceFill(['user_id' => $request->user()->id])->save();
     }

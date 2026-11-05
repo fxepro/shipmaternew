@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { jobApi, bidApi, shipmentApi } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 const bidSchema = z.object({
   amount:                  z.coerce.number().positive('Enter a valid amount'),
@@ -90,6 +91,7 @@ function BidModal({ job, onClose }: { job: OpenJob; onClose: () => void }) {
 }
 
 function OpenJobCard({ job, onBid }: { job: OpenJob; onBid: () => void }) {
+  const can = useCan();
   return (
     <div className="bg-[var(--color-white)] rounded-xl border border-[var(--color-cream-dark)] shadow-[0_1px_3px_rgba(0,0,0,0.05)] p-5 flex flex-col">
       <div className="flex items-start justify-between gap-2">
@@ -125,7 +127,7 @@ function OpenJobCard({ job, onBid }: { job: OpenJob; onBid: () => void }) {
           <CheckCircle2 size={14} className="text-[var(--color-sage)]" />
           Bid placed
         </div>
-      ) : (
+      ) : can.do('loads.bid') && (
         <button
           onClick={onBid}
           className="mt-4 w-full rounded-lg bg-[var(--color-teal)] py-2 text-sm font-medium text-white hover:bg-[var(--color-teal-light)] transition-colors"
@@ -143,6 +145,7 @@ function ContractedOfferCard({ offer, onAccept, onDecline, isPending }: {
   onDecline: () => void;
   isPending: boolean;
 }) {
+  const can = useCan();
   const rate = offer.agreed_cost ?? offer.contract_rate;
 
   return (
@@ -174,7 +177,7 @@ function ContractedOfferCard({ offer, onAccept, onDecline, isPending }: {
         {offer.pickup_date && <span className="flex items-center gap-1"><Clock size={10} />{formatDate(offer.pickup_date)}</span>}
       </div>
 
-      <div className="mt-4 flex gap-2">
+      {can.do('loads.accept') && <div className="mt-4 flex gap-2">
         <button
           onClick={onDecline}
           disabled={isPending}
@@ -190,7 +193,7 @@ function ContractedOfferCard({ offer, onAccept, onDecline, isPending }: {
           {isPending && <Loader2 size={13} className="animate-spin" />}
           Accept
         </button>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -117,7 +117,7 @@ class ShipperProfileController extends Controller
             'state'         => $me?->state ?? '',
             'zip'           => $me?->zip ?? '',
             'country'       => $me?->country === 'US' || !$me?->country ? 'United States' : $me->country,
-            'can_edit_company' => $user->isOrgAdmin(),
+            'can_edit_company' => $user->canDo('company.profile'),
 
             // Business identity (the company)
             'company'                => $org?->name ?? '',
@@ -305,7 +305,7 @@ class ShipperProfileController extends Controller
         $serviceChange = $has('service_type_keys');
 
         // Only the owner or staff change the company; others save just their own details
-        if ($org && $user->isOrgAdmin() && ($changed || $serviceChange)) {
+        if ($org && $user->canDo('company.profile') && ($changed || $serviceChange)) {
             if ($changed) $org->update($changed);
             if ($serviceChange) {
                 $org->serviceTypes()->sync(ServiceType::whereIn('key', $validated['service_type_keys'])->pluck('id'));

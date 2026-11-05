@@ -9,6 +9,7 @@ import { ShipmentTable } from '@/components/shipments/ShipmentTable';
 import { ShipmentPanel } from '@/components/shipments/ShipmentPanel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { Shipment, ShipmentStatus } from '@/types/shipment';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 const STATUS_FILTERS: { label: string; value: ShipmentStatus | 'all' }[] = [
   { label: 'All',        value: 'all' },
@@ -17,6 +18,7 @@ const STATUS_FILTERS: { label: string; value: ShipmentStatus | 'all' }[] = [
 ];
 
 export default function ShipperShipmentsPage() {
+  const can = useCan();
   const [filter, setFilter]           = useState<ShipmentStatus | 'all'>('all');
   const [selectedId, setSelectedId]   = useState<number | null>(null);
 
@@ -38,12 +40,12 @@ export default function ShipperShipmentsPage() {
             </h1>
             <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">All shipments you have dispatched</p>
           </div>
-          <Link
+          {can.do('loads.post') && <Link
             href="/shipper/shipments/new"
             className="flex items-center gap-1.5 rounded-lg bg-[var(--color-teal)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-teal-light)] transition-colors shadow-sm"
           >
             <Plus size={14} /> New Shipment
-          </Link>
+          </Link>}
         </div>
 
         {/* Filter bar */}

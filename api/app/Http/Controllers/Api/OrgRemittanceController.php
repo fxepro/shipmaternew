@@ -25,7 +25,7 @@ class OrgRemittanceController extends Controller
         $user = $request->user();
         $org  = $user->currentOrg;
         abort_if(!$org, 404);
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('company.payouts'), 403);
 
         $data = $request->validate([
             'payee_name'          => ['nullable', 'string', 'max:255'],

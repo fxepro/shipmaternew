@@ -55,7 +55,7 @@ class FreightJobController extends Controller
             ->when($request->type === 'assigned',    fn($q) => $q->where('carrier_id', $uid))
             ->when($request->type === 'open_market', fn($q) => $q->whereNull('carrier_id')->where('status', 'posted'))
             // A driver sees only the loads they are on
-            ->when($user->isDriver(), fn($q) => $q->forPerson($user->id))
+            ->when($user->onlyAssignedLoads(), fn($q) => $q->forPerson($user->id))
             ->orderByDesc('created_at')
             ->get();
 

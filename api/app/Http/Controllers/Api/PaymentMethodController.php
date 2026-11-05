@@ -106,7 +106,7 @@ class PaymentMethodController extends Controller
         $user = $request->user();
         $org  = $user->currentOrg;
         abort_unless($org, 403, 'No company selected.');
-        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can manage payment methods.');
+        abort_unless($user->canDo($org->type === 'shipper' ? 'money.methods' : 'money.payments'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         return $org;
     }
 

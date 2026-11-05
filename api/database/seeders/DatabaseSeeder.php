@@ -749,5 +749,6 @@ class DatabaseSeeder extends Seeder
         $this->call(LocationSeeder::class);
         $this->call(FactoringDemoSeeder::class);
         $this->call(PaymentsDemoSeeder::class);
+        $this->call(RoleDemoSeeder::class);
     }
 }

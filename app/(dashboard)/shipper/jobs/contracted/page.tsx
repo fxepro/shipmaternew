@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { freightJobApi } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 type Status = 'all' | 'draft' | 'posted' | 'in_progress' | 'completed';
 
@@ -73,6 +74,7 @@ function jobRate(job: any): string {
 }
 
 export default function ContractedJobsPage() {
+  const can = useCan();
   const router = useRouter();
   const [filter, setFilter] = useState<Status>('all');
 
@@ -105,12 +107,12 @@ export default function ContractedJobsPage() {
             Jobs dispatched under carrier contracts
           </p>
         </div>
-        <Link
+        {can.do('loads.post') && <Link
           href="/shipper/jobs/contracted/new"
           className="flex items-center gap-1.5 rounded-lg bg-[var(--color-teal)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-teal-light)] transition-colors shadow-sm"
         >
           <Plus size={14} /> New job
-        </Link>
+        </Link>}
       </div>
 
       <div className="flex gap-2 flex-wrap">

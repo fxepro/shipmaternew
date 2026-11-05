@@ -152,7 +152,7 @@ class CarrierVerificationController extends Controller
     {
         $org = \App\Services\PersonChecks::companyOf($request->user(), 'carrier');
         abort_unless($org, 422, 'You are not part of a carrier company.');
-        abort_unless($request->user()->isOrgAdmin(), 403, 'Only the owner or staff can verify the company.');
+        abort_unless($request->user()->canDo('company.profile'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         return $org;
     }
 }

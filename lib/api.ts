@@ -77,6 +77,13 @@ api.interceptors.response.use(
         action: { label: 'Subscribe', onClick: () => { window.location.href = '/shipper/profile?tab=subscription'; } },
       }));
     }
+    // The role matrix refused an action (Settings, Roles & Permissions): say so once.
+    // Refused reads are left to the page, so opening a page doesn't pop up a message.
+    if (typeof window !== 'undefined' && err?.config?.method !== 'get'
+        && ['not_permitted', 'not_assigned'].includes(err?.response?.data?.code)) {
+      const msg = err.response.data.error as string;
+      import('sonner').then(({ toast }) => toast.error(msg, { id: `perm-${err.response.data.permission}` }));
+    }
     return Promise.reject(err);
   }
 );
@@ -218,6 +225,14 @@ export const adminFinanceApi = {
   receivables:    () => api.get('/api/v1/admin/receivables'),
   settings:       () => api.get('/api/v1/admin/settings/payments'),
   updateSettings: (flow: 'direct' | 'platform') => api.put('/api/v1/admin/settings/payments', { flow }),
+};
+
+// ── Admin: company role matrix (Settings, Roles & Permissions) ─────────
+export const adminRoleApi = {
+  matrix: () => api.get('/api/v1/admin/roles/matrix'),
+  update: (type: string, changes: { role: string; permission: string; level: string }[]) =>
+    api.put(`/api/v1/admin/roles/matrix/${type}`, { changes }),
+  reset:  (type: string) => api.post(`/api/v1/admin/roles/matrix/${type}/reset`),
 };
 
 // ── Preferred carriers ────────────────────────────────────────────────

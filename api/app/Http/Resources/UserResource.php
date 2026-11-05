@@ -30,7 +30,9 @@ class UserResource extends JsonResource
                 'logo_url'          => $org->logo_url,
                 'is_platform_tenant'=> (bool) $org->is_platform_tenant,
             ] : null,
-            'org_role' => $this->orgRole(),
+            'org_role' => $role = $this->orgRole(),
+            // This person's level for each action in the role matrix (Settings, Roles & Permissions)
+            'permissions' => (object) \App\Support\Permissions::forRole($org?->type, $role),
 
             // The carrier company's public details (for carrier companies)
             'carrier_profile' => $this->when(

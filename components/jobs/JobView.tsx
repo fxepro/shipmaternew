@@ -16,6 +16,7 @@ import { RouteMap } from '@/components/RouteMap';
 import type { RouteMapStop } from '@/components/RouteMap';
 import { OfferPanel } from '@/components/jobs/OfferPanel';
 import { RatingForm } from '@/components/jobs/RatingForm';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 // ── Status configs ─────────────────────────────────────────────────────────────
 
@@ -170,6 +171,7 @@ function fmt(n: number | string | null | undefined) {
 
 export function JobView({ job, role, backHref, backLabel, currentUserId, onStopUpdated, onJobUpdated }: JobViewProps) {
   const [pendingStop,   setPendingStop]   = useState<number | null>(null);
+  const can = useCan();
   const [showOfferPanel, setShowOfferPanel] = useState(false);
   const [docLoading, setDocLoading] = useState<string | null>(null);
   const qc = useQueryClient();
@@ -347,7 +349,7 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
         )}
 
         {/* Edit button — draft + shipper only */}
-        {role === 'shipper' && job.status === 'draft' && (
+        {role === 'shipper' && job.status === 'draft' && can.do('loads.post') && (
           <Link
             href={`/shipper/jobs/contracted/new?edit=${job.id}`}
             className="flex items-center gap-1.5 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-4 py-2 text-sm font-semibold text-[var(--color-text)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)] transition-colors"
@@ -807,7 +809,7 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
                           <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-cream)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-text-faint)]">
                             Declined
                           </span>
-                        ) : isPending && !job.carrier_id ? (
+                        ) : isPending && !job.carrier_id && can.do('loads.decide') ? (
                           <div className="flex gap-2 pt-1">
                             <button
                               onClick={() => acceptOfferMutation.mutate(offer.id)}

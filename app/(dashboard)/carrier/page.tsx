@@ -8,6 +8,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusPill } from '@/components/shipments/StatusPill';
 import { formatCurrency } from '@/lib/utils';
+import { useCan } from '@/components/layout/PermissionsContext';
 
 function SkeletonCard() {
   return <div className="skeleton h-[104px] rounded-xl" />;
@@ -163,6 +164,7 @@ function ApprovalBanner({ status }: { status: string }) {
 
 // ── Main dashboard ─────────────────────────────────────────────────────────
 export default function CarrierDashboard() {
+  const can = useCan();
   const { data: profileRes, isLoading: profileLoading } = useQuery({
     queryKey: ['carrier-profile'],
     queryFn: () => api.get('/api/v1/carrier/profile').then(r => r.data?.data),
@@ -175,13 +177,13 @@ export default function CarrierDashboard() {
   const { data: jobsRes, isLoading: jobsLoading } = useQuery({
     queryKey: ['carrier-jobs'],
     queryFn: () => jobApi.list({ limit: 5 }),
-    enabled: isApproved,
+    enabled: isApproved && can.see('loads.board'),
     retry: false,
   });
   const { data: earningsRes } = useQuery({
     queryKey: ['carrier-earnings'],
     queryFn: () => carrierApi.earnings(),
-    enabled: isApproved,
+    enabled: isApproved && can.see('money.payments'),
     retry: false,
   });
 
@@ -201,7 +203,7 @@ export default function CarrierDashboard() {
         <h1 className="page-title">
           Dashboard
         </h1>
-        {isApproved && (
+        {isApproved && can.see('loads.board') && (
           <Link href="/carrier/jobs" className="rounded-lg bg-[var(--color-teal)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-teal-light)] transition-colors">
             Browse Jobs
           </Link>

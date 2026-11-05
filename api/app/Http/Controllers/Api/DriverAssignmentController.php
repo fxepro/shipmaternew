@@ -46,7 +46,7 @@ class DriverAssignmentController extends Controller
             'driver'      => $drivers->first(),
             'drivers'     => $drivers,
             'assigned_at' => $row?->created_at,
-            'can_assign'  => $request->user()->isDispatcher(),
+            'can_assign'  => $request->user()->canDo('loads.assign'),
         ]]);
     }
 
@@ -98,7 +98,7 @@ class DriverAssignmentController extends Controller
         abort_unless($user->currentOrg?->type === 'carrier' && $user->isCarrierOf($shipment), 403);
 
         if ($assigning) {
-            abort_unless($user->isDispatcher(), 403, 'Only owners, staff and dispatchers can assign drivers.');
+            abort_unless($user->canDo('loads.assign'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         }
     }
 

@@ -137,6 +137,32 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->current_org_id && (int) $row?->carrier_id === (int) $this->current_org_id;
     }
 
+    // ── Role permissions (Admin Console, Settings, Roles & Permissions; App\Support\Permissions) ──
+
+    /** This person's level for an action in their current company: full, view, assigned, self or none */
+    public function permLevel(string $action): string
+    {
+        return \App\Support\Permissions::level($this->currentOrg?->type, $this->orgRole(), $action);
+    }
+
+    /** May act (full, or on their own assigned loads or record) */
+    public function canDo(string $action): bool
+    {
+        return in_array($this->permLevel($action), ['full', 'assigned', 'self'], true);
+    }
+
+    /** May see (anything but none) */
+    public function canSee(string $action): bool
+    {
+        return $this->permLevel($action) !== 'none';
+    }
+
+    /** Sees only the loads they are on (drivers, by default) */
+    public function onlyAssignedLoads(): bool
+    {
+        return $this->permLevel('loads.view') === 'assigned';
+    }
+
     public function isOrgOwner(): bool  { return $this->orgRole() === 'owner'; }
     public function isOrgAdmin(): bool  { return in_array($this->orgRole(), ['owner', 'staff']); }
     public function isDriver(): bool    { return $this->orgRole() === 'driver'; }

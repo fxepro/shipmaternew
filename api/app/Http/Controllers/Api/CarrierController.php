@@ -180,7 +180,7 @@ class CarrierController extends Controller
             'total_ratings'           => $org?->total_ratings ?? 0,
             'total_deliveries'        => $org?->carrier_total_deliveries ?? 0,
             'org_id'                  => $org?->id,
-            'can_edit_company'        => $user->isOrgAdmin(),
+            'can_edit_company'        => $user->canDo('company.profile'),
             'member_since'            => $user->created_at->format('M Y'),
 
             // Services and certifications (company)
@@ -335,7 +335,7 @@ class CarrierController extends Controller
         $serviceChange = $has('service_type_keys');
 
         // Only the owner or staff change the company; drivers and dispatchers save just their own details
-        if ($org && $user->isOrgAdmin() && ($changed || $serviceChange)) {
+        if ($org && $user->canDo('company.profile') && ($changed || $serviceChange)) {
             if ($changed) $org->update($changed);
             if ($serviceChange) {
                 $org->serviceTypes()->sync(ServiceType::whereIn('key', $validated['service_type_keys'])->pluck('id'));

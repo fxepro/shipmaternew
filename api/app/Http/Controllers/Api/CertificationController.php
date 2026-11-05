@@ -49,7 +49,7 @@ class CertificationController extends Controller
         // Certifications belong to the carrier company (owner or staff)
         $org = \App\Services\PersonChecks::companyOf($user, 'carrier');
         abort_unless($org, 422, 'You are not part of a carrier company.');
-        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can change the company certifications.');
+        abort_unless($user->canDo('company.profile'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         $ids = Certification::whereIn('key', $validated['certification_keys'])->pluck('id');
         $org->certifications()->sync($ids);
 

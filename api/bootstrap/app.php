@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'carrier.approved' => \App\Http\Middleware\RequireCarrierApproval::class,
             'shipper.subscribed' => \App\Http\Middleware\RequireShipperSubscription::class,
             'account.status'   => \App\Http\Middleware\EnforceAccountStatus::class,
+            'perm'             => \App\Http\Middleware\RequireOrgPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

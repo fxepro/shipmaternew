@@ -45,7 +45,7 @@ class SubscriptionController extends Controller
     {
         $user = $request->user();
         $org  = $this->shipperOrg($request);
-        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can manage the subscription.');
+        abort_unless($user->canDo('company.subscription'), 403, "Your role can't do this. Ask your company's owner if you need it.");
 
         $data = $request->validate([
             'stated_annual_value' => ['required', 'numeric', 'min:0', 'max:100000000000'],
@@ -128,7 +128,7 @@ class SubscriptionController extends Controller
     {
         $user = $request->user();
         $org  = $this->shipperOrg($request);
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('company.subscription'), 403);
 
         $sub = ShipperSubscription::firstWhere('org_id', $org->id);
         abort_if(!$sub?->stripe_subscription_id, 404, 'No active subscription.');
@@ -143,7 +143,7 @@ class SubscriptionController extends Controller
     {
         $user = $request->user();
         $org  = $this->shipperOrg($request);
-        abort_unless($user->isOrgAdmin(), 403);
+        abort_unless($user->canDo('company.subscription'), 403);
 
         $sub = ShipperSubscription::firstWhere('org_id', $org->id);
         abort_unless($sub?->isActive() && $sub->cancel_at_period_end, 422, 'There is no cancellation to undo.');

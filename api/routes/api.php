@@ -98,32 +98,32 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::post('/auth/logout',  [AuthController::class, 'logout']);
 
     // Shipments
-    Route::get('/shipments',                         [ShipmentController::class, 'index']);
-    Route::post('/shipments',                        [ShipmentController::class, 'store'])->middleware('shipper.subscribed');
-    Route::get('/shipments/{shipment}',              [ShipmentController::class, 'show']);
-    Route::put('/shipments/{shipment}/accept-offer', [ShipmentController::class, 'acceptOffer']);
-    Route::put('/shipments/{shipment}/decline-offer',[ShipmentController::class, 'declineOffer']);
+    Route::get('/shipments',                         [ShipmentController::class, 'index'])->middleware('perm:carrier:loads.view=view,shipper:loads.view=view');
+    Route::post('/shipments',                        [ShipmentController::class, 'store'])->middleware('shipper.subscribed')->middleware('perm:shipper:loads.post');
+    Route::get('/shipments/{shipment}',              [ShipmentController::class, 'show'])->middleware('perm:carrier:loads.view=view,shipper:loads.view=view');
+    Route::put('/shipments/{shipment}/accept-offer', [ShipmentController::class, 'acceptOffer'])->middleware('perm:carrier:loads.accept');
+    Route::put('/shipments/{shipment}/decline-offer',[ShipmentController::class, 'declineOffer'])->middleware('perm:carrier:loads.accept');
 
     // Bids
-    Route::get('/shipments/{shipment}/bids',  [BidController::class, 'index']);
-    Route::post('/shipments/{shipment}/bids', [BidController::class, 'store']);
+    Route::get('/shipments/{shipment}/bids',  [BidController::class, 'index'])->middleware('perm:carrier:loads.board=view,shipper:loads.view=view');
+    Route::post('/shipments/{shipment}/bids', [BidController::class, 'store'])->middleware('perm:carrier:loads.bid');
     // ── Carrier operational routes — requires approved status ─────────────
     Route::middleware('carrier.approved')->group(function () {
-        Route::get('/jobs',               [JobController::class, 'index']);
-        Route::get('/carrier/offers',     [BidController::class, 'carrierOffers']);
-        Route::get('/carrier/earnings',   [CarrierController::class, 'earnings']);
-        Route::post('/carrier/payout',    [CarrierController::class, 'requestPayout']);
-        Route::post('/shipments/{shipment}/deliver', [ShipmentController::class, 'deliver']);
-        Route::put('/shipments/{shipment}/start',    [ShipmentController::class, 'start']);
-        Route::post('/shipments/{shipment}/ping',    [ShipmentController::class, 'ping']);
+        Route::get('/jobs',               [JobController::class, 'index'])->middleware('perm:carrier:loads.board=view');
+        Route::get('/carrier/offers',     [BidController::class, 'carrierOffers'])->middleware('perm:carrier:loads.board=view');
+        Route::get('/carrier/earnings',   [CarrierController::class, 'earnings'])->middleware('perm:carrier:money.payments=view');
+        Route::post('/carrier/payout',    [CarrierController::class, 'requestPayout'])->middleware('perm:carrier:money.payments');
+        Route::post('/shipments/{shipment}/deliver', [ShipmentController::class, 'deliver'])->middleware('perm:carrier:trips.run');
+        Route::put('/shipments/{shipment}/start',    [ShipmentController::class, 'start'])->middleware('perm:carrier:trips.run');
+        Route::post('/shipments/{shipment}/ping',    [ShipmentController::class, 'ping'])->middleware('perm:carrier:trips.run');
 
         // Driver assignment: only approved drivers with current credentials
-        Route::get('/carrier/drivers',               [DriverAssignmentController::class, 'drivers']);
-        Route::get('/shipments/{id}/driver',         [DriverAssignmentController::class, 'show']);
-        Route::put('/shipments/{id}/driver',         [DriverAssignmentController::class, 'assign']);
-        Route::get('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'show']);
-        Route::put('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'assign']);
-        Route::put('/bids/{bid}/withdraw',           [BidController::class, 'withdraw']);
+        Route::get('/carrier/drivers',               [DriverAssignmentController::class, 'drivers'])->middleware('perm:carrier:loads.assign');
+        Route::get('/shipments/{id}/driver',         [DriverAssignmentController::class, 'show'])->middleware('perm:carrier:loads.view=view');
+        Route::put('/shipments/{id}/driver',         [DriverAssignmentController::class, 'assign'])->middleware('perm:carrier:loads.assign');
+        Route::get('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'show'])->middleware('perm:carrier:loads.view=view');
+        Route::put('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'assign'])->middleware('perm:carrier:loads.assign');
+        Route::put('/bids/{bid}/withdraw',           [BidController::class, 'withdraw'])->middleware('perm:carrier:loads.bid');
     });
 
     // Carrier: profile, documents, vehicles (always accessible)
@@ -132,15 +132,15 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::put('/carrier/profile',             [CarrierController::class, 'update']);
 
     // Payout account setup (carriers and factors): details collected here, sent to Stripe once
-    Route::get('/payouts/setup',     [\App\Http\Controllers\Api\PayoutSetupController::class, 'show']);
-    Route::put('/payouts/business',  [\App\Http\Controllers\Api\PayoutSetupController::class, 'business']);
-    Route::put('/payouts/bank',      [\App\Http\Controllers\Api\PayoutSetupController::class, 'bank']);
-    Route::post('/payouts/submit',   [\App\Http\Controllers\Api\PayoutSetupController::class, 'submit']);
-    Route::post('/payouts/refresh',  [\App\Http\Controllers\Api\PayoutSetupController::class, 'refresh']);
+    Route::get('/payouts/setup',     [\App\Http\Controllers\Api\PayoutSetupController::class, 'show'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
+    Route::put('/payouts/business',  [\App\Http\Controllers\Api\PayoutSetupController::class, 'business'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
+    Route::put('/payouts/bank',      [\App\Http\Controllers\Api\PayoutSetupController::class, 'bank'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
+    Route::post('/payouts/submit',   [\App\Http\Controllers\Api\PayoutSetupController::class, 'submit'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
+    Route::post('/payouts/refresh',  [\App\Http\Controllers\Api\PayoutSetupController::class, 'refresh'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
 
     // Stripe Connect
-    Route::post('/stripe/connect/onboard',     [StripeConnectController::class, 'onboard']);
-    Route::get('/stripe/connect/status',       [StripeConnectController::class, 'status']);
+    Route::post('/stripe/connect/onboard',     [StripeConnectController::class, 'onboard'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
+    Route::get('/stripe/connect/status',       [StripeConnectController::class, 'status'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
 
     // Stripe Identity
     Route::post('/stripe/identity/session',    [StripeConnectController::class, 'identitySession']);
@@ -149,37 +149,37 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/background',                         [\App\Http\Controllers\Api\BackgroundCheckController::class, 'show']);
     Route::post('/background/pay',                    [\App\Http\Controllers\Api\BackgroundCheckController::class, 'pay']);
     Route::post('/background/checks/{check}/start',   [\App\Http\Controllers\Api\BackgroundCheckController::class, 'start']);
-    Route::get('/shipper/carriers/{carrier}/background',  [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperShow']);
-    Route::post('/shipper/carriers/{carrier}/background', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperOrder']);
+    Route::get('/shipper/carriers/{carrier}/background',  [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperShow'])->middleware('perm:shipper:carriers.checks=view');
+    Route::post('/shipper/carriers/{carrier}/background', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperOrder'])->middleware('perm:shipper:carriers.order_check');
 
     // Carrier verification (FMCSA live lookup)
-    Route::post('/carrier/verify/dot',         [CarrierVerificationController::class, 'verifyDot']);
-    Route::post('/carrier/verify/mc',          [CarrierVerificationController::class, 'verifyMc']);
+    Route::post('/carrier/verify/dot',         [CarrierVerificationController::class, 'verifyDot'])->middleware('perm:carrier:company.profile');
+    Route::post('/carrier/verify/mc',          [CarrierVerificationController::class, 'verifyMc'])->middleware('perm:carrier:company.profile');
     Route::get('/carrier/verifications',       [CarrierVerificationController::class, 'index']);
 
     // FMCSA Drug & Alcohol Clearinghouse
     Route::post('/carrier/clearinghouse',         [ClearinghouseController::class, 'initiate']);
     Route::get('/carrier/clearinghouse/status',   [ClearinghouseController::class, 'status']);
 
-    Route::get('/carrier/documents',           [CarrierController::class, 'getDocuments']);
-    Route::post('/carrier/documents',          [CarrierController::class, 'uploadDocument']);
-    Route::get('/carrier/vehicles',            [CarrierController::class, 'getVehicles']);
-    Route::post('/carrier/vehicles',           [CarrierController::class, 'createVehicle']);
-    Route::put('/carrier/vehicles/{id}',       [CarrierController::class, 'updateVehicle']);
-    Route::delete('/carrier/vehicles/{id}',    [CarrierController::class, 'deleteVehicle']);
+    Route::get('/carrier/documents',           [CarrierController::class, 'getDocuments'])->middleware('perm:carrier:company.profile=view');
+    Route::post('/carrier/documents',          [CarrierController::class, 'uploadDocument'])->middleware('perm:carrier:company.profile');
+    Route::get('/carrier/vehicles',            [CarrierController::class, 'getVehicles'])->middleware('perm:carrier:fleet.vehicles=view');
+    Route::post('/carrier/vehicles',           [CarrierController::class, 'createVehicle'])->middleware('perm:carrier:fleet.vehicles');
+    Route::put('/carrier/vehicles/{id}',       [CarrierController::class, 'updateVehicle'])->middleware('perm:carrier:fleet.vehicles');
+    Route::delete('/carrier/vehicles/{id}',    [CarrierController::class, 'deleteVehicle'])->middleware('perm:carrier:fleet.vehicles');
     Route::get('/carriers',                    [CarrierController::class, 'index']);
 
     // Certifications
-    Route::put('/carrier/certifications', [CertificationController::class, 'sync']);
+    Route::put('/carrier/certifications', [CertificationController::class, 'sync'])->middleware('perm:carrier:company.profile');
 
     // Org / Team management
     Route::get('/org',                             [OrgController::class, 'show']);
-    Route::put('/org',                             [OrgController::class, 'update']);
-    Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show']);
-    Route::put('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'update']);
+    Route::put('/org',                             [OrgController::class, 'update'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
+    Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
+    Route::put('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'update'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
     Route::get('/org/members',                     [OrgController::class, 'members']);
-    Route::put('/org/members/{id}',                [OrgController::class, 'updateMember']);
-    Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember']);
+    Route::put('/org/members/{id}',                [OrgController::class, 'updateMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
+    Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
     // A person's own checks: identity record and credentials (docs/people-types-and-checks.md)
     Route::get('/me/checks',                         [MyChecksController::class, 'show']);
     Route::put('/me/identity',                       [MyChecksController::class, 'updateIdentity']);
@@ -188,38 +188,38 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::post('/me/credentials/{credential}',      [MyChecksController::class, 'updateCredential']);
     Route::delete('/me/credentials/{credential}',    [MyChecksController::class, 'destroyCredential']);
 
-    Route::get('/org/invitations',                 [OrgController::class, 'invitations']);
-    Route::post('/org/invitations',                [OrgController::class, 'invite']);
+    Route::get('/org/invitations',                 [OrgController::class, 'invitations'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
+    Route::post('/org/invitations',                [OrgController::class, 'invite'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
     Route::post('/org/invitations/accept',         [OrgController::class, 'acceptInvitation']);
-    Route::delete('/org/invitations/{id}',         [OrgController::class, 'cancelInvitation']);
+    Route::delete('/org/invitations/{id}',         [OrgController::class, 'cancelInvitation'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
     Route::put('/org/switch',                      [OrgController::class, 'switchOrg']);
     Route::get('/user/organizations',              [OrgController::class, 'userOrgs']);
 
     // Shipper subscription (required to post loads)
-    Route::get('/shipper/subscription',          [\App\Http\Controllers\Api\SubscriptionController::class, 'show']);
-    Route::post('/shipper/subscription',         [\App\Http\Controllers\Api\SubscriptionController::class, 'subscribe']);
-    Route::post('/shipper/subscription/confirm', [\App\Http\Controllers\Api\SubscriptionController::class, 'confirm']);
-    Route::post('/shipper/subscription/cancel',  [\App\Http\Controllers\Api\SubscriptionController::class, 'cancel']);
-    Route::post('/shipper/subscription/resume',  [\App\Http\Controllers\Api\SubscriptionController::class, 'resume']);
+    Route::get('/shipper/subscription',          [\App\Http\Controllers\Api\SubscriptionController::class, 'show'])->middleware('perm:shipper:company.subscription=view');
+    Route::post('/shipper/subscription',         [\App\Http\Controllers\Api\SubscriptionController::class, 'subscribe'])->middleware('perm:shipper:company.subscription');
+    Route::post('/shipper/subscription/confirm', [\App\Http\Controllers\Api\SubscriptionController::class, 'confirm'])->middleware('perm:shipper:company.subscription');
+    Route::post('/shipper/subscription/cancel',  [\App\Http\Controllers\Api\SubscriptionController::class, 'cancel'])->middleware('perm:shipper:company.subscription');
+    Route::post('/shipper/subscription/resume',  [\App\Http\Controllers\Api\SubscriptionController::class, 'resume'])->middleware('perm:shipper:company.subscription');
 
     // Factor: own Stripe account for factored-load payments
-    Route::post('/factor/stripe/connect', [\App\Http\Controllers\Api\FactorStripeController::class, 'connect']);
-    Route::get('/factor/stripe/status',   [\App\Http\Controllers\Api\FactorStripeController::class, 'status']);
+    Route::post('/factor/stripe/connect', [\App\Http\Controllers\Api\FactorStripeController::class, 'connect'])->middleware('perm:factor:company.payouts');
+    Route::get('/factor/stripe/status',   [\App\Http\Controllers\Api\FactorStripeController::class, 'status'])->middleware('perm:factor:company.payouts=view');
 
     // Factoring: NOAs and factored loads, for carrier, factor, shipper and admin (docs/noa-factoring.md)
-    Route::get('/factoring/noas',                      [\App\Http\Controllers\Api\FactoringController::class, 'noas']);
-    Route::post('/factoring/noas',                     [\App\Http\Controllers\Api\FactoringController::class, 'fileNoa']);
-    Route::get('/factoring/noas/{noa}/document',       [\App\Http\Controllers\Api\FactoringController::class, 'document']);
-    Route::post('/factoring/noas/{noa}/decide',        [\App\Http\Controllers\Api\FactoringController::class, 'decideNoa']);
-    Route::post('/factoring/noas/{noa}/release',       [\App\Http\Controllers\Api\FactoringController::class, 'release']);
-    Route::post('/factoring/noas/{noa}/request-release', [\App\Http\Controllers\Api\FactoringController::class, 'requestRelease']);
-    Route::get('/factoring/factors',                   [\App\Http\Controllers\Api\FactoringController::class, 'factors']);
-    Route::get('/factoring/eligible-loads',            [\App\Http\Controllers\Api\FactoringController::class, 'eligibleLoads']);
-    Route::get('/factoring/loads',                     [\App\Http\Controllers\Api\FactoringController::class, 'loads']);
-    Route::post('/factoring/loads',                    [\App\Http\Controllers\Api\FactoringController::class, 'factorLoad']);
-    Route::delete('/factoring/loads/{load}',           [\App\Http\Controllers\Api\FactoringController::class, 'withdrawLoad']);
-    Route::post('/factoring/loads/{load}/decide',      [\App\Http\Controllers\Api\FactoringController::class, 'decideLoad']);
-    Route::post('/factoring/loads/{load}/acknowledge', [\App\Http\Controllers\Api\FactoringController::class, 'acknowledge']);
+    Route::get('/factoring/noas',                      [\App\Http\Controllers\Api\FactoringController::class, 'noas'])->middleware('perm:carrier:money.factoring,factor:loads.view=view,shipper:money.payments=view');
+    Route::post('/factoring/noas',                     [\App\Http\Controllers\Api\FactoringController::class, 'fileNoa'])->middleware('perm:carrier:money.factoring');
+    Route::get('/factoring/noas/{noa}/document',       [\App\Http\Controllers\Api\FactoringController::class, 'document'])->middleware('perm:carrier:money.factoring,factor:loads.view=view,shipper:money.payments=view');
+    Route::post('/factoring/noas/{noa}/decide',        [\App\Http\Controllers\Api\FactoringController::class, 'decideNoa'])->middleware('perm:factor:noas.decide');
+    Route::post('/factoring/noas/{noa}/release',       [\App\Http\Controllers\Api\FactoringController::class, 'release'])->middleware('perm:factor:noas.decide');
+    Route::post('/factoring/noas/{noa}/request-release', [\App\Http\Controllers\Api\FactoringController::class, 'requestRelease'])->middleware('perm:carrier:money.factoring');
+    Route::get('/factoring/factors',                   [\App\Http\Controllers\Api\FactoringController::class, 'factors'])->middleware('perm:carrier:money.factoring');
+    Route::get('/factoring/eligible-loads',            [\App\Http\Controllers\Api\FactoringController::class, 'eligibleLoads'])->middleware('perm:carrier:money.factoring');
+    Route::get('/factoring/loads',                     [\App\Http\Controllers\Api\FactoringController::class, 'loads'])->middleware('perm:carrier:money.factoring,factor:loads.view=view,shipper:money.payments=view');
+    Route::post('/factoring/loads',                    [\App\Http\Controllers\Api\FactoringController::class, 'factorLoad'])->middleware('perm:carrier:money.factoring');
+    Route::delete('/factoring/loads/{load}',           [\App\Http\Controllers\Api\FactoringController::class, 'withdrawLoad'])->middleware('perm:carrier:money.factoring');
+    Route::post('/factoring/loads/{load}/decide',      [\App\Http\Controllers\Api\FactoringController::class, 'decideLoad'])->middleware('perm:factor:loads.decide');
+    Route::post('/factoring/loads/{load}/acknowledge', [\App\Http\Controllers\Api\FactoringController::class, 'acknowledge'])->middleware('perm:shipper:factoring.acknowledge');
 
     // Admin: fees (Platform settings)
     Route::put('/admin/settings/fees',    [\App\Http\Controllers\Api\FeesController::class, 'update']);
@@ -228,12 +228,12 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::post('/admin/settings/background/test', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'testConnection']);
 
     // Load payments and Shipmater revenue (docs/fees-and-billing.md)
-    Route::get('/payments',                      [\App\Http\Controllers\Api\PaymentsController::class, 'index']);
-    Route::get('/payments/summary',              [\App\Http\Controllers\Api\PaymentsController::class, 'summary']);
-    Route::get('/payments/fees',                 [\App\Http\Controllers\Api\PaymentsController::class, 'fees']);
-    Route::post('/payments/fees/{fee}/retry',    [\App\Http\Controllers\Api\PaymentsController::class, 'retryFee']);
-    Route::post('/payments/{payment}/retry',     [\App\Http\Controllers\Api\PaymentsController::class, 'retry']);
-    Route::post('/payments/{payment}/pay-early', [\App\Http\Controllers\Api\PaymentsController::class, 'payEarly']);
+    Route::get('/payments',                      [\App\Http\Controllers\Api\PaymentsController::class, 'index'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view,factor:loads.view=view');
+    Route::get('/payments/summary',              [\App\Http\Controllers\Api\PaymentsController::class, 'summary'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view,factor:loads.view=view');
+    Route::get('/payments/fees',                 [\App\Http\Controllers\Api\PaymentsController::class, 'fees'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view');
+    Route::post('/payments/fees/{fee}/retry',    [\App\Http\Controllers\Api\PaymentsController::class, 'retryFee'])->middleware('perm:carrier:money.payments,shipper:money.pay');
+    Route::post('/payments/{payment}/retry',     [\App\Http\Controllers\Api\PaymentsController::class, 'retry'])->middleware('perm:shipper:money.pay');
+    Route::post('/payments/{payment}/pay-early', [\App\Http\Controllers\Api\PaymentsController::class, 'payEarly'])->middleware('perm:shipper:money.pay');
     Route::get('/admin/ledger',                  [\App\Http\Controllers\Api\AdminFinanceController::class, 'ledger']);
     Route::get('/admin/receivables',             [\App\Http\Controllers\Api\AdminFinanceController::class, 'receivables']);
     Route::get('/admin/settings/payments',       [\App\Http\Controllers\Api\AdminFinanceController::class, 'settings']);
@@ -250,24 +250,24 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
         ->middleware('throttle:5,60');
     Route::post('/shipper/verify/phone/confirm', [ShipperVerificationController::class, 'confirmPhoneCode'])
         ->middleware('throttle:10,60');
-    Route::get('/shipper/documents',             [ShipperVerificationController::class, 'listDocuments']);
-    Route::post('/shipper/documents',            [ShipperVerificationController::class, 'uploadDocument']);
-    Route::post('/shipper/verify/business/submit', [ShipperVerificationController::class, 'submitBusiness']);
+    Route::get('/shipper/documents',             [ShipperVerificationController::class, 'listDocuments'])->middleware('perm:shipper:company.profile=view');
+    Route::post('/shipper/documents',            [ShipperVerificationController::class, 'uploadDocument'])->middleware('perm:shipper:company.profile');
+    Route::post('/shipper/verify/business/submit', [ShipperVerificationController::class, 'submitBusiness'])->middleware('perm:shipper:company.profile');
 
     // Payment methods
-    Route::get('/payment-methods',                          [PaymentMethodController::class, 'index']);
-    Route::post('/payment-methods/setup-intent',            [PaymentMethodController::class, 'setupIntent']);
-    Route::post('/payment-methods',                         [PaymentMethodController::class, 'store']);
-    Route::delete('/payment-methods/{paymentMethod}',       [PaymentMethodController::class, 'destroy']);
-    Route::post('/payment-methods/{paymentMethod}/default', [PaymentMethodController::class, 'setDefault']);
+    Route::get('/payment-methods',                          [PaymentMethodController::class, 'index'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view');
+    Route::post('/payment-methods/setup-intent',            [PaymentMethodController::class, 'setupIntent'])->middleware('perm:carrier:money.payments,shipper:money.methods');
+    Route::post('/payment-methods',                         [PaymentMethodController::class, 'store'])->middleware('perm:carrier:money.payments,shipper:money.methods');
+    Route::delete('/payment-methods/{paymentMethod}',       [PaymentMethodController::class, 'destroy'])->middleware('perm:carrier:money.payments,shipper:money.methods');
+    Route::post('/payment-methods/{paymentMethod}/default', [PaymentMethodController::class, 'setDefault'])->middleware('perm:carrier:money.payments,shipper:money.methods');
 
     // Transactions
-    Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::get('/transactions', [TransactionController::class, 'index'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view');
 
     // Preferred carriers
-    Route::get('/preferred-carriers',                       [PreferredCarrierController::class, 'index']);
-    Route::post('/preferred-carriers',                      [PreferredCarrierController::class, 'store']);
-    Route::delete('/preferred-carriers/{preferredCarrier}', [PreferredCarrierController::class, 'destroy']);
+    Route::get('/preferred-carriers',                       [PreferredCarrierController::class, 'index'])->middleware('perm:shipper:carriers.preferred=view');
+    Route::post('/preferred-carriers',                      [PreferredCarrierController::class, 'store'])->middleware('perm:shipper:carriers.preferred');
+    Route::delete('/preferred-carriers/{preferredCarrier}', [PreferredCarrierController::class, 'destroy'])->middleware('perm:shipper:carriers.preferred');
 
     // White-label tenant: self-service branding
     Route::get('/tenant/branding', [TenantController::class, 'show']);
@@ -294,6 +294,11 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::post('/admin/people/credentials/{credential}/verify', [AdminPeopleController::class, 'verifyCredential']);
     Route::delete('/admin/people/credentials/{credential}',      [AdminPeopleController::class, 'destroyCredential']);
     Route::get('/admin/people/credentials/{credential}/file',    [AdminPeopleController::class, 'credentialFile']);
+
+    // Admin: company role matrix (Settings, Roles & Permissions)
+    Route::get('/admin/roles/matrix',               [\App\Http\Controllers\Api\AdminRoleController::class, 'show']);
+    Route::put('/admin/roles/matrix/{type}',        [\App\Http\Controllers\Api\AdminRoleController::class, 'update']);
+    Route::post('/admin/roles/matrix/{type}/reset', [\App\Http\Controllers\Api\AdminRoleController::class, 'reset']);
 
     // Admin: carrier and shipper companies (organizations)
     Route::get('/admin/subscriptions',              [\App\Http\Controllers\Api\AdminSubscriptionController::class, 'index']);
@@ -323,7 +328,7 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/admin/financials/export', [AdminController::class, 'financialsExport']);
 
     // Ratings & reviews
-    Route::post('/jobs/{job}/ratings', [RatingController::class, 'store']);
+    Route::post('/jobs/{job}/ratings', [RatingController::class, 'store'])->middleware('perm:carrier:ratings.give,shipper:ratings.give');
     Route::get('/jobs/{job}/ratings',  [RatingController::class, 'jobRatings']);
 
     // Blog admin
@@ -333,71 +338,71 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::delete('/admin/blog/{id}', [BlogController::class, 'destroy']);
 
     // Contracts
-    Route::get('/contracts',                         [ContractController::class, 'index']);
-    Route::post('/contracts',                        [ContractController::class, 'store']);
-    Route::put('/contracts/{contract}',              [ContractController::class, 'update']);
-    Route::delete('/contracts/{contract}',           [ContractController::class, 'destroy']);
-    Route::get('/contracts/{contract}/agreement',    [ContractController::class, 'agreement']);
+    Route::get('/contracts',                         [ContractController::class, 'index'])->middleware('perm:carrier:contracts.view=view,shipper:contracts.edit=view');
+    Route::post('/contracts',                        [ContractController::class, 'store'])->middleware('perm:shipper:contracts.edit');
+    Route::put('/contracts/{contract}',              [ContractController::class, 'update'])->middleware('perm:shipper:contracts.edit');
+    Route::delete('/contracts/{contract}',           [ContractController::class, 'destroy'])->middleware('perm:shipper:contracts.edit');
+    Route::get('/contracts/{contract}/agreement',    [ContractController::class, 'agreement'])->middleware('perm:carrier:contracts.view=view,shipper:contracts.edit=view');
 
     // ── Locations address book ────────────────────────────────────────────────
-    Route::get('/locations',              [LocationController::class, 'index']);
-    Route::post('/locations',             [LocationController::class, 'store']);
-    Route::put('/locations/{location}',   [LocationController::class, 'update']);
-    Route::delete('/locations/{location}',[LocationController::class, 'destroy']);
+    Route::get('/locations',              [LocationController::class, 'index'])->middleware('perm:shipper:locations.manage=view');
+    Route::post('/locations',             [LocationController::class, 'store'])->middleware('perm:shipper:locations.manage');
+    Route::put('/locations/{location}',   [LocationController::class, 'update'])->middleware('perm:shipper:locations.manage');
+    Route::delete('/locations/{location}',[LocationController::class, 'destroy'])->middleware('perm:shipper:locations.manage');
 
     // ── Freight jobs (contracted work) ────────────────────────────────────────
-    Route::get('/shipper/freight-jobs',                              [FreightJobController::class, 'shipperIndex']);
-    Route::post('/shipper/freight-jobs',                             [FreightJobController::class, 'store'])->middleware('shipper.subscribed');
-    Route::get('/shipper/freight-jobs/{job}',                        [FreightJobController::class, 'show']);
-    Route::post('/shipper/freight-jobs/{job}/optimise',              [FreightJobController::class, 'optimise']);
-    Route::patch('/shipper/freight-jobs/{job}/billing',              [FreightJobController::class, 'saveBilling']);
-    Route::patch('/shipper/freight-jobs/{job}/terms',                [FreightJobController::class, 'saveTerms']);
-    Route::post('/shipper/freight-jobs/{job}/post',                  [FreightJobController::class, 'post']);
-    Route::get('/jobs/{job}/rate-confirmation',                      [FreightJobController::class, 'rateConfirmation']);
-    Route::get('/jobs/{job}/bol',                                    [FreightJobController::class, 'bol']);
-    Route::get('/jobs/{job}/invoice',                                [FreightJobController::class, 'invoice']);
+    Route::get('/shipper/freight-jobs',                              [FreightJobController::class, 'shipperIndex'])->middleware('perm:shipper:loads.view=view');
+    Route::post('/shipper/freight-jobs',                             [FreightJobController::class, 'store'])->middleware('shipper.subscribed')->middleware('perm:shipper:loads.post');
+    Route::get('/shipper/freight-jobs/{job}',                        [FreightJobController::class, 'show'])->middleware('perm:shipper:loads.view=view');
+    Route::post('/shipper/freight-jobs/{job}/optimise',              [FreightJobController::class, 'optimise'])->middleware('perm:shipper:loads.post');
+    Route::patch('/shipper/freight-jobs/{job}/billing',              [FreightJobController::class, 'saveBilling'])->middleware('perm:shipper:loads.post');
+    Route::patch('/shipper/freight-jobs/{job}/terms',                [FreightJobController::class, 'saveTerms'])->middleware('perm:shipper:loads.post');
+    Route::post('/shipper/freight-jobs/{job}/post',                  [FreightJobController::class, 'post'])->middleware('perm:shipper:loads.post');
+    Route::get('/jobs/{job}/rate-confirmation',                      [FreightJobController::class, 'rateConfirmation'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
+    Route::get('/jobs/{job}/bol',                                    [FreightJobController::class, 'bol'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
+    Route::get('/jobs/{job}/invoice',                                [FreightJobController::class, 'invoice'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
 
     // Evidence (photos) per stop — shipper or assigned carrier
-    Route::get('/jobs/{job}/stops/{stop}/evidence',                  [EvidenceController::class, 'index']);
-    Route::post('/jobs/{job}/stops/{stop}/evidence',                 [EvidenceController::class, 'store']);
-    Route::post('/jobs/{job}/stops/{stop}/signature',                [EvidenceController::class, 'signature']);
-    Route::delete('/jobs/{job}/evidence/{evidence}',                 [EvidenceController::class, 'destroy']);
+    Route::get('/jobs/{job}/stops/{stop}/evidence',                  [EvidenceController::class, 'index'])->middleware('perm:carrier:loads.view=view,shipper:loads.view=view');
+    Route::post('/jobs/{job}/stops/{stop}/evidence',                 [EvidenceController::class, 'store'])->middleware('perm:carrier:trips.stops');
+    Route::post('/jobs/{job}/stops/{stop}/signature',                [EvidenceController::class, 'signature'])->middleware('perm:carrier:trips.stops');
+    Route::delete('/jobs/{job}/evidence/{evidence}',                 [EvidenceController::class, 'destroy'])->middleware('perm:carrier:trips.stops,shipper:loads.post');
 
     // POD — view (inline) or download
-    Route::get('/jobs/{job}/stops/{stop}/pod',                       [EvidenceController::class, 'downloadPod']);
-    Route::post('/jobs/{job}/stops/{stop}/pod',                      [EvidenceController::class, 'generatePod']);
+    Route::get('/jobs/{job}/stops/{stop}/pod',                       [EvidenceController::class, 'downloadPod'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
+    Route::post('/jobs/{job}/stops/{stop}/pod',                      [EvidenceController::class, 'generatePod'])->middleware('perm:carrier:trips.stops');
 
-    Route::get('/carrier/freight-jobs',                              [FreightJobController::class, 'carrierIndex']);
-    Route::get('/carrier/freight-jobs/{job}',                        [FreightJobController::class, 'carrierShow']);
-    Route::patch('/carrier/freight-jobs/{job}/stops/{stop}',         [FreightJobController::class, 'updateStop']);
+    Route::get('/carrier/freight-jobs',                              [FreightJobController::class, 'carrierIndex'])->middleware('perm:carrier:loads.board=view');
+    Route::get('/carrier/freight-jobs/{job}',                        [FreightJobController::class, 'carrierShow'])->middleware('perm:carrier:loads.view=view');
+    Route::patch('/carrier/freight-jobs/{job}/stops/{stop}',         [FreightJobController::class, 'updateStop'])->middleware('perm:carrier:trips.stops');
     // Carrier: my offers across all jobs
-    Route::get('/carrier/my-offers',                                 [FreightJobOfferController::class, 'carrierMyOffers']);
+    Route::get('/carrier/my-offers',                                 [FreightJobOfferController::class, 'carrierMyOffers'])->middleware('perm:carrier:loads.board=view');
     // Carrier offers per job
-    Route::get('/carrier/freight-jobs/{job}/offers/mine',            [FreightJobOfferController::class, 'mine']);
-    Route::post('/carrier/freight-jobs/{job}/offers',                [FreightJobOfferController::class, 'store']);
-    Route::delete('/carrier/freight-jobs/{job}/offers/{offer}',      [FreightJobOfferController::class, 'withdraw']);
+    Route::get('/carrier/freight-jobs/{job}/offers/mine',            [FreightJobOfferController::class, 'mine'])->middleware('perm:carrier:loads.board=view');
+    Route::post('/carrier/freight-jobs/{job}/offers',                [FreightJobOfferController::class, 'store'])->middleware('perm:carrier:loads.bid');
+    Route::delete('/carrier/freight-jobs/{job}/offers/{offer}',      [FreightJobOfferController::class, 'withdraw'])->middleware('perm:carrier:loads.bid');
 
     // Shipper: view + act on offers
-    Route::get('/shipper/offers',                                    [FreightJobOfferController::class, 'shipperAllOffers']);
-    Route::get('/shipper/freight-jobs/{job}/offers',                 [FreightJobOfferController::class, 'index']);
-    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/accept', [FreightJobOfferController::class, 'accept']);
-    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/decline',[FreightJobOfferController::class, 'decline']);
+    Route::get('/shipper/offers',                                    [FreightJobOfferController::class, 'shipperAllOffers'])->middleware('perm:shipper:loads.view=view');
+    Route::get('/shipper/freight-jobs/{job}/offers',                 [FreightJobOfferController::class, 'index'])->middleware('perm:shipper:loads.view=view');
+    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/accept', [FreightJobOfferController::class, 'accept'])->middleware('perm:shipper:loads.decide');
+    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/decline',[FreightJobOfferController::class, 'decline'])->middleware('perm:shipper:loads.decide');
 
     // ── Freight payments (shipper) ─────────────────────────────────────────
     // Step 1: create PaymentIntent before accepting a bid
-    Route::post('/bids/{bid}/payment-intent', [ShipperPaymentController::class, 'createIntent']);
+    Route::post('/bids/{bid}/payment-intent', [ShipperPaymentController::class, 'createIntent'])->middleware('perm:shipper:loads.decide');
     // Step 2: accept bid (after Stripe confirms authorization)
-    Route::put('/bids/{bid}/accept',          [ShipperPaymentController::class, 'accept']);
+    Route::put('/bids/{bid}/accept',          [ShipperPaymentController::class, 'accept'])->middleware('perm:shipper:loads.decide');
     // Direct payment for contracted / pre-agreed shipments
-    Route::post('/shipper/pay/{shipment}',    [ShipperPaymentController::class, 'payShipment']);
+    Route::post('/shipper/pay/{shipment}',    [ShipperPaymentController::class, 'payShipment'])->middleware('perm:shipper:money.pay');
 
     // ── Plaid / ACH bank connection (shipper) ──────────────────────────────
-    Route::get('/shipper/plaid/link-token',    [PlaidController::class, 'linkToken']);
-    Route::post('/shipper/plaid/exchange',     [PlaidController::class, 'exchange']);
-    Route::get('/shipper/plaid/status',        [PlaidController::class, 'status']);
-    Route::delete('/shipper/plaid/disconnect', [PlaidController::class, 'disconnect']);
+    Route::get('/shipper/plaid/link-token',    [PlaidController::class, 'linkToken'])->middleware('perm:shipper:money.methods');
+    Route::post('/shipper/plaid/exchange',     [PlaidController::class, 'exchange'])->middleware('perm:shipper:money.methods');
+    Route::get('/shipper/plaid/status',        [PlaidController::class, 'status'])->middleware('perm:shipper:money.payments=view');
+    Route::delete('/shipper/plaid/disconnect', [PlaidController::class, 'disconnect'])->middleware('perm:shipper:money.methods');
 
     // ── Ratings ────────────────────────────────────────────────────────────
-    Route::post('/jobs/{job}/ratings', [RatingController::class, 'store']);
+    Route::post('/jobs/{job}/ratings', [RatingController::class, 'store'])->middleware('perm:carrier:ratings.give,shipper:ratings.give');
     Route::get('/jobs/{job}/ratings',  [RatingController::class, 'jobRatings']);
 });
