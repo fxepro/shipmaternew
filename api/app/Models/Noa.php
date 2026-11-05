@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Noa extends Model
 {
     protected $fillable = [
-        'carrier_org_id', 'factor_org_id', 'status', 'effective_date', 'document_path', 'release_document_path', 'notes',
+        'carrier_id', 'factor_id', 'status', 'effective_date', 'document_path', 'release_document_path', 'notes',
         'uploaded_by', 'decided_by', 'decided_at', 'decline_reason', 'release_requested_at', 'released_by', 'released_at',
     ];
 
@@ -24,8 +24,8 @@ class Noa extends Model
         ];
     }
 
-    public function carrierOrg(): BelongsTo { return $this->belongsTo(Organization::class, 'carrier_org_id'); }
-    public function factorOrg(): BelongsTo  { return $this->belongsTo(Organization::class, 'factor_org_id'); }
+    public function carrierOrg(): BelongsTo { return $this->belongsTo(Organization::class, 'carrier_id'); }
+    public function factorOrg(): BelongsTo  { return $this->belongsTo(Organization::class, 'factor_id'); }
     public function loads(): HasMany        { return $this->hasMany(FactoredLoad::class); }
 
     /** Confirmed by the factor and in effect today */

@@ -56,8 +56,9 @@ class LoadPayments
         if ($payment->exists && !in_array($payment->status, ['scheduled', 'hold_failed', 'canceled'], true)) return $payment;
 
         $payment->fill([
-            'shipper_org_id' => self::orgOf($facts['shipper_id'], 'shipper')?->id,
-            'carrier_org_id' => self::orgOf($facts['carrier_id'], 'carrier')?->id,
+            // Loads already hold the two companies
+            'shipper_id'     => $facts['shipper_id'],
+            'carrier_id'     => $facts['carrier_id'],
             'amount_cents'   => $facts['amount_cents'],
             'pickup_date'    => $facts['pickup_date'],
             'flow'           => self::flow(),
@@ -88,7 +89,7 @@ class LoadPayments
         if (!in_array($p->status, ['scheduled', 'hold_failed'], true)) return $p;
         $this->applyPayee($p);
 
-        $pm = $this->defaultMethod($p->shipper_org_id);
+        $pm = $this->defaultMethod($p->shipper_id);
         if (!$pm) return $this->holdFailed($p, 'No card or bank account on file. Add one in Payments.');
         $p->payment_method_id = $pm->id;
         $p->method = $pm->type === 'card' ? 'card' : 'us_bank_account';
@@ -130,7 +131,7 @@ class LoadPayments
         }
 
         $this->applyPayee($p);
-        $pm = $this->defaultMethod($p->shipper_org_id);
+        $pm = $this->defaultMethod($p->shipper_id);
         if (!$pm) return $this->failed($p, 'No card or bank account on file.');
         if (!$p->stripe_account) return $this->failed($p, $this->notConnectedMessage($p));
 
@@ -147,7 +148,7 @@ class LoadPayments
         abort_unless(in_array($p->status, ['scheduled', 'hold_failed', 'held'], true), 422, 'This load is already paid or being paid.');
         $this->applyPayee($p);
         abort_unless($p->stripe_account, 422, $this->notConnectedMessage($p));
-        abort_unless($this->defaultMethod($p->shipper_org_id), 422, 'Add a card or bank account first.');
+        abort_unless($this->defaultMethod($p->shipper_id), 422, 'Add a card or bank account first.');
 
         if ($p->status === 'held' && $p->payment_intent_id) {
             $this->gateway->cancelIntent($p->payment_intent_id, $p->flow === 'direct' ? $p->stripe_account : null);
@@ -193,7 +194,7 @@ class LoadPayments
         $rate        = Fees::standardRate();
 
         $fee = FeeCharge::firstOrCreate(['factored_load_id' => $load->id], [
-            'carrier_org_id'    => $load->carrier_org_id,
+            'carrier_id'    => $load->carrier_id,
             'load_amount_cents' => $amountCents,
             'amount_cents'      => (int) round($amountCents * $rate),
             'fee_rate'          => $rate,
@@ -206,12 +207,12 @@ class LoadPayments
     {
         if (in_array($fee->status, ['paid', 'processing'], true) || $fee->amount_cents <= 0) return $fee;
 
-        $pm = $this->defaultMethod($fee->carrier_org_id);
+        $pm = $this->defaultMethod($fee->carrier_id);
         if (!$pm) {
             $fee->update(['status' => 'failed', 'failure_reason' => 'No card or bank account on file. Add one in Earnings.']);
             return $fee;
         }
-        $org      = Organization::find($fee->carrier_org_id);
+        $org      = Organization::find($fee->carrier_id);
         $customer = $this->customerFor($org);
         $result   = $this->gateway->createIntent([
             'amount'         => $fee->amount_cents,
@@ -239,7 +240,7 @@ class LoadPayments
     /** A carrier with an unpaid Shipmater fee can't factor new loads */
     public static function carrierOwesFees(int $carrierOrgId): bool
     {
-        return FeeCharge::where('carrier_org_id', $carrierOrgId)->where('status', 'failed')->exists();
+        return FeeCharge::where('carrier_id', $carrierOrgId)->where('status', 'failed')->exists();
     }
 
     // ── Stripe events (webhook) ──────────────────────────────────────────────
@@ -280,7 +281,7 @@ class LoadPayments
         $p->update(['refunded_cents' => $refunded, 'status' => $refunded >= $p->amount_cents ? 'refunded' : $p->status]);
         $feeBack = (int) round($p->fee_cents * min(1, $refunded / max(1, $p->amount_cents)));
         if ($feeBack > 0) {
-            LedgerEntry::record('refund', -$feeBack, ['gross_cents' => -$refunded, 'org_id' => $p->carrier_org_id, 'source_type' => 'load_payment',
+            LedgerEntry::record('refund', -$feeBack, ['gross_cents' => -$refunded, 'org_id' => $p->carrier_id, 'source_type' => 'load_payment',
                 'source_id' => $p->id, 'reference' => $charge->id . ':' . $refunded, 'description' => "Refund, {$p->load_type} #{$p->load_id}"]);
         }
     }
@@ -320,11 +321,11 @@ class LoadPayments
         $factored = FactoredLoad::where('load_type', $p->load_type)->where('load_id', $p->load_id)->whereIn('status', ['accepted', 'funded'])->latest()->first();
 
         if ($factored) {
-            $factor = Organization::find($factored->factor_org_id);
-            $p->fill(['payee_type' => 'factor', 'payee_org_id' => $factor?->id, 'factored_load_id' => $factored->id, 'stripe_account' => $factor?->stripe_connect_id]);
+            $factor = Organization::find($factored->factor_id);
+            $p->fill(['payee_type' => 'factor', 'payee_id' => $factor?->id, 'factored_load_id' => $factored->id, 'stripe_account' => $factor?->stripe_connect_id]);
         } else {
-            $carrier = $p->carrier_org_id ? Organization::find($p->carrier_org_id) : null;
-            $p->fill(['payee_type' => 'carrier', 'payee_org_id' => $carrier?->id, 'factored_load_id' => null, 'stripe_account' => $this->carrierAccount($p)]);
+            $carrier = $p->carrier_id ? Organization::find($p->carrier_id) : null;
+            $p->fill(['payee_type' => 'carrier', 'payee_id' => $carrier?->id, 'factored_load_id' => null, 'stripe_account' => $this->carrierAccount($p)]);
         }
 
         // Factored loads: Shipmater's fee is charged to the carrier at funding, not taken from the shipper's payment
@@ -334,19 +335,17 @@ class LoadPayments
 
     private function carrierAccount(LoadPayment $p): ?string
     {
-        $org = $p->carrier_org_id ? Organization::find($p->carrier_org_id) : null;
+        $org = $p->carrier_id ? Organization::find($p->carrier_id) : null;
         if ($org?->stripe_connect_id) return $org->stripe_connect_id;
 
-        $load    = $p->loadRecord();
-        $owner   = $org ? User::find($org->owner_id) : null;
-        $profile = $owner?->carrierProfile ?? ($load?->carrier_id ? User::find($load->carrier_id)?->carrierProfile : null);
+        $profile = $org?->carrierProfile;
 
         return $profile?->stripe_account_id ?: null;
     }
 
     private function intent(LoadPayment $p, PaymentMethod $pm, bool $manual): array
     {
-        $shipperOrg = Organization::find($p->shipper_org_id);
+        $shipperOrg = Organization::find($p->shipper_id);
         $customer   = $this->customerFor($shipperOrg);
         $params = [
             'amount'               => $p->amount_cents,
@@ -405,13 +404,13 @@ class LoadPayments
 
         if ($p->fee_cents > 0) {
             LedgerEntry::record('load_fee', (int) $p->fee_cents, [
-                'gross_cents' => (int) $p->amount_cents, 'org_id' => $p->carrier_org_id, 'source_type' => 'load_payment', 'source_id' => $p->id,
+                'gross_cents' => (int) $p->amount_cents, 'org_id' => $p->carrier_id, 'source_type' => 'load_payment', 'source_id' => $p->id,
                 'reference' => $p->payment_intent_id, 'description' => ucfirst(str_replace('_', ' ', $p->load_type)) . " #{$p->load_id}" . ($p->early ? ' (early)' : ''),
             ]);
         } else {
             // Factored loads: volume only; the fee is booked when the carrier pays it
             LedgerEntry::record('load_volume', 0, [
-                'gross_cents' => (int) $p->amount_cents, 'org_id' => $p->carrier_org_id, 'source_type' => 'load_payment', 'source_id' => $p->id,
+                'gross_cents' => (int) $p->amount_cents, 'org_id' => $p->carrier_id, 'source_type' => 'load_payment', 'source_id' => $p->id,
                 'reference' => $p->payment_intent_id, 'description' => ucfirst(str_replace('_', ' ', $p->load_type)) . " #{$p->load_id} (factored)",
             ]);
         }
@@ -426,7 +425,7 @@ class LoadPayments
     {
         $fee->fill(['status' => 'paid', 'paid_at' => $fee->paid_at ?? now(), 'failure_reason' => null])->save();
         LedgerEntry::record('factored_fee', (int) $fee->amount_cents, [
-            'gross_cents' => 0, 'org_id' => $fee->carrier_org_id, 'source_type' => 'fee_charge', 'source_id' => $fee->id,
+            'gross_cents' => 0, 'org_id' => $fee->carrier_id, 'source_type' => 'fee_charge', 'source_id' => $fee->id,
             'reference' => $fee->payment_intent_id, 'description' => "Factored load #{$fee->factored_load_id}",
         ]);
     }
@@ -457,9 +456,10 @@ class LoadPayments
         return PaymentMethod::where('org_id', $orgId)->whereNotNull('stripe_pm_id')->orderByDesc('is_default')->orderBy('id')->first();
     }
 
+    /** The company's Stripe customer. A saved id that no longer exists in the current Stripe account is replaced. */
     public function customerFor(Organization $org): string
     {
-        if ($org->stripe_customer_id) return $org->stripe_customer_id;
+        if ($org->stripe_customer_id && $this->gateway->customerExists($org->stripe_customer_id)) return $org->stripe_customer_id;
         $id = $this->gateway->createCustomer($org->name, $org->email, ['org_id' => (string) $org->id, 'org_type' => $org->type]);
         $org->forceFill(['stripe_customer_id' => $id])->save();
         return $id;

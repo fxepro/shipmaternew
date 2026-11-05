@@ -16,6 +16,18 @@ class FakeGateway implements Gateway
         return 'cus_fake_' . Str::random(10);
     }
 
+    public function createSubscription(string $customerId, string $paymentMethodId, int $amountCents, string $name, array $metadata): object
+    {
+        if (str_ends_with($paymentMethodId, '0002')) throw new \RuntimeException('Your card was declined.');
+        return (object) ['id' => 'sub_fake_' . Str::random(10), 'status' => 'active',
+            'current_period_end' => now()->addMonth()->timestamp, 'items' => (object) ['data' => []]];
+    }
+
+    public function customerExists(string $customerId): bool
+    {
+        return str_starts_with($customerId, 'cus_fake_');
+    }
+
     public function setupIntent(string $customerId): array
     {
         return ['client_secret' => null, 'id' => 'seti_fake_' . Str::random(10)];

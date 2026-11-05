@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
+use App\Services\PersonChecks;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class ShipmentResource extends JsonResource
@@ -14,6 +15,8 @@ class ShipmentResource extends JsonResource
 
         return [
             'id'             => $this->id,
+            'shipper_id'     => $this->shipper_id,
+            'carrier_id'     => $this->carrier_id,
             'status'         => $this->status,
             'job_type'       => $this->job_type ?? 'open',
             'contract_id'    => $this->contract_id,
@@ -58,16 +61,16 @@ class ShipmentResource extends JsonResource
             // Cost
             'agreed_cost' => $this->agreed_cost ? (float) $this->agreed_cost : null,
 
-            // Parties
+            // Parties: shipper and carrier are companies; people are the load_people rows
             'shipper' => $this->when(
                 $this->relationLoaded('shipper') && $this->shipper,
-                fn () => ['id' => $this->shipper->id, 'name' => $this->shipper->name, 'email' => $this->shipper->email]
+                fn () => ['id' => $this->shipper->id, 'name' => PersonChecks::companyName($this->shipper), 'email' => $this->shipper->email]
             ),
             'carrier' => $this->when(
                 $this->relationLoaded('carrier') && $this->carrier,
                 fn () => [
                     'id'              => $this->carrier->id,
-                    'name'            => $this->carrier->name,
+                    'name'            => PersonChecks::companyName($this->carrier),
                     'email'           => $this->carrier->email,
                     'carrier_profile' => $this->carrier->relationLoaded('carrierProfile') && $this->carrier->carrierProfile
                         ? [
@@ -79,6 +82,15 @@ class ShipmentResource extends JsonResource
                         ]
                         : null,
                 ]
+            ),
+            'people' => $this->when(
+                $this->relationLoaded('people'),
+                fn () => $this->people->map(fn ($p) => [
+                    'org_id'  => $p->org_id,
+                    'user_id' => $p->user_id,
+                    'name'    => $p->user?->name,
+                    'role'    => \App\Models\OrgMember::where('org_id', $p->org_id)->where('user_id', $p->user_id)->value('role'),
+                ])->values()
             ),
             'receiver' => $this->when(
                 $this->relationLoaded('receiver') && $this->receiver,
@@ -100,7 +112,8 @@ class ShipmentResource extends JsonResource
                 fn () => $this->bids->map(fn ($bid) => [
                     'id'                      => $bid->id,
                     'carrier_id'              => $bid->carrier_id,
-                    'carrier_name'            => $bid->carrier?->name ?? '',
+                    'user_id'                 => $bid->user_id,
+                    'carrier_name'            => PersonChecks::companyName($bid->carrier) ?? '',
                     'carrier_rating'          => (float) ($bid->carrier?->carrierProfile?->rating ?? 5.0),
                     'carrier_dot_verified'    => (bool) ($bid->carrier?->carrierProfile?->dot_verified ?? false),
                     'amount'                  => (float) $bid->amount,

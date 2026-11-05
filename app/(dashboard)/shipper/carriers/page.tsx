@@ -36,7 +36,9 @@ interface Carrier {
   city?: string;
   state?: string;
   zip?: string;
-  // preferred network extras
+  /** The carrier company (organizations.id) */
+  org_id?: number;
+  // preferred network extras: id is the network row, carrierId the carrier company
   carrierId?: number;
   completedTogether?: number;
   status?: 'active' | 'pending' | 'inactive';
@@ -89,7 +91,7 @@ function CarrierDrawer({ carrier, onClose, showAddToNetwork }: {
   });
 
   const removeMutation = useMutation({
-    mutationFn: () => preferredCarrierApi.remove(carrier.carrierId!),
+    mutationFn: () => preferredCarrierApi.remove(carrier.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['preferred-carriers'] });
       onClose();
@@ -172,7 +174,7 @@ function CarrierDrawer({ carrier, onClose, showAddToNetwork }: {
         </div>
 
         {/* Background check levels: shared with shippers that have an active contract */}
-        <ShipperCarrierChecks carrierUserId={carrier.carrierId ?? carrier.id} />
+        {(carrier.carrierId ?? carrier.org_id) ? <ShipperCarrierChecks carrierId={(carrier.carrierId ?? carrier.org_id)!} /> : null}
 
         {/* Stats */}
         <div className="p-6 border-b border-[var(--color-cream-dark)]">

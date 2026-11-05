@@ -148,11 +148,9 @@ class BackgroundChecks
     /** A shipper sees and orders complete checks only for carriers it has an active contract with */
     public static function shipperHasContract(User $shipper, Organization $carrierOrg): bool
     {
-        $shipperOrgId = $shipper->current_org_id;
-        $shipperIds = $shipperOrgId ? OrgMember::where('org_id', $shipperOrgId)->pluck('user_id')->push($shipper->id) : collect([$shipper->id]);
-        $carrierIds = OrgMember::where('org_id', $carrierOrg->id)->pluck('user_id')->push($carrierOrg->owner_id);
-
-        return Contract::whereIn('shipper_id', $shipperIds)->whereIn('carrier_id', $carrierIds)->where('status', 'active')->exists();
+        // Contracts are company to company
+        return $shipper->current_org_id && Contract::where('shipper_id', $shipper->current_org_id)
+            ->where('carrier_id', $carrierOrg->id)->where('status', 'active')->exists();
     }
 
     /** First and last name, email, date of birth and state for the provider */
@@ -186,7 +184,7 @@ class BackgroundChecks
 
     /**
      * A payment for checks succeeded: record a check for each person and start it.
-     * $meta is the PaymentIntent metadata: subjects (comma-separated user ids), level, paid_by, payer_user_id, payer_org_id.
+     * $meta is the PaymentIntent metadata: subjects (comma-separated user ids), level, paid_by, payer_user_id, payer_id.
      */
     public static function paid(array $meta, string $intentId, int $amountCents): void
     {
@@ -195,7 +193,7 @@ class BackgroundChecks
         if ($subjects->isEmpty()) return;
 
         \App\Models\LedgerEntry::record('background_check', $amountCents, [
-            'org_id' => (int) ($meta['payer_org_id'] ?? 0) ?: null, 'source_type' => 'payment_intent', 'reference' => $intentId,
+            'org_id' => (int) ($meta['payer_id'] ?? $meta['payer_org_id'] ?? 0) ?: null, 'source_type' => 'payment_intent', 'reference' => $intentId,
             'description' => $level === 'complete' ? 'Complete background check' : 'Basic background check',
         ]);
 
@@ -208,7 +206,7 @@ class BackgroundChecks
                 'provider' => self::settings()['provider'], 'mode' => self::mode(), 'kind' => $kind,
                 'package' => self::package(self::settings()['provider'], $kind), 'status' => 'paid',
                 'paid_by' => ($meta['paid_by'] ?? 'carrier') === 'shipper' ? 'shipper' : 'carrier',
-                'payer_user_id' => (int) ($meta['payer_user_id'] ?? 0) ?: null, 'payer_org_id' => (int) ($meta['payer_org_id'] ?? 0) ?: null,
+                'payer_user_id' => (int) ($meta['payer_user_id'] ?? 0) ?: null, 'payer_id' => (int) ($meta['payer_id'] ?? $meta['payer_org_id'] ?? 0) ?: null,
                 'amount_cents' => self::priceCents($kind), 'payment_intent_id' => $intentId,
             ]);
 

@@ -10,11 +10,9 @@ Broadcast::channel('shipment.{shipmentId}', function (User $user, int $shipmentI
     $shipment = Shipment::find($shipmentId);
     if (!$shipment) return false;
 
-    return match ($user->role) {
-        'admin'    => true,
-        'shipper'  => $shipment->shipper_id  === $user->id,
-        'carrier'  => $shipment->carrier_id  === $user->id,
-        'receiver' => $shipment->receiver_id === $user->id,
-        default    => false,
-    };
+    // shipper_id / carrier_id are companies; anyone in either company may listen
+    return $user->isPlatformAdmin()
+        || $user->isShipperOf($shipment)
+        || $user->isCarrierOf($shipment)
+        || (int) $shipment->receiver_id === (int) $user->id;
 });

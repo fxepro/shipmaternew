@@ -46,7 +46,7 @@ class ContractController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Contract::with('carrier.carrierProfile')
-            ->where('shipper_id', $request->user()->id);
+            ->where('shipper_id', $request->user()->current_org_id);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -65,7 +65,7 @@ class ContractController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'carrier_id'     => ['required', 'exists:users,id'],
+            'carrier_id'     => ['required', 'exists:organizations,id'],
             'rate_type'      => ['required', 'in:Per mile,Flat rate,Hourly'],
             'rate'           => ['required', 'numeric', 'min:0'],
             'fuel_surcharge' => ['nullable', 'numeric', 'min:0'],
@@ -85,7 +85,7 @@ class ContractController extends Controller
 
         $contract = Contract::create([
             ...$validated,
-            'shipper_id'     => $request->user()->id,
+            'shipper_id'     => $request->user()->current_org_id,
             'status'         => $validated['status'] ?? 'pending',
             'shipments_under'=> 0,
         ]);
@@ -98,7 +98,7 @@ class ContractController extends Controller
     // ── PUT /contracts/{contract} ─────────────────────────────────────────────
     public function update(Request $request, Contract $contract): JsonResponse
     {
-        abort_if($contract->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($contract), 403);
 
         $validated = $request->validate([
             'status' => ['sometimes', 'in:active,pending,expired,draft'],
@@ -114,7 +114,7 @@ class ContractController extends Controller
     // ── DELETE /contracts/{contract} ──────────────────────────────────────────
     public function destroy(Request $request, Contract $contract): JsonResponse
     {
-        abort_if($contract->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($contract), 403);
         $contract->delete();
         return response()->json(['message' => 'Contract archived']);
     }
@@ -124,7 +124,7 @@ class ContractController extends Controller
     /** GET /api/v1/contracts/{contract}/agreement */
     public function agreement(Request $request, Contract $contract): Response
     {
-        abort_if($contract->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($contract), 403);
         return app(DocumentService::class)->carrierAgreement($contract, (bool) $request->boolean('download'));
     }
 }

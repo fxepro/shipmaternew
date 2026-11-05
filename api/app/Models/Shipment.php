@@ -10,9 +10,13 @@ use App\Models\ServiceType;
 
 class Shipment extends Model
 {
+    use HasLoadPeople;
+
+    public function loadType(): string { return 'shipment'; }
+
     protected $fillable = [
         'shipper_id', 'carrier_id', 'receiver_id',
-        'org_id', 'service_type_id', 'required_cert_keys',
+        'service_type_id', 'required_cert_keys',
         'status', 'job_type', 'contract_id',
         'item_description', 'item_category', 'weight_lbs',
         'handling_requirements', 'special_notes',
@@ -60,16 +64,6 @@ class Shipment extends Model
     }
 
     // ── Relationships ──────────────────────────────────────────────────
-
-    public function shipper(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'shipper_id');
-    }
-
-    public function carrier(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'carrier_id');
-    }
 
     public function receiver(): BelongsTo
     {

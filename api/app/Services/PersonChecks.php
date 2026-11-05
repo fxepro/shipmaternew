@@ -89,8 +89,8 @@ class PersonChecks
         if (!$org) return null;
         if ($org->type === 'factor') return $org->name;
         $profile = $org->type === 'carrier'
-            ? CarrierProfile::where('user_id', $org->owner_id)->value('company_name')
-            : \App\Models\ShipperProfile::where('user_id', $org->owner_id)->value('company_name');
+            ? CarrierProfile::where('org_id', $org->id)->value('company_name')
+            : \App\Models\ShipperProfile::where('org_id', $org->id)->value('company_name');
 
         return $profile ?: $org->name;
     }

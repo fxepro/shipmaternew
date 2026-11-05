@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class FactoredLoad extends Model
 {
     protected $fillable = [
-        'noa_id', 'carrier_org_id', 'factor_org_id', 'load_type', 'load_id', 'load_amount', 'status',
+        'noa_id', 'carrier_id', 'factor_id', 'load_type', 'load_id', 'load_amount', 'status',
         'requested_by', 'decided_by', 'decided_at', 'decline_reason', 'funded_at', 'funded_by',
         'shipper_acknowledged_at', 'shipper_acknowledged_by',
     ];
@@ -25,8 +25,8 @@ class FactoredLoad extends Model
     }
 
     public function noa(): BelongsTo        { return $this->belongsTo(Noa::class); }
-    public function carrierOrg(): BelongsTo { return $this->belongsTo(Organization::class, 'carrier_org_id'); }
-    public function factorOrg(): BelongsTo  { return $this->belongsTo(Organization::class, 'factor_org_id'); }
+    public function carrierOrg(): BelongsTo { return $this->belongsTo(Organization::class, 'carrier_id'); }
+    public function factorOrg(): BelongsTo  { return $this->belongsTo(Organization::class, 'factor_id'); }
 
     /** The shipment or freight job */
     public function loadRecord(): ?Model

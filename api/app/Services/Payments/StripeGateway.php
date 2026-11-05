@@ -20,6 +20,51 @@ class StripeGateway implements Gateway
         return $this->stripe->customers->create(['name' => $name, 'email' => $email, 'metadata' => $metadata])->id;
     }
 
+    public function createSubscription(string $customerId, string $paymentMethodId, int $amountCents, string $name, array $metadata): object
+    {
+        // One reusable monthly price per amount, found again by its lookup key
+        $key   = 'shipmater_subscription_usd_' . $amountCents;
+        $price = $this->stripe->prices->all(['lookup_keys' => [$key], 'active' => true, 'limit' => 1])->data[0]
+            ?? $this->stripe->prices->create([
+                'currency' => 'usd', 'unit_amount' => $amountCents, 'recurring' => ['interval' => 'month'],
+                'lookup_key' => $key, 'product_data' => ['name' => $name],
+            ]);
+
+        // A card is charged on the spot, so a decline or a bank's extra check fails here and the person can pick
+        // another method. A bank debit takes days to clear, so it starts incomplete and Stripe confirms it later.
+        $isCard = $this->stripe->paymentMethods->retrieve($paymentMethodId)->type === 'card';
+
+        try {
+            return $this->stripe->subscriptions->create([
+                'customer'               => $customerId,
+                'items'                  => [['price' => $price->id]],
+                'default_payment_method' => $paymentMethodId,
+                // Charge now; a bank debit that's still processing leaves it incomplete until Stripe confirms it
+                'payment_behavior'       => $isCard ? 'error_if_incomplete' : 'allow_incomplete',
+                'payment_settings'       => ['payment_method_types' => ['card', 'us_bank_account']],
+                'metadata'               => $metadata,
+            ]);
+        } catch (CardException $e) {
+            throw new \RuntimeException(($e->getError()?->message ?: 'Your card was declined.') . ' Choose another card or a bank account.');
+        } catch (\Stripe\Exception\InvalidRequestException $e) {
+            if (str_contains($e->getMessage(), 'does not belong to') || str_contains($e->getMessage(), 'No such PaymentMethod')) {
+                throw new \RuntimeException('This payment method was saved under an old Stripe account. Remove it on the Payment tab and add it again.');
+            }
+            throw $e;
+        }
+    }
+
+    public function customerExists(string $customerId): bool
+    {
+        try {
+            return empty($this->stripe->customers->retrieve($customerId)->deleted);
+        } catch (\Stripe\Exception\InvalidRequestException $e) {
+            // Saved under another Stripe account (e.g. test ids after switching to live keys)
+            if ($e->getStripeCode() === 'resource_missing') return false;
+            throw $e;
+        }
+    }
+
     public function setupIntent(string $customerId): array
     {
         $si = $this->stripe->setupIntents->create([

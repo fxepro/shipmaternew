@@ -162,6 +162,14 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // ── Companies ─────────────────────────────────────────────────────
+        // Every shipper and carrier person owns a company; loads, contracts and the rest point at the company
+        $this->call(OrganizationMigrationSeeder::class);
+        $shipperOrg = $shipper->fresh()->current_org_id;
+        $c1Org      = $carrier1->fresh()->current_org_id;
+        $c2Org      = $carrier2->fresh()->current_org_id;
+        $c3Org      = $carrier3->fresh()->current_org_id;
+
         // ── Helper ────────────────────────────────────────────────────────
         // Adds a single GPS ping to a shipment if it has none yet
 
@@ -185,8 +193,8 @@ class DatabaseSeeder extends Seeder
         $s1 = Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0001'],
             [
-                'shipper_id'              => $shipper->id,
-                'carrier_id'              => $carrier1->id,
+                'shipper_id'              => $shipperOrg,
+                'carrier_id'              => $c1Org,
                 'receiver_id'             => $receiver->id,
                 'status'                  => 'in_transit',
                 'item_description'        => 'Pallet of surgical instruments',
@@ -223,8 +231,8 @@ class DatabaseSeeder extends Seeder
         $s2 = Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0002'],
             [
-                'shipper_id'              => $shipper->id,
-                'carrier_id'              => $carrier2->id,
+                'shipper_id'              => $shipperOrg,
+                'carrier_id'              => $c2Org,
                 'receiver_id'             => $receiver->id,
                 'status'                  => 'in_transit',
                 'item_description'        => 'Auto parts — engine blocks',
@@ -261,8 +269,8 @@ class DatabaseSeeder extends Seeder
         $s3 = Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0003'],
             [
-                'shipper_id'              => $shipper->id,
-                'carrier_id'              => $carrier1->id,
+                'shipper_id'              => $shipperOrg,
+                'carrier_id'              => $c1Org,
                 'receiver_id'             => $receiver->id,
                 'status'                  => 'in_transit',
                 'item_description'        => 'Restaurant kitchen equipment',
@@ -298,8 +306,8 @@ class DatabaseSeeder extends Seeder
         $s4 = Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0004'],
             [
-                'shipper_id'              => $shipper->id,
-                'carrier_id'              => $carrier2->id,
+                'shipper_id'              => $shipperOrg,
+                'carrier_id'              => $c2Org,
                 'status'                  => 'in_transit',
                 'item_description'        => 'Lab specimen cooler — urgent',
                 'item_category'           => 'Medical / Healthcare',
@@ -335,8 +343,8 @@ class DatabaseSeeder extends Seeder
         $s5 = Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0005'],
             [
-                'shipper_id'              => $shipper->id,
-                'carrier_id'              => $carrier1->id,
+                'shipper_id'              => $shipperOrg,
+                'carrier_id'              => $c1Org,
                 'status'                  => 'in_transit',
                 'item_description'        => 'Film production equipment',
                 'item_category'           => 'Entertainment / AV',
@@ -372,8 +380,8 @@ class DatabaseSeeder extends Seeder
         $s6 = Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0006'],
             [
-                'shipper_id'              => $shipper->id,
-                'carrier_id'              => $carrier2->id,
+                'shipper_id'              => $shipperOrg,
+                'carrier_id'              => $c2Org,
                 'status'                  => 'in_transit',
                 'item_description'        => 'HVAC units — multi-site install',
                 'item_category'           => 'Construction / HVAC',
@@ -409,8 +417,8 @@ class DatabaseSeeder extends Seeder
         Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0007'],
             [
-                'shipper_id'         => $shipper->id,
-                'carrier_id'         => $carrier1->id,
+                'shipper_id'         => $shipperOrg,
+                'carrier_id'         => $c1Org,
                 'status'             => 'assigned',
                 'item_description'   => 'Film set props — breakables',
                 'item_category'      => 'Entertainment / Props',
@@ -443,8 +451,8 @@ class DatabaseSeeder extends Seeder
         Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0008'],
             [
-                'shipper_id'         => $shipper->id,
-                'carrier_id'         => $carrier2->id,
+                'shipper_id'         => $shipperOrg,
+                'carrier_id'         => $c2Org,
                 'status'             => 'assigned',
                 'item_description'   => 'Furniture — home relocation',
                 'item_category'      => 'Household Goods',
@@ -477,7 +485,7 @@ class DatabaseSeeder extends Seeder
         Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0009'],
             [
-                'shipper_id'         => $shipper->id,
+                'shipper_id'         => $shipperOrg,
                 'status'             => 'pending',
                 'item_description'   => 'Pharmaceutical cold-chain shipment',
                 'item_category'      => 'Medical / Pharmaceutical',
@@ -512,7 +520,7 @@ class DatabaseSeeder extends Seeder
         Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0010'],
             [
-                'shipper_id'         => $shipper->id,
+                'shipper_id'         => $shipperOrg,
                 'status'             => 'pending',
                 'item_description'   => 'MRI machine components',
                 'item_category'      => 'Medical Equipment',
@@ -546,8 +554,8 @@ class DatabaseSeeder extends Seeder
         Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0011'],
             [
-                'shipper_id'         => $shipper->id,
-                'carrier_id'         => $carrier1->id,
+                'shipper_id'         => $shipperOrg,
+                'carrier_id'         => $c1Org,
                 'receiver_id'        => $receiver->id,
                 'status'             => 'delivered',
                 'item_description'   => 'Art gallery installation',
@@ -584,8 +592,8 @@ class DatabaseSeeder extends Seeder
         Shipment::firstOrCreate(
             ['tracking_token' => 'DEMO0012'],
             [
-                'shipper_id'         => $shipper->id,
-                'carrier_id'         => $carrier2->id,
+                'shipper_id'         => $shipperOrg,
+                'carrier_id'         => $c2Org,
                 'status'             => 'assigned',
                 'item_description'   => 'Trade show booth materials',
                 'item_category'      => 'Events / Exhibitions',
@@ -621,7 +629,8 @@ class DatabaseSeeder extends Seeder
         $mc   = $pm->firstWhere('last4', '5100');
         $ach  = $pm->firstWhere('last4', '4821');
 
-        if (! Transaction::where('shipper_id', $shipper->id)->exists()) {
+        $orgOfCarrier = [$carrier1->id => $c1Org, $carrier2->id => $c2Org, $carrier3->id => $c3Org];
+        if (! Transaction::where('shipper_id', $shipperOrg)->exists()) {
             $txns = [
                 ['INV-2026-0042', $carrier1->id, $visa?->id,  'Industrial HVAC Units',          'Industrial Equipment', 'Denver, CO',         'Salt Lake City, UT', 1224.75, 'paid',       '2026-05-28', '2026-06-07', null,                                                         '2026-05-28 10:00:00'],
                 ['INV-2026-0041', $carrier2->id, $mc?->id,    'Retail Fixtures Pallet',          'Retail Goods',         'Portland, OR',       'Seattle, WA',        950.00,  'paid',       '2026-05-22', '2026-06-01', null,                                                         '2026-05-22 09:00:00'],
@@ -635,8 +644,9 @@ class DatabaseSeeder extends Seeder
 
             foreach ($txns as [$inv, $cid, $pmid, $desc, $cat, $pickup, $delivery, $amount, $status, $date, $due, $notes, $paidAt]) {
                 Transaction::create([
-                    'shipper_id'        => $shipper->id,
-                    'carrier_id'        => $cid,
+                    'shipper_id'        => $shipperOrg,
+                    'carrier_id'        => $orgOfCarrier[$cid],
+                    'user_id'           => $cid,
                     'payment_method_id' => $pmid,
                     'invoice_no'        => $inv,
                     'description'       => $desc,
@@ -655,7 +665,7 @@ class DatabaseSeeder extends Seeder
         }
 
         // ── Contracts ──────────────────────────────────────────────────────────
-        if (! Contract::where('shipper_id', $shipper->id)->exists()) {
+        if (! Contract::where('shipper_id', $shipperOrg)->exists()) {
             $contracts = [
                 [$carrier1->id, 'Per mile',  2.85,  0.18, 55.00, 2, 'Dry Van',   45000, 'CO, WY, UT, NM',    'Net 30',   'First Call', true,  '2026-01-01', '2026-12-31', 'active',  'Preferred for Rocky Mountain region. Priority response within 2 hours.', 8],
                 [$carrier2->id, 'Flat rate',  950.00, null, 50.00, 3, 'Reefer',   40000, 'Pacific Northwest',  'Net 15',   'Preferred',  false, '2026-03-01', '2026-08-31', 'active',  'Flat rate per full-truckload. Max 40,000 lbs.', 3],
@@ -665,8 +675,8 @@ class DatabaseSeeder extends Seeder
 
             foreach ($contracts as [$cid, $rtype, $rate, $fuel, $det, $free, $equip, $wt, $cov, $terms, $pri, $ar, $from, $to, $status, $notes, $ships]) {
                 Contract::create([
-                    'shipper_id'      => $shipper->id,
-                    'carrier_id'      => $cid,
+                    'shipper_id'      => $shipperOrg,
+                    'carrier_id'      => $orgOfCarrier[$cid],
                     'rate_type'       => $rtype,
                     'rate'            => $rate,
                     'fuel_surcharge'  => $fuel,
@@ -727,7 +737,7 @@ class DatabaseSeeder extends Seeder
             [$carrier3->id, 'pending'],
         ] as [$cid, $status]) {
             PreferredCarrier::firstOrCreate(
-                ['shipper_id' => $shipper->id, 'carrier_id' => $cid],
+                ['shipper_id' => $shipperOrg, 'carrier_id' => $orgOfCarrier[$cid]],
                 ['status' => $status]
             );
         }
@@ -737,6 +747,7 @@ class DatabaseSeeder extends Seeder
             PaymentMethod::insert([
                 [
                     'user_id'      => $shipper->id,
+                    'org_id'       => $shipperOrg,
                     'type'         => 'card',
                     'brand'        => 'Visa',
                     'last4'        => '4242',
@@ -751,6 +762,7 @@ class DatabaseSeeder extends Seeder
                 ],
                 [
                     'user_id'      => $shipper->id,
+                    'org_id'       => $shipperOrg,
                     'type'         => 'card',
                     'brand'        => 'Mastercard',
                     'last4'        => '5100',
@@ -765,6 +777,7 @@ class DatabaseSeeder extends Seeder
                 ],
                 [
                     'user_id'      => $shipper->id,
+                    'org_id'       => $shipperOrg,
                     'type'         => 'bank',
                     'brand'        => null,
                     'last4'        => '4821',
@@ -778,6 +791,13 @@ class DatabaseSeeder extends Seeder
                     'updated_at'   => now(),
                 ],
             ]);
+        }
+
+        // ── People on the demo loads ──────────────────────────────────────
+        $personOf = [$shipperOrg => $shipper->id, $c1Org => $carrier1->id, $c2Org => $carrier2->id, $c3Org => $carrier3->id];
+        foreach (Shipment::where('tracking_token', 'like', 'DEMO%')->get() as $s) {
+            $s->addPerson($s->shipper_id, $personOf[$s->shipper_id] ?? null);
+            if ($s->carrier_id) $s->addPerson($s->carrier_id, $personOf[$s->carrier_id] ?? null);
         }
 
         $this->call(LocationSeeder::class);

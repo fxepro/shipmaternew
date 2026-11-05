@@ -15,6 +15,8 @@ export function display(key: string, value: unknown): React.ReactNode {
   const dateOnly = str.match(/^(\d{4})-(\d{2})-(\d{2})(T00:00:00(\.0+)?Z)?$/);
   if (dateOnly) return new Date(+dateOnly[1], +dateOnly[2] - 1, +dateOnly[3]).toLocaleDateString();
   if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return new Date(str).toLocaleString();
+  // Raw database timestamps ("2026-10-28 02:47:42") are UTC
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) return new Date(str.replace(' ', 'T') + 'Z').toLocaleString();
   if (key === 'status' || key.endsWith('_status')) return str.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
   if (/^https?:\/\//.test(str)) return <a href={str} target="_blank" rel="noreferrer" className="text-[var(--color-teal)] underline break-all">Open</a>;
   return <span className="break-all">{str}</span>;

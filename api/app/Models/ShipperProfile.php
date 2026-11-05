@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ShipperProfile extends Model
 {
+    protected static function booted(): void
+    {
+        // The legal business name is the company's name
+        static::saved(fn (ShipperProfile $profile) => Organization::syncNameFromProfile($profile));
+    }
+
     protected $fillable = [
         'user_id',
         'org_id',
@@ -19,9 +25,9 @@ class ShipperProfile extends Model
         'state_of_incorporation', 'year_established', 'employee_count',
         'industry', 'website', 'business_phone', 'business_email', 'sam_gov_number',
         // Registered address
-        'biz_street', 'biz_city', 'biz_state', 'biz_zip',
+        'biz_street', 'biz_city', 'biz_state', 'biz_zip', 'biz_country',
         // Operating address
-        'ops_same_as_biz', 'ops_street', 'ops_city', 'ops_state', 'ops_zip',
+        'ops_same_as_biz', 'ops_street', 'ops_city', 'ops_state', 'ops_zip', 'ops_country',
         // Verification
         'verification_status', 'verification_notes', 'verification_submitted_at',
         'email_verified_at', 'phone_verified_at', 'ein_verified_at',

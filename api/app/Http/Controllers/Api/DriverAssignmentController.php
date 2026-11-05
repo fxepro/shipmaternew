@@ -38,32 +38,36 @@ class DriverAssignmentController extends Controller
         $shipment = $this->load($request, $id);
         $this->authorizeCarrier($request, $shipment, false);
 
-        $driver = $shipment->driver_id ? User::find($shipment->driver_id) : null;
+        // Drivers on the load are load_people rows for the carrier company whose role there is driver
+        $row     = \App\Models\LoadPerson::drivers($shipment->loadType(), $shipment->id, $shipment->carrier_id)->oldest()->first();
+        $drivers = $shipment->drivers()->get()->map(fn ($d) => $this->driverSummary($d))->values();
 
         return response()->json(['data' => [
-            'driver'      => $driver ? $this->driverSummary($driver) : null,
-            'assigned_at' => $shipment->driver_assigned_at,
+            'driver'      => $drivers->first(),
+            'drivers'     => $drivers,
+            'assigned_at' => $row?->created_at,
             'can_assign'  => $request->user()->isDispatcher(),
         ]]);
     }
 
-    // PUT /api/v1/shipments/{id}/driver   and   PUT /api/v1/freight-jobs/{id}/driver   { driver_id: int|null }
+    // PUT /api/v1/shipments/{id}/driver   and   PUT /api/v1/freight-jobs/{id}/driver   { user_id: int|null }
     public function assign(Request $request, int $id): JsonResponse
     {
         $shipment = $this->load($request, $id);
         $this->authorizeCarrier($request, $shipment, true);
 
-        $data = $request->validate(['driver_id' => ['nullable', 'integer']]);
+        $data = $request->validate(['user_id' => ['nullable', 'integer']]);
         $user = $request->user();
+        $personId = $data['user_id'] ?? null;
 
-        if ($data['driver_id'] ?? null) {
-            $isDriver = OrgMember::where('org_id', $user->current_org_id)->where('user_id', $data['driver_id'])
+        if ($personId) {
+            $isDriver = OrgMember::where('org_id', $user->current_org_id)->where('user_id', $personId)
                 ->where('role', 'driver')->where('status', 'active')->exists();
             if (!$isDriver) {
                 return response()->json(['error' => 'That person is not a driver on your team.', 'code' => 'not_a_driver'], 422);
             }
 
-            $driver = User::findOrFail($data['driver_id']);
+            $driver = User::findOrFail($personId);
             PersonChecks::refresh($driver);
             if (!PersonChecks::isCleared($driver)) {
                 $summary = $this->driverSummary($driver);
@@ -74,13 +78,11 @@ class DriverAssignmentController extends Controller
             }
         }
 
-        $shipment->forceFill([
-            'driver_id'          => $data['driver_id'] ?? null,
-            'driver_assigned_at' => ($data['driver_id'] ?? null) ? now() : null,
-            'driver_assigned_by' => ($data['driver_id'] ?? null) ? $user->id : null,
-        ])->save();
+        // One driver at a time from this screen: replace the carrier's current drivers on the load
+        \App\Models\LoadPerson::drivers($shipment->loadType(), $shipment->id, $shipment->carrier_id)->delete();
+        if ($personId) $shipment->addPerson($shipment->carrier_id, $personId, $user->id);
 
-        return response()->json(['message' => ($data['driver_id'] ?? null) ? 'Driver assigned.' : 'Driver removed.']);
+        return response()->json(['message' => $personId ? 'Driver assigned.' : 'Driver removed.']);
     }
 
     /** A marketplace shipment or a contracted freight job, by route */
@@ -89,16 +91,11 @@ class DriverAssignmentController extends Controller
         return $request->is('api/v1/freight-jobs/*') ? FreightJob::findOrFail($id) : Shipment::findOrFail($id);
     }
 
-    /** The load must belong to someone at the caller's carrier company */
+    /** The load's carrier must be the caller's company */
     private function authorizeCarrier(Request $request, Model $shipment, bool $assigning): void
     {
         $user = $request->user();
-        $org  = $user->currentOrg;
-        abort_unless($org && $org->type === 'carrier' && $shipment->carrier_id, 403);
-
-        $sameCompany = $shipment->carrier_id === $user->id
-            || OrgMember::where('org_id', $org->id)->where('user_id', $shipment->carrier_id)->exists();
-        abort_unless($sameCompany, 403);
+        abort_unless($user->currentOrg?->type === 'carrier' && $user->isCarrierOf($shipment), 403);
 
         if ($assigning) {
             abort_unless($user->isDispatcher(), 403, 'Only owners, staff and dispatchers can assign drivers.');

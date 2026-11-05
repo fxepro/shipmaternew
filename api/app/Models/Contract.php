@@ -31,7 +31,7 @@ class Contract extends Model
         ];
     }
 
-    public function shipper(): BelongsTo { return $this->belongsTo(User::class, 'shipper_id'); }
-    public function carrier(): BelongsTo { return $this->belongsTo(User::class, 'carrier_id'); }
+    public function shipper(): BelongsTo { return $this->belongsTo(Organization::class, 'shipper_id'); }
+    public function carrier(): BelongsTo { return $this->belongsTo(Organization::class, 'carrier_id'); }
     public function shipments(): HasMany  { return $this->hasMany(Shipment::class); }
 }

@@ -28,7 +28,13 @@ class PaymentService
     public function getOrCreateCustomer(User $user): string
     {
         if ($user->stripe_customer_id) {
-            return $user->stripe_customer_id;
+            try {
+                $c = $this->stripe->customers->retrieve($user->stripe_customer_id);
+                if (empty($c->deleted)) return $user->stripe_customer_id;
+            } catch (\Stripe\Exception\InvalidRequestException $e) {
+                // Saved under another Stripe account (e.g. test ids after switching to live keys): make a new one
+                if ($e->getStripeCode() !== 'resource_missing') throw $e;
+            }
         }
 
         $customer = $this->stripe->customers->create([

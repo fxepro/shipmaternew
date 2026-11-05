@@ -8,7 +8,7 @@ import {
   Truck, BarChart2, Users, ShieldCheck, AlertTriangle, Route, MapPin, Building2, FileText,
   Briefcase, PlusCircle, Radio, ClipboardList, BookOpen, Warehouse, Palette,
   TrendingUp, Shield, Plus, Minus, CreditCard, Receipt, FileSignature, Plug,
-  Settings, UserCog,
+  Settings, UserCog, Repeat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/user';
@@ -172,7 +172,8 @@ const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Finance',
       items: [
-        { label: 'Payments',    href: '/admin/payments',    icon: CreditCard },
+        { label: 'Payments',      href: '/admin/payments',      icon: CreditCard },
+        { label: 'Subscriptions', href: '/admin/subscriptions', icon: Repeat     },
         { label: 'Ledger',      href: '/admin/financials',  icon: TrendingUp },
         { label: 'Receivables', href: '/admin/receivables', icon: Receipt    },
       ],

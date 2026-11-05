@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Location extends Model
 {
     protected $fillable = [
-        'shipper_id', 'org_id', 'type', 'name',
+        'org_id', 'type', 'name',
         'contact_name', 'contact_phone', 'contact_email',
         'address', 'city', 'state', 'zip', 'country',
         'lat', 'lng', 'operating_hours', 'notes',
@@ -26,9 +26,9 @@ class Location extends Model
         ];
     }
 
-    public function shipper(): BelongsTo
+    public function org(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'shipper_id');
+        return $this->belongsTo(Organization::class, 'org_id');
     }
 
     public function incrementUsage(): void

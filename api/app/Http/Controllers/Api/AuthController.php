@@ -27,9 +27,14 @@ class AuthController extends Controller
             'email'    => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role'     => ['required', Rule::in(['shipper', 'carrier', 'receiver', 'factor'])],
-            'company_name' => ['sometimes', 'nullable', 'string', 'max:200'],
+            // The legal business name is the company's name; required unless joining a company by invitation
+            'company_name' => [Rule::requiredIf(fn () => !$request->filled('invite_token') && in_array($request->input('role'), ['shipper', 'carrier', 'factor'], true)),
+                'nullable', 'string', 'max:200'],
             'invite_token' => ['sometimes', 'nullable', 'string', 'size:64'],
+        ], [
+            'company_name.required' => 'Enter your legal business name.',
         ]);
+        $companyName = trim((string) ($data['company_name'] ?? ''));
 
         // Joining an existing company by invitation: no company of their own; their role comes from the invite
         $invitation = null;
@@ -63,10 +68,11 @@ class AuthController extends Controller
         }
         // Otherwise they're starting a company: create their solo org
         elseif (in_array($data['role'], ['carrier', 'shipper', 'factor'])) {
-            $org = $this->createSoloOrg($user, $data['role']);
-            // Factors keep their company details on the company itself; no admin approval (docs/noa-factoring.md)
+            // The person signing up owns the new company; everyone else joins by invitation
+            $org = $this->createSoloOrg($user, $data['role'], $companyName);
+            // Factors don't need Shipmater approval (docs/noa-factoring.md)
             if ($data['role'] === 'factor') {
-                $org->update(['name' => $request->input('company_name') ?: $org->name, 'verification_status' => 'not_required']);
+                $org->update(['verification_status' => 'not_required']);
             }
             $user->update(['current_org_id' => $org->id]);
             $user->setRelation('currentOrg', $org);
@@ -75,8 +81,9 @@ class AuthController extends Controller
         // Carriers get an auto-created profile
         if ($user->role === 'carrier') {
             CarrierProfile::create([
-                'user_id' => $user->id,
-                'org_id'  => $user->current_org_id,
+                'user_id'      => $user->id,
+                'org_id'       => $user->current_org_id,
+                'company_name' => $invitation ? null : $companyName,
             ]);
         }
 
@@ -85,7 +92,7 @@ class AuthController extends Controller
             ShipperProfile::create([
                 'user_id'      => $user->id,
                 'org_id'       => $user->current_org_id,
-                'company_name' => $request->input('company_name') ?: null,
+                'company_name' => $companyName,
             ]);
         }
 
@@ -203,10 +210,10 @@ class AuthController extends Controller
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    private function createSoloOrg(User $user, string $type): Organization
+    private function createSoloOrg(User $user, string $type, string $companyName): Organization
     {
-        $orgName = $user->name . "'s " . ucfirst($type);
-        $baseSlug = Str::slug($user->name . '-' . $type);
+        $orgName = $companyName;
+        $baseSlug = Str::slug($companyName . '-' . $type) ?: Str::slug($user->name . '-' . $type);
         $slug = $baseSlug;
         $i = 1;
         while (Organization::where('slug', $slug)->exists()) {
@@ -214,8 +221,9 @@ class AuthController extends Controller
         }
 
         $org = Organization::create([
-            'name'     => $orgName,
-            'slug'     => $slug,
+            'name'       => $orgName,
+            'legal_name' => $orgName,
+            'slug'       => $slug,
             'type'     => $type,
             'status'   => 'active',
             'owner_id' => $user->id,

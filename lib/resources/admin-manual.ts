@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { Mail, MessageSquare, ShieldCheck, Server, KeyRound } from 'lucide-react';
 import { PROFILE_VERIFICATION_TOPIC } from './dev/profile-verification';
+import { COMPANIES_AND_PEOPLE_TOPIC } from './dev/companies-and-people';
 
 /**
  * Admin / Dev technical manual — platform operators only.
@@ -222,6 +223,7 @@ TWILIO_VERIFY_SID=<verify-service-sid>
     ],
   },
   PROFILE_VERIFICATION_TOPIC,
+  COMPANIES_AND_PEOPLE_TOPIC,
 ];
 
 export const DEFAULT_CATEGORY = 'Platform setup';

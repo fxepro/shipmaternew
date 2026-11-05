@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\FreightJob;
 use App\Models\FreightJobOffer;
+use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,10 +22,11 @@ class FreightJobOfferController extends Controller
 
         abort_unless($job->status === 'posted', 422, 'This job is no longer accepting offers.');
         abort_unless(is_null($job->carrier_id), 422, 'This job has already been assigned.');
-        abort_if($job->shipper_id === $carrier->id, 422, 'You cannot make an offer on your own job.');
+        abort_unless($carrier->isCarrier() && $carrier->current_org_id, 403, 'Only carriers can make offers.');
 
-        if ($job->offers()->where('carrier_id', $carrier->id)->whereIn('status', ['pending', 'accepted'])->exists()) {
-            abort(422, 'You already have a pending offer on this job.');
+        // One offer per carrier company
+        if ($job->offers()->where('carrier_id', $carrier->current_org_id)->whereIn('status', ['pending', 'accepted'])->exists()) {
+            abort(422, 'Your company already has a pending offer on this job.');
         }
 
         // Build validation rules dynamically from quote_requirements
@@ -64,7 +66,8 @@ class FreightJobOfferController extends Controller
         $data = $request->validate($rules);
 
         $offer = $job->offers()->create([
-            'carrier_id'     => $carrier->id,
+            'carrier_id'     => $carrier->current_org_id,
+            'user_id'        => $carrier->id,
             'rate_type'      => $rateType,
             'rate_value'     => $data['rate_value'] ?? null,
             'amount'         => $data['amount'],
@@ -88,7 +91,7 @@ class FreightJobOfferController extends Controller
 
     public function withdraw(Request $request, FreightJob $job, FreightJobOffer $offer): JsonResponse
     {
-        abort_if($offer->carrier_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isCarrierOf($offer), 403);
         abort_if($offer->freight_job_id !== $job->id, 404);
         abort_unless($offer->status === 'pending', 422, 'Only pending offers can be withdrawn.');
 
@@ -102,7 +105,7 @@ class FreightJobOfferController extends Controller
 
     public function index(Request $request, FreightJob $job): JsonResponse
     {
-        abort_if($job->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($job), 403);
 
         $offers = $job->offers()
             ->with('carrier.carrierProfile')
@@ -117,7 +120,7 @@ class FreightJobOfferController extends Controller
 
     public function accept(Request $request, FreightJob $job, FreightJobOffer $offer): JsonResponse
     {
-        abort_if($job->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($offer->freight_job_id !== $job->id, 404);
         abort_unless($offer->status === 'pending', 422, 'This offer can no longer be accepted.');
         abort_unless(is_null($job->carrier_id), 422, 'Job already has a carrier assigned.');
@@ -131,6 +134,8 @@ class FreightJobOfferController extends Controller
 
         // Assign the carrier — status stays 'posted' (shown as "Dispatched" on frontend)
         $job->update(['carrier_id' => $offer->carrier_id]);
+        $job->addPerson($request->user()->current_org_id, $request->user()->id);
+        $job->addPerson($offer->carrier_id, $offer->user_id);
         app(\App\Services\Payments\LoadPayments::class)->schedule('freight_job', $job);
 
         $offer->load('carrier.carrierProfile');
@@ -143,7 +148,7 @@ class FreightJobOfferController extends Controller
 
     public function decline(Request $request, FreightJob $job, FreightJobOffer $offer): JsonResponse
     {
-        abort_if($job->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($offer->freight_job_id !== $job->id, 404);
         abort_unless($offer->status === 'pending', 422, 'This offer has already been resolved.');
 
@@ -158,7 +163,7 @@ class FreightJobOfferController extends Controller
     public function mine(Request $request, FreightJob $job): JsonResponse
     {
         $offer = $job->offers()
-            ->where('carrier_id', $request->user()->id)
+            ->where('carrier_id', $request->user()->current_org_id)
             ->latest()
             ->first();
 
@@ -170,7 +175,7 @@ class FreightJobOfferController extends Controller
 
     public function shipperAllOffers(Request $request): JsonResponse
     {
-        $uid = $request->user()->id;
+        $uid = $request->user()->current_org_id;   // the shipper company
 
         $offers = FreightJobOffer::with([
             'carrier.carrierProfile',
@@ -204,7 +209,7 @@ class FreightJobOfferController extends Controller
 
     public function carrierMyOffers(Request $request): JsonResponse
     {
-        $uid = $request->user()->id;
+        $uid = $request->user()->current_org_id;   // the carrier company
 
         $offers = FreightJobOffer::with([
             'carrier',
@@ -225,7 +230,7 @@ class FreightJobOfferController extends Controller
                         'status'               => $job->status,
                         'route_distance_miles' => $job->route_distance_miles,
                         'stops_count'          => $job->stops_count ?? 0,
-                        'shipper_name'         => $job->shipper?->name ?? '',
+                        'shipper_name'         => PersonChecks::companyName($job->shipper) ?? '',
                         'posted_at'            => $job->posted_at?->toISOString(),
                     ] : null,
                 ]);
@@ -244,7 +249,8 @@ class FreightJobOfferController extends Controller
             'id'             => $offer->id,
             'freight_job_id' => $offer->freight_job_id,
             'carrier_id'     => $offer->carrier_id,
-            'carrier_name'   => $carrier?->name ?? '',
+            'user_id'        => $offer->user_id,
+            'carrier_name'   => PersonChecks::companyName($carrier) ?? '',
             'carrier_rating' => (float) ($profile?->rating ?? 5.0),
             'carrier_dot'    => (bool)  ($profile?->dot_verified ?? false),
             'rate_type'      => $offer->rate_type ?? 'flat',

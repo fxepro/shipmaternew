@@ -9,8 +9,8 @@ class Rating extends Model
 {
     protected $fillable = [
         'freight_job_id',
+        'user_id',
         'rater_id', 'ratee_id',
-        'rater_org_id', 'ratee_org_id',
         'rater_type',
         'overall', 'communication', 'reliability',
         'comment', 'is_public',
@@ -27,10 +27,10 @@ class Rating extends Model
     }
 
     public function freightJob(): BelongsTo { return $this->belongsTo(FreightJob::class); }
-    public function rater(): BelongsTo      { return $this->belongsTo(User::class, 'rater_id'); }
-    public function ratee(): BelongsTo      { return $this->belongsTo(User::class, 'ratee_id'); }
-    public function raterOrg(): BelongsTo   { return $this->belongsTo(Organization::class, 'rater_org_id'); }
-    public function rateeOrg(): BelongsTo   { return $this->belongsTo(Organization::class, 'ratee_org_id'); }
+    /** The person who wrote it */
+    public function user(): BelongsTo       { return $this->belongsTo(User::class); }
+    public function raterOrg(): BelongsTo   { return $this->belongsTo(Organization::class, 'rater_id'); }
+    public function rateeOrg(): BelongsTo   { return $this->belongsTo(Organization::class, 'ratee_id'); }
 
     /** Average of all three sub-scores */
     public function averageScore(): float

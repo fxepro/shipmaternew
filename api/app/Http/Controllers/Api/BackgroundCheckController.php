@@ -74,10 +74,11 @@ class BackgroundCheckController extends Controller
 
     // ── Shippers: complete checks for carriers they have a contract with ────
 
-    private function contractedCarrier(Request $request, User $carrier): \App\Models\Organization
+    /** {carrier} is the carrier company (organizations.id) */
+    private function contractedCarrier(Request $request, int $carrier): \App\Models\Organization
     {
         abort_unless($request->user()->isShipper(), 403);
-        $org = BackgroundChecks::carrierOrg($carrier);
+        $org = \App\Models\Organization::where('type', 'carrier')->find($carrier);
         abort_unless($org, 404, 'This carrier has no company on Shipmater.');
         abort_unless(BackgroundChecks::shipperHasContract($request->user(), $org), 403, 'Background check results are shared only with shippers that have an active contract with this carrier.');
         return $org;
@@ -94,7 +95,7 @@ class BackgroundCheckController extends Controller
     }
 
     // GET /api/v1/shipper/carriers/{carrier}/background
-    public function shipperShow(Request $request, User $carrier): JsonResponse
+    public function shipperShow(Request $request, int $carrier): JsonResponse
     {
         $org = $this->contractedCarrier($request, $carrier);
         $todo = $this->toUpgrade($org);
@@ -107,7 +108,7 @@ class BackgroundCheckController extends Controller
     }
 
     // POST /api/v1/shipper/carriers/{carrier}/background   → { client_secret, amount }
-    public function shipperOrder(Request $request, User $carrier): JsonResponse
+    public function shipperOrder(Request $request, int $carrier): JsonResponse
     {
         $org  = $this->contractedCarrier($request, $carrier);
         $todo = $this->toUpgrade($org);
@@ -135,7 +136,7 @@ class BackgroundCheckController extends Controller
                 'subjects'      => implode(',', array_map(fn ($u) => $u->id, $subjects)),
                 'paid_by'       => $paidBy,
                 'payer_user_id' => (string) $payer->id,
-                'payer_org_id'  => (string) ($payer->current_org_id ?? ''),
+                'payer_id'      => (string) ($payer->current_org_id ?? ''),
             ],
         ]);
         return response()->json(['client_secret' => $intent->client_secret, 'amount' => $amountCents / 100]);

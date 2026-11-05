@@ -59,7 +59,7 @@ class AdminFinanceController extends Controller
 
         // Loads waiting to be paid where the payee hasn't connected Stripe
         $notConnected = LoadPayment::with(['carrierOrg', 'payeeOrg'])->whereIn('status', ['scheduled', 'hold_failed'])->whereNull('stripe_account')->get()
-            ->groupBy('payee_org_id')->map(fn ($rows) => [
+            ->groupBy('payee_id')->map(fn ($rows) => [
                 'company' => $rows->first()->payee_type === 'factor' ? $rows->first()->payeeOrg?->name : PersonChecks::companyName($rows->first()->payeeOrg),
                 'type'    => $rows->first()->payee_type,
                 'loads'   => $rows->count(),

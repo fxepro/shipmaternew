@@ -11,7 +11,8 @@ class LocationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Location::where('shipper_id', $request->user()->id);
+        // Locations belong to the company
+        $query = Location::where('org_id', $request->user()->current_org_id);
 
         if ($request->filled('type')) {
             $query->where(function ($q) use ($request) {
@@ -56,10 +57,10 @@ class LocationController extends Controller
             'is_default'      => 'boolean',
         ]);
 
+        abort_unless($request->user()->current_org_id, 422, 'Join or create a company first.');
         $location = Location::create([
             ...$data,
-            'shipper_id' => $request->user()->id,
-            'org_id'     => $request->user()->org_id ?? null,
+            'org_id' => $request->user()->current_org_id,
         ]);
 
         return response()->json(['data' => $location], 201);
@@ -100,6 +101,6 @@ class LocationController extends Controller
 
     private function authorise(Request $request, Location $location): void
     {
-        abort_if($location->shipper_id !== $request->user()->id, 403);
+        abort_unless((int) $location->org_id === (int) $request->user()->current_org_id, 403);
     }
 }

@@ -9,6 +9,6 @@ class PreferredCarrier extends Model
 {
     protected $fillable = ['shipper_id', 'carrier_id', 'status'];
 
-    public function shipper(): BelongsTo { return $this->belongsTo(User::class, 'shipper_id'); }
-    public function carrier(): BelongsTo { return $this->belongsTo(User::class, 'carrier_id'); }
+    public function shipper(): BelongsTo { return $this->belongsTo(Organization::class, 'shipper_id'); }
+    public function carrier(): BelongsTo { return $this->belongsTo(Organization::class, 'carrier_id'); }
 }

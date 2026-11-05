@@ -22,12 +22,12 @@ const ROLE = (r: string | null) => (r === 'owner' ? 'Owner' : r === 'driver' ? '
  * for the complete check for everyone who doesn't have it yet. Shows only outcomes, never reports.
  * Renders nothing when there is no contract (the API refuses).
  */
-export function ShipperCarrierChecks({ carrierUserId }: { carrierUserId: number }) {
+export function ShipperCarrierChecks({ carrierId }: { carrierId: number }) {
   const qc = useQueryClient();
-  const key = ['shipper-carrier-background', carrierUserId];
+  const key = ['shipper-carrier-background', carrierId];
   const { data, isError } = useQuery({
     queryKey: key, retry: false,
-    queryFn: () => backgroundApi.shipperGet(carrierUserId).then((r) => r.data.data as ShipperView),
+    queryFn: () => backgroundApi.shipperGet(carrierId).then((r) => r.data.data as ShipperView),
   });
   const [paying, setPaying] = useState<{ clientSecret: string; amount: number } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,7 +45,7 @@ export function ShipperCarrierChecks({ carrierUserId }: { carrierUserId: number 
   async function order() {
     setBusy(true);
     try {
-      const res = await backgroundApi.shipperOrder(carrierUserId);
+      const res = await backgroundApi.shipperOrder(carrierId);
       setPaying({ clientSecret: res.data.client_secret, amount: res.data.amount });
     } catch (err) {
       toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Could not start the payment.');

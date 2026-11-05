@@ -10,6 +10,7 @@ class Bid extends Model
     protected $fillable = [
         'shipment_id',
         'carrier_id',
+        'user_id',
         'amount',
         'estimated_pickup_date',
         'estimated_delivery_date',
@@ -31,8 +32,15 @@ class Bid extends Model
         return $this->belongsTo(Shipment::class);
     }
 
+    /** The carrier company */
     public function carrier(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'carrier_id');
+        return $this->belongsTo(Organization::class, 'carrier_id');
+    }
+
+    /** The person who placed it */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

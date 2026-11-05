@@ -28,7 +28,7 @@ class PaymentsDemoSeeder extends Seeder
 
         $carrier = LoadPayments::orgOf($jordan->id, 'carrier');
         $shipper = LoadPayments::orgOf($alex->id, 'shipper');
-        if (!$carrier || !$shipper || LoadPayment::where('carrier_org_id', $carrier->id)->exists()) return;
+        if (!$carrier || !$shipper || LoadPayment::where('carrier_id', $carrier->id)->exists()) return;
 
         $card = null;
         if (config('payments.driver') === 'fake') {
@@ -41,8 +41,8 @@ class PaymentsDemoSeeder extends Seeder
             ]);
         }
 
-        $shipments = Shipment::where('carrier_id', $jordan->id)->get()->keyBy('item_description');
-        $factored  = FactoredLoad::where('carrier_org_id', $carrier->id)->get()->keyBy('load_id');
+        $shipments = Shipment::where('carrier_id', $carrier->id)->get()->keyBy('item_description');
+        $factored  = FactoredLoad::where('carrier_id', $carrier->id)->get()->keyBy('load_id');
         $standard  = \App\Services\Fees::standardRate();
 
         // [title, status, extra]
@@ -59,13 +59,13 @@ class PaymentsDemoSeeder extends Seeder
             $s = $shipments->get($title);
             if (!$s) continue;
             $fl     = $factored->get($s->id);
-            $factor = $fl && in_array($fl->status, ['accepted', 'funded'], true) ? Organization::find($fl->factor_org_id) : null;
+            $factor = $fl && in_array($fl->status, ['accepted', 'funded'], true) ? Organization::find($fl->factor_id) : null;
             $amount = (int) round((float) $s->agreed_cost * 100);
             $fee    = $factor ? 0 : (int) round($amount * $standard);
 
             $p = LoadPayment::create(array_merge([
-                'load_type' => 'shipment', 'load_id' => $s->id, 'shipper_org_id' => $shipper->id, 'carrier_org_id' => $carrier->id,
-                'payee_org_id' => $factor?->id ?? $carrier->id, 'payee_type' => $factor ? 'factor' : 'carrier', 'factored_load_id' => $factor ? $fl->id : null,
+                'load_type' => 'shipment', 'load_id' => $s->id, 'shipper_id' => $shipper->id, 'carrier_id' => $carrier->id,
+                'payee_id' => $factor?->id ?? $carrier->id, 'payee_type' => $factor ? 'factor' : 'carrier', 'factored_load_id' => $factor ? $fl->id : null,
                 'amount_cents' => $amount, 'fee_cents' => $fee, 'fee_rate' => $standard, 'flow' => 'direct', 'method' => 'card',
                 'pickup_date' => $s->pickup_date, 'status' => $status, 'payment_method_id' => $card?->id,
                 'stripe_account' => $factor ? $factor->stripe_connect_id : $carrierAccount,
@@ -86,7 +86,7 @@ class PaymentsDemoSeeder extends Seeder
         if ($funded && !FeeCharge::where('factored_load_id', $funded->id)->exists()) {
             $loadCents = (int) round((float) $funded->load_amount * 100);
             $fee = FeeCharge::create([
-                'factored_load_id' => $funded->id, 'carrier_org_id' => $carrier->id, 'load_amount_cents' => $loadCents,
+                'factored_load_id' => $funded->id, 'carrier_id' => $carrier->id, 'load_amount_cents' => $loadCents,
                 'amount_cents' => (int) round($loadCents * $standard), 'fee_rate' => $standard, 'status' => 'paid',
                 'payment_intent_id' => 'pi_demo_fee_' . $funded->id, 'paid_at' => $funded->funded_at ?? now()->subDays(5),
             ]);

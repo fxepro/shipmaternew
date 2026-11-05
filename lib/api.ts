@@ -98,9 +98,11 @@ export const feesApi = {
 
 export const subscriptionApi = {
   get:       ()                          => api.get('/api/v1/shipper/subscription'),
-  subscribe: (statedAnnualValue: number) => api.post('/api/v1/shipper/subscription', { stated_annual_value: statedAnnualValue }),
+  subscribe: (statedAnnualValue: number, paymentMethodId?: number | null) =>
+    api.post('/api/v1/shipper/subscription', { stated_annual_value: statedAnnualValue, payment_method_id: paymentMethodId ?? null }),
   confirm:   (sessionId: string)         => api.post('/api/v1/shipper/subscription/confirm', { session_id: sessionId }),
   cancel:    ()                          => api.post('/api/v1/shipper/subscription/cancel'),
+  resume:    ()                          => api.post('/api/v1/shipper/subscription/resume'),
 };
 
 export const factorStripeApi = {
@@ -441,8 +443,9 @@ export const backgroundApi = {
   pay:   (level: CheckLevel, userId?: number) => api.post('/api/v1/background/pay', { level, ...(userId ? { user_id: userId } : {}) }),
   start: (checkId: number) => api.post(`/api/v1/background/checks/${checkId}/start`),
   // Shippers, for carriers they have an active contract with
-  shipperGet:   (carrierUserId: number) => api.get(`/api/v1/shipper/carriers/${carrierUserId}/background`),
-  shipperOrder: (carrierUserId: number) => api.post(`/api/v1/shipper/carriers/${carrierUserId}/background`),
+  // carrierId is the carrier company (organizations.id)
+  shipperGet:   (carrierId: number) => api.get(`/api/v1/shipper/carriers/${carrierId}/background`),
+  shipperOrder: (carrierId: number) => api.post(`/api/v1/shipper/carriers/${carrierId}/background`),
   // Admin → Settings
   settings:       () => api.get('/api/v1/admin/settings/background'),
   updateSettings: (data: Record<string, unknown>) => api.put('/api/v1/admin/settings/background', data),

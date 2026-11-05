@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class FeeCharge extends Model
 {
     protected $fillable = [
-        'factored_load_id', 'carrier_org_id', 'load_amount_cents', 'amount_cents', 'fee_rate', 'status',
+        'factored_load_id', 'carrier_id', 'load_amount_cents', 'amount_cents', 'fee_rate', 'status',
         'payment_method_id', 'payment_intent_id', 'failure_reason', 'attempts', 'paid_at',
     ];
 
@@ -19,5 +19,5 @@ class FeeCharge extends Model
     }
 
     public function factoredLoad(): BelongsTo { return $this->belongsTo(FactoredLoad::class); }
-    public function carrierOrg(): BelongsTo   { return $this->belongsTo(Organization::class, 'carrier_org_id'); }
+    public function carrierOrg(): BelongsTo   { return $this->belongsTo(Organization::class, 'carrier_id'); }
 }

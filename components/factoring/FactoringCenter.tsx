@@ -146,7 +146,7 @@ function FileNoa({ noas, onDone }: { noas: Noa[]; onDone: () => void }) {
   const submit = useMutation({
     mutationFn: () => {
       const fd = new FormData();
-      fd.append('factor_org_id', String(factorId));
+      fd.append('factor_id', String(factorId));
       fd.append('effective_date', effective);
       if (file) fd.append('document', file);
       if (notes.trim()) fd.append('notes', notes.trim());

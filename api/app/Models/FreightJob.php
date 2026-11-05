@@ -8,10 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FreightJob extends Model
 {
+    use HasLoadPeople;
+
+    public function loadType(): string { return 'freight_job'; }
+
     protected $table = 'freight_jobs';
 
     protected $fillable = [
-        'contract_id', 'shipper_id', 'carrier_id', 'org_id',
+        'contract_id', 'shipper_id', 'carrier_id',
         'title', 'reference_number', 'special_instructions',
         'total_weight_lbs', 'status', 'optimization_mode',
         'route_distance_miles', 'route_duration_minutes',
@@ -40,8 +44,6 @@ class FreightJob extends Model
     }
 
     public function contract(): BelongsTo  { return $this->belongsTo(Contract::class); }
-    public function shipper(): BelongsTo   { return $this->belongsTo(User::class, 'shipper_id'); }
-    public function carrier(): BelongsTo   { return $this->belongsTo(User::class, 'carrier_id'); }
     public function stops(): HasMany       { return $this->hasMany(JobStop::class)->orderBy('optimized_sequence')->orderBy('sequence'); }
     public function evidence(): HasMany    { return $this->hasMany(JobEvidence::class); }
     public function offers(): HasMany      { return $this->hasMany(FreightJobOffer::class)->latest(); }

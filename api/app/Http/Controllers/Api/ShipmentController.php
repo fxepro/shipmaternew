@@ -35,13 +35,13 @@ class ShipmentController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $query = match ($user->role) {
-            'shipper'  => Shipment::where('shipper_id', $user->id),
-            'carrier'  => Shipment::where('carrier_id', $user->id),
-            'receiver' => Shipment::where('receiver_id', $user->id),
-            'admin'    => Shipment::query(),
-            default    => Shipment::where('shipper_id', $user->id),
-        };
+        // shipper_id / carrier_id are companies; a driver sees only the loads they are on
+        if ($user->isPlatformAdmin())   $query = Shipment::query();
+        elseif ($user->isReceiver())    $query = Shipment::where('receiver_id', $user->id);
+        elseif ($user->isCarrier()) {
+            $query = Shipment::where('carrier_id', $user->current_org_id);
+            if ($user->isDriver()) $query->forPerson($user->id);
+        } else                          $query = Shipment::where('shipper_id', $user->current_org_id);
 
         if ($request->filled('phase')) {
             match ($request->input('phase')) {
@@ -109,7 +109,7 @@ class ShipmentController extends Controller
             'distance_miles'          => ['nullable', 'numeric'],
             'estimated_duration_mins' => ['nullable', 'integer'],
 
-            'carrier_id'       => ['nullable', 'exists:users,id'],
+            'carrier_id'       => ['nullable', 'exists:organizations,id'],
             'receiver_id'      => ['nullable', 'exists:users,id'],
             'receiver_email'   => ['nullable', 'email'],
             'agreed_cost'      => ['nullable', 'numeric', 'min:0'],
@@ -143,7 +143,7 @@ class ShipmentController extends Controller
         if ($jobType === 'contracted') {
             /** @var Contract $contract */
             $contract = Contract::findOrFail($data['contract_id']);
-            abort_unless($contract->shipper_id === $user->id, 403, 'Contract does not belong to you.');
+            abort_unless($user->isShipperOf($contract), 403, 'Contract does not belong to you.');
             abort_unless($contract->status === 'active', 422, 'Contract must be active to create a contracted job.');
             $data['carrier_id'] = $contract->carrier_id;
             $data['agreed_cost'] = $data['agreed_cost'] ?? $contract->rate;
@@ -193,11 +193,13 @@ class ShipmentController extends Controller
             }
         }
 
+        abort_unless($user->current_org_id, 422, 'Join or create a shipper company first.');
         $shipment = Shipment::create(array_merge($data, [
-            'shipper_id' => $user->id,
+            'shipper_id' => $user->current_org_id,
             'job_type'   => $jobType,
             'status'     => $status,
         ]));
+        $shipment->addPerson($user->current_org_id, $user->id);
 
         // Payment is scheduled once a carrier is assigned (docs/fees-and-billing.md)
         if ($status === 'assigned') app(\App\Services\Payments\LoadPayments::class)->schedule('shipment', $shipment);
@@ -222,7 +224,7 @@ class ShipmentController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        if ($user->role !== 'admin' && $shipment->carrier_id !== $user->id) {
+        if (!$user->isPlatformAdmin() && !$user->isCarrierOf($shipment)) {
             abort(403, 'Only the assigned carrier can send GPS pings.');
         }
 
@@ -257,11 +259,11 @@ class ShipmentController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        abort_unless($user->role === 'carrier', 403);
-        abort_unless($shipment->carrier_id === $user->id, 403);
+        abort_unless($user->isCarrierOf($shipment), 403);
         abort_unless($shipment->status === 'offered', 422, 'This job is not awaiting acceptance.');
 
         $shipment->update(['status' => 'assigned']);
+        $shipment->addPerson($user->current_org_id, $user->id);
         app(\App\Services\Payments\LoadPayments::class)->schedule('shipment', $shipment);
 
         return response()->json(['data' => new ShipmentResource($shipment)]);
@@ -273,10 +275,10 @@ class ShipmentController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        abort_unless($user->role === 'carrier', 403);
-        abort_unless($shipment->carrier_id === $user->id, 403);
+        abort_unless($user->isCarrierOf($shipment), 403);
         abort_unless($shipment->status === 'offered', 422, 'This job is not awaiting acceptance.');
 
+        $shipment->people()->where('org_id', $shipment->carrier_id)->delete();
         $shipment->update([
             'status'     => 'pending',
             'carrier_id' => null,
@@ -289,8 +291,7 @@ class ShipmentController extends Controller
     public function deliver(Request $request, Shipment $shipment): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isCarrier(), 403);
-        abort_unless($shipment->carrier_id === $user->id, 403);
+        abort_unless($user->isCarrierOf($shipment), 403);
         abort_unless(
             in_array($shipment->status, ['assigned', 'in_transit']),
             422,
@@ -325,8 +326,7 @@ class ShipmentController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        abort_unless($user->role === 'carrier', 403);
-        abort_unless($shipment->carrier_id === $user->id, 403);
+        abort_unless($user->isCarrierOf($shipment), 403);
         abort_unless($shipment->status === 'assigned', 422, 'Only assigned jobs can be started.');
 
         $shipment->update(['status' => 'in_transit']);
@@ -338,13 +338,10 @@ class ShipmentController extends Controller
 
     private function authorizeView(User $user, Shipment $shipment): void
     {
-        $allowed = match ($user->role) {
-            'admin'    => true,
-            'shipper'  => $shipment->shipper_id === $user->id,
-            'carrier'  => $shipment->carrier_id === $user->id,
-            'receiver' => $shipment->receiver_id === $user->id,
-            default    => false,
-        };
+        $allowed = $user->isPlatformAdmin()
+            || $user->isShipperOf($shipment)
+            || $user->isCarrierOf($shipment)
+            || (int) $shipment->receiver_id === (int) $user->id;
 
         abort_unless($allowed, 403);
     }

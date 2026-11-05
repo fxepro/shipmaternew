@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Contract;
 use App\Models\FreightJob;
 use App\Models\JobStop;
+use App\Models\Organization;
 use App\Models\JobStopItem;
 use App\Models\Location;
 use App\Services\DocumentService;
@@ -23,8 +24,8 @@ class FreightJobController extends Controller
 
     public function shipperIndex(Request $request): JsonResponse
     {
-        $jobs = FreightJob::where('shipper_id', $request->user()->id)
-            ->with(['contract.carrier.carrierProfile', 'carrier.carrierProfile', 'stops'])
+        $jobs = FreightJob::where('shipper_id', $request->user()->current_org_id)
+            ->with(['contract.carrier:' . Organization::PUBLIC, 'contract.carrier.carrierProfile', 'carrier:' . Organization::PUBLIC, 'carrier.carrierProfile', 'stops'])
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->when($request->filled('contract_id'), fn($q) => $q->where('contract_id', $request->contract_id))
             ->when($request->type === 'contracted', fn($q) => $q->whereNotNull('contract_id'))
@@ -39,9 +40,10 @@ class FreightJobController extends Controller
 
     public function carrierIndex(Request $request): JsonResponse
     {
-        $uid = $request->user()->id;
+        $user = $request->user();
+        $uid  = $user->current_org_id;   // the carrier company
 
-        $jobs = FreightJob::with(['contract', 'stops', 'shipper'])
+        $jobs = FreightJob::with(['contract', 'stops', 'shipper:' . Organization::PUBLIC])
             // Jobs assigned to this carrier  OR  open posted jobs on the market
             ->where(function ($q) use ($uid) {
                 $q->where('carrier_id', $uid)
@@ -52,6 +54,8 @@ class FreightJobController extends Controller
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->when($request->type === 'assigned',    fn($q) => $q->where('carrier_id', $uid))
             ->when($request->type === 'open_market', fn($q) => $q->whereNull('carrier_id')->where('status', 'posted'))
+            // A driver sees only the loads they are on
+            ->when($user->isDriver(), fn($q) => $q->forPerson($user->id))
             ->orderByDesc('created_at')
             ->get();
 
@@ -68,9 +72,11 @@ class FreightJobController extends Controller
             'stops.pickupItems.deliveryStop',
             'stops.deliveryItems.pickupStop',
             'stops.evidence',
-            'shipper',
+            'shipper:' . Organization::PUBLIC,
+            'carrier:' . Organization::PUBLIC,
             'carrier.carrierProfile',
-            'offers.carrier',
+            'offers.carrier:' . Organization::PUBLIC,
+            'people.user:id,name',
         ]);
         return response()->json(['data' => $job]);
     }
@@ -82,8 +88,8 @@ class FreightJobController extends Controller
 
     public function carrierShow(Request $request, FreightJob $job): JsonResponse
     {
-        $uid = $request->user()->id;
-        $canView = $job->carrier_id === $uid
+        $uid = $request->user()->current_org_id;   // the carrier company
+        $canView = $request->user()->isCarrierOf($job)
             || (is_null($job->carrier_id) && $job->status === 'posted');
 
         abort_if(!$canView, 403, 'You do not have access to this job.');
@@ -93,9 +99,11 @@ class FreightJobController extends Controller
             'stops.pickupItems.deliveryStop',
             'stops.deliveryItems.pickupStop',
             'stops.evidence',
-            'shipper',
+            'shipper:' . Organization::PUBLIC,
+            'carrier:' . Organization::PUBLIC,
             'carrier.carrierProfile',
             'offers' => fn($q) => $q->where('carrier_id', $uid),
+            'people.user:id,name',
         ]);
         return response()->json(['data' => $job]);
     }
@@ -140,15 +148,16 @@ class FreightJobController extends Controller
 
         $contract = $data['contract_id'] ? Contract::findOrFail($data['contract_id']) : null;
         if ($contract) {
-            abort_if($contract->shipper_id !== $request->user()->id, 403);
+            abort_unless($request->user()->isShipperOf($contract), 403);
         }
+
+        abort_unless($request->user()->current_org_id, 422, 'Join or create a shipper company first.');
 
         return DB::transaction(function () use ($data, $contract, $request) {
             $job = FreightJob::create([
                 'contract_id'          => $contract?->id,
-                'shipper_id'           => $request->user()->id,
+                'shipper_id'           => $request->user()->current_org_id,
                 'carrier_id'           => $contract?->carrier_id,
-                'org_id'               => $request->user()->org_id ?? null,
                 'title'                => $data['title'] ?? null,
                 'reference_number'     => $data['reference_number'] ?? null,
                 'special_instructions' => $data['special_instructions'] ?? null,
@@ -156,6 +165,7 @@ class FreightJobController extends Controller
                 'optimization_mode'    => $data['optimization_mode'] ?? $contract?->optimization_mode ?? 'shortest_route',
                 'status'               => 'draft',
             ]);
+            $job->addPerson($request->user()->current_org_id, $request->user()->id);
 
             // Create stops keyed by sequence for item linking
             $stopsBySequence = [];
@@ -217,7 +227,7 @@ class FreightJobController extends Controller
 
     public function optimise(Request $request, FreightJob $job): JsonResponse
     {
-        abort_if($job->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($job->status !== 'draft', 422, 'Can only optimise draft jobs.');
 
         $stops = $job->stops()->with('deliveryItems')->get();
@@ -254,7 +264,7 @@ class FreightJobController extends Controller
 
     public function saveTerms(Request $request, FreightJob $job): JsonResponse
     {
-        abort_if($job->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($job->status !== 'draft', 422, 'Can only update terms on draft jobs.');
         abort_unless(is_null($job->contract_id), 422, 'Only open jobs use offer terms.');
 
@@ -279,9 +289,9 @@ class FreightJobController extends Controller
             'stops.pickupItems.deliveryStop',
             'stops.deliveryItems.pickupStop',
             'stops.evidence',
-            'shipper',
-            'carrier',
-            'offers.carrier',
+            'shipper:' . Organization::PUBLIC,
+            'carrier:' . Organization::PUBLIC,
+            'offers.carrier:' . Organization::PUBLIC,
         ]);
 
         return response()->json(['data' => $job]);
@@ -291,7 +301,7 @@ class FreightJobController extends Controller
 
     public function saveBilling(Request $request, FreightJob $job): JsonResponse
     {
-        abort_if($job->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($job->status !== 'draft', 422, 'Can only update billing on draft jobs.');
 
         $data = $request->validate([
@@ -312,7 +322,7 @@ class FreightJobController extends Controller
 
     public function post(Request $request, FreightJob $job): JsonResponse
     {
-        abort_if($job->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($job->status !== 'draft', 422, 'Job is not in draft status.');
 
         $job->update([
@@ -329,8 +339,9 @@ class FreightJobController extends Controller
 
     public function updateStop(Request $request, FreightJob $job, JobStop $stop): JsonResponse
     {
-        abort_if($job->carrier_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isCarrierOf($job), 403);
         abort_if($stop->freight_job_id !== $job->id, 404);
+        $job->addPerson($job->carrier_id, $request->user()->id);
 
         $data = $request->validate([
             'status'        => 'required|in:en_route,arrived,completed',
@@ -391,7 +402,7 @@ class FreightJobController extends Controller
 
     private function authorise(Request $request, FreightJob $job): void
     {
-        $uid = $request->user()->id;
-        abort_if($job->shipper_id !== $uid && $job->carrier_id !== $uid, 403);
+        $user = $request->user();
+        abort_unless($user->isShipperOf($job) || $user->isCarrierOf($job), 403);
     }
 }

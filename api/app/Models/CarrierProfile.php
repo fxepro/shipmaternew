@@ -143,6 +143,7 @@ class CarrierProfile extends Model
     protected static function booted(): void
     {
         static::saved(fn (CarrierProfile $profile) => \App\Services\PersonChecks::syncFromCarrierProfile($profile));
+        static::saved(fn (CarrierProfile $profile) => Organization::syncNameFromProfile($profile));
     }
 
     public function user(): BelongsTo

@@ -34,10 +34,10 @@ class FactoringDemoSeeder extends Seeder
             Storage::disk('local')->put($doc, "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
         }
 
-        if ($jordan && ($carrier = $this->carrierOrg($jordan)) && !Noa::where('carrier_org_id', $carrier->id)->exists()) {
+        if ($jordan && ($carrier = $this->carrierOrg($jordan)) && !Noa::where('carrier_id', $carrier->id)->exists()) {
             $noa = Noa::create([
-                'carrier_org_id' => $carrier->id,
-                'factor_org_id'  => $factor->id,
+                'carrier_id' => $carrier->id,
+                'factor_id'  => $factor->id,
                 'status'         => 'active',
                 'effective_date' => today()->subDays(14),
                 'document_path'  => "local:{$doc}",
@@ -47,7 +47,7 @@ class FactoringDemoSeeder extends Seeder
                 'decided_at'     => now()->subDays(13),
             ]);
 
-            $shipments = Shipment::where('carrier_id', $jordan->id)->orderBy('id')->get()->keyBy('item_description');
+            $shipments = Shipment::where('carrier_id', $carrier->id)->orderBy('id')->get()->keyBy('item_description');
             $loads = [
                 ['Pallet of surgical instruments', 'accepted', ['shipper_acknowledged_at' => now()->subDays(2), 'shipper_acknowledged_by' => $alex?->id]],
                 ['Restaurant kitchen equipment',   'requested', []],
@@ -59,8 +59,8 @@ class FactoringDemoSeeder extends Seeder
                 if (!$s) continue;
                 FactoredLoad::create([
                     'noa_id'         => $noa->id,
-                    'carrier_org_id' => $carrier->id,
-                    'factor_org_id'  => $factor->id,
+                    'carrier_id' => $carrier->id,
+                    'factor_id'  => $factor->id,
                     'load_type'      => 'shipment',
                     'load_id'        => $s->id,
                     'load_amount'    => $s->agreed_cost,
@@ -72,10 +72,10 @@ class FactoringDemoSeeder extends Seeder
             }
         }
 
-        if ($marcus && ($carrier = $this->carrierOrg($marcus)) && !Noa::where('carrier_org_id', $carrier->id)->exists()) {
+        if ($marcus && ($carrier = $this->carrierOrg($marcus)) && !Noa::where('carrier_id', $carrier->id)->exists()) {
             Noa::create([
-                'carrier_org_id' => $carrier->id,
-                'factor_org_id'  => $factor->id,
+                'carrier_id' => $carrier->id,
+                'factor_id'  => $factor->id,
                 'status'         => 'pending_factor',
                 'effective_date' => today(),
                 'document_path'  => "local:{$doc}",

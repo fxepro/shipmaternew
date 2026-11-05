@@ -7,6 +7,7 @@ use App\Models\Bid;
 use App\Models\ServiceType;
 use App\Models\Shipment;
 use App\Models\User;
+use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,7 +25,7 @@ class JobController extends Controller
         // ── Contracted offers ─────────────��────────────────────────────
         if ($type === 'contracted') {
             $jobs = Shipment::where('job_type', 'contracted')
-                ->where('carrier_id', $user->id)
+                ->where('carrier_id', $user->current_org_id)
                 ->where('status', 'offered')
                 ->with(['shipper', 'contract', 'serviceType'])
                 ->latest()
@@ -55,7 +56,7 @@ class JobController extends Controller
         $jobs = $query->latest()->paginate(50);
 
         // Single query: which jobs has this carrier already bid on?
-        $biddedIds = Bid::where('carrier_id', $user->id)
+        $biddedIds = Bid::where('carrier_id', $user->current_org_id)
             ->whereIn('shipment_id', $jobs->pluck('id'))
             ->pluck('shipment_id')
             ->flip()
@@ -84,7 +85,7 @@ class JobController extends Controller
                     'status'           => $s->status,
                     'bids_count'       => $s->bids_count,
                     'already_bid'      => isset($biddedIds[$s->id]),
-                    'shipper_name'     => $s->shipper?->name,
+                    'shipper_name'     => PersonChecks::companyName($s->shipper),
                     'created_at'       => $s->created_at?->toISOString(),
                 ];
             }),
@@ -112,7 +113,7 @@ class JobController extends Controller
             'agreed_cost'      => $s->agreed_cost ? (float) $s->agreed_cost : null,
             'contract_rate'    => $s->contract?->rate ? (float) $s->contract->rate : null,
             'contract_rate_type' => $s->contract?->rate_type,
-            'shipper_name'     => $s->shipper?->name,
+            'shipper_name'     => PersonChecks::companyName($s->shipper),
             'created_at'       => $s->created_at?->toISOString(),
         ];
     }

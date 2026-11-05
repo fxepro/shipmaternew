@@ -62,6 +62,7 @@ interface ShipperProfile {
   coi_url: string; coi_expiry: string;
   hipaa_baa_url: string; hipaa_baa_expiry: string;
   hazmat_reg_url: string; hazmat_reg_expiry: string;
+  coi_file?: string | null; hipaa_baa_file?: string | null; hazmat_reg_file?: string | null;
   // notifications
   notif_email: Record<string, boolean>;
   notif_sms:   Record<string, boolean>;
@@ -1010,13 +1011,38 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
 
 // ── Tab: Compliance ───────────────────────────────────────────────────────────
 
-function UploadDoc({ required, url, expiry, onFileChange, onExpiryChange }: {
+function UploadDoc({ required, url, link, docType, expiry, onFileChange, onExpiryChange }: {
   label?: string; hint?: string; required?: boolean;
-  url: string; expiry: string;
+  url: string; link?: string | null; docType: 'coi' | 'hazmat_reg' | 'hipaa_baa'; expiry: string;
   onFileChange: (name: string) => void;
   onExpiryChange: (date: string) => void;
 }) {
+  const qc = useQueryClient();
   const [fileName, setFileName] = useState(url ? 'Uploaded ✓' : '');
+  const [uploading, setUploading] = useState(false);
+
+  // The file is stored as a company document right away; the expiry is saved with it
+  async function upload(file: File) {
+    const fd = new FormData();
+    fd.append('document', file);
+    fd.append('type', docType);
+    fd.append('name', file.name);
+    if (expiry) fd.append('expiry', expiry);
+    setUploading(true);
+    try {
+      await shipperVerificationApi.uploadDocument(fd);
+      setFileName(file.name);
+      onFileChange(file.name);
+      qc.invalidateQueries({ queryKey: ['shipper-profile'] });
+      qc.invalidateQueries({ queryKey: ['shipper-documents'] });
+      toast.success('Document uploaded');
+    } catch (e: unknown) {
+      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      toast.error(d?.message ?? 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }
   const isExpired = expiry && new Date(expiry) < new Date();
   const expiresSoon = expiry && !isExpired && new Date(expiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -1031,13 +1057,13 @@ function UploadDoc({ required, url, expiry, onFileChange, onExpiryChange }: {
         <label className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer text-sm transition-colors ${
           fileName ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)] text-[var(--color-teal)]' : 'border-dashed border-[var(--color-cream-dark)] text-[var(--color-text-muted)] hover:border-[var(--color-teal)]'
         }`}>
-          <Upload size={14} />
-          <span className="truncate">{fileName || 'Upload PDF or image'}</span>
-          <input type="file" accept=".pdf,image/*" className="hidden"
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          <span className="truncate">{uploading ? 'Uploading…' : fileName || 'Upload PDF or image'}</span>
+          <input type="file" accept=".pdf,image/*" className="hidden" disabled={uploading}
             onChange={e => {
-              const name = e.target.files?.[0]?.name || '';
-              setFileName(name);
-              onFileChange(name);
+              const file = e.target.files?.[0];
+              if (file) upload(file);
+              e.target.value = '';
             }} />
         </label>
         <div>
@@ -1045,6 +1071,7 @@ function UploadDoc({ required, url, expiry, onFileChange, onExpiryChange }: {
           <input type="date" value={expiry ?? ''} onChange={e => onExpiryChange(e.target.value)} className="profile-input" />
         </div>
       </div>
+      {link && <a href={link} target="_blank" rel="noreferrer" className="text-xs font-medium text-[var(--color-teal)] underline">View current file</a>}
     </div>
   );
 }
@@ -1085,6 +1112,8 @@ function ComplianceTab({ initialData }: { initialData: ShipperProfile }) {
           label="Certificate of Insurance (COI)"
           required={false}
           url={form.coi_url}
+          link={initialData.coi_file}
+          docType="coi"
           expiry={form.coi_expiry}
           onFileChange={name => setForm(f => ({ ...f, coi_url: name }))}
           onExpiryChange={d => setForm(f => ({ ...f, coi_expiry: d }))}
@@ -1099,6 +1128,8 @@ function ComplianceTab({ initialData }: { initialData: ShipperProfile }) {
           label="HazMat Shipper Registration (PHMSA)"
           required={false}
           url={form.hazmat_reg_url}
+          link={initialData.hazmat_reg_file}
+          docType="hazmat_reg"
           expiry={form.hazmat_reg_expiry}
           onFileChange={name => setForm(f => ({ ...f, hazmat_reg_url: name }))}
           onExpiryChange={d => setForm(f => ({ ...f, hazmat_reg_expiry: d }))}

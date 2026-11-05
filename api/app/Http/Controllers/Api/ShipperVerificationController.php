@@ -150,8 +150,9 @@ class ShipperVerificationController extends Controller
 
         $validated = $request->validate([
             'document' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
-            'type'     => ['required', 'in:w9,articles,other'],
+            'type'     => ['required', 'in:w9,articles,other,coi,hazmat_reg,hipaa_baa'],
             'name'     => ['sometimes', 'string', 'max:255'],
+            'expiry'   => ['sometimes', 'nullable', 'date'],
         ]);
 
         $user = $request->user();
@@ -176,6 +177,14 @@ class ShipperVerificationController extends Controller
             'mime_type'          => $file->getMimeType(),
             'size'               => $file->getSize(),
         ]);
+
+        // Compliance documents are also the current COI / HazMat registration / HIPAA BAA on the profile
+        if (in_array($validated['type'], ['coi', 'hazmat_reg', 'hipaa_baa'], true)) {
+            $profile->update(array_filter([
+                "{$validated['type']}_url"    => $path,
+                "{$validated['type']}_expiry" => $validated['expiry'] ?? null,
+            ], fn ($v) => $v !== null));
+        }
 
         return response()->json(['data' => $this->shapeDoc($doc)], 201);
     }
@@ -313,19 +322,7 @@ class ShipperVerificationController extends Controller
 
     private function shapeDoc(ShipperDocument $d): array
     {
-        $url = $d->url;
-        if ($url && !str_starts_with($url, 'http')) {
-            try {
-                $disk = $this->documentDisk();
-                if ($disk === 'r2') {
-                    $url = Storage::disk('r2')->temporaryUrl($d->url, now()->addHour());
-                } else {
-                    $url = Storage::disk('public')->url($d->url);
-                }
-            } catch (\Throwable) {
-                $url = null;
-            }
-        }
+        $url = ShipperDocument::fileUrl($d->url);
 
         return [
             'id'          => $d->id,

@@ -86,16 +86,6 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(PersonCredential::class);
     }
 
-    public function dispatchedShipments(): HasMany
-    {
-        return $this->hasMany(Shipment::class, 'shipper_id');
-    }
-
-    public function assignedShipments(): HasMany
-    {
-        return $this->hasMany(Shipment::class, 'carrier_id');
-    }
-
     public function inboundShipments(): HasMany
     {
         return $this->hasMany(Shipment::class, 'receiver_id');
@@ -106,19 +96,10 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(PaymentMethod::class);
     }
 
-    public function transactions(): HasMany
+    /** Loads this person is on (load_people) */
+    public function shipments()
     {
-        return $this->hasMany(Transaction::class, 'shipper_id');
-    }
-
-    public function preferredCarriers(): HasMany
-    {
-        return $this->hasMany(PreferredCarrier::class, 'shipper_id');
-    }
-
-    public function contracts(): HasMany
-    {
-        return $this->hasMany(Contract::class, 'shipper_id');
+        return Shipment::forPerson($this->id);
     }
 
     // ── Role helpers ───────────────────────────────────────────────────────
@@ -151,6 +132,21 @@ class User extends Authenticatable implements MustVerifyEmail
         return OrgMember::where('org_id', $this->current_org_id)
                         ->where('user_id', $this->id)
                         ->value('role');
+    }
+
+    // ── Company sides on a row ─────────────────────────────────────────────
+    // shipper_id / carrier_id on loads, contracts, bids and so on are companies (organizations.id).
+
+    /** The person's current company is the shipper on this row */
+    public function isShipperOf($row): bool
+    {
+        return $this->current_org_id && (int) $row?->shipper_id === (int) $this->current_org_id;
+    }
+
+    /** The person's current company is the carrier on this row */
+    public function isCarrierOf($row): bool
+    {
+        return $this->current_org_id && (int) $row?->carrier_id === (int) $this->current_org_id;
     }
 
     public function isOrgOwner(): bool  { return $this->orgRole() === 'owner'; }

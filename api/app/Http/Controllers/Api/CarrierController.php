@@ -355,7 +355,7 @@ class CarrierController extends Controller
         abort_unless($request->user()->isCarrier(), 403);
 
         $user      = $request->user();
-        $shipments = Shipment::where('carrier_id', $user->id)
+        $shipments = Shipment::where('carrier_id', $user->current_org_id)
             ->whereIn('status', ['delivered', 'in_transit', 'assigned'])
             ->get(['id', 'status', 'agreed_cost', 'pickup_city', 'pickup_state',
                    'delivery_city', 'delivery_state', 'distance_miles', 'delivered_at']);
@@ -719,6 +719,7 @@ class CarrierController extends Controller
 
                 return [
                     'id'                   => $c->id,
+                    'org_id'               => $profile?->org_id ?? $org?->id,   // the carrier company
                     'name'                 => $c->name,
                     'email'                => $c->email,
                     'company_name'         => $profile?->company_name ?? $org?->name ?? '',

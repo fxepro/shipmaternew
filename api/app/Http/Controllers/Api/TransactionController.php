@@ -12,8 +12,8 @@ class TransactionController extends Controller
     // ── GET /transactions ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $rows = Transaction::with(['carrier.carrierProfile', 'paymentMethod'])
-            ->where('shipper_id', $request->user()->id)
+        $rows = Transaction::with(['carrier.carrierProfile', 'paymentMethod', 'user'])
+            ->where('shipper_id', $request->user()->current_org_id)
             ->orderByDesc('created_at')
             ->get()
             ->map(function ($t) {
@@ -24,7 +24,8 @@ class TransactionController extends Controller
                         : "{$pm->bank_name} \u{2022}\u{2022}\u{2022}\u{2022} {$pm->last4}")
                     : 'N/A';
 
-                $parts  = explode(' ', $t->carrier->name);
+                $name   = \App\Services\PersonChecks::companyName($t->carrier) ?? '';
+                $parts  = explode(' ', $name);
                 $avatar = strtoupper(substr($parts[0], 0, 1) . (isset($parts[1]) ? substr($parts[1], 0, 1) : ''));
 
                 return [
@@ -32,8 +33,10 @@ class TransactionController extends Controller
                     'invoice_no'     => $t->invoice_no,
                     'shipment'       => $t->description,
                     'tracking_token' => $t->invoice_no,
-                    'carrier'        => $t->carrier->name,
-                    'carrier_company'=> $t->carrier->carrierProfile?->company_name ?? '',
+                    'carrier_id'     => $t->carrier_id,
+                    'user_id'        => $t->user_id,
+                    'carrier'        => $t->user?->name ?? $name,
+                    'carrier_company'=> $t->carrier->carrierProfile?->company_name ?? $name,
                     'carrier_avatar' => $avatar,
                     'amount'         => $t->amount,
                     'date'           => $t->created_at->format('Y-m-d'),

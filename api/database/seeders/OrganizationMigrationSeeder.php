@@ -23,7 +23,9 @@ class OrganizationMigrationSeeder extends Seeder
             $orgType = $user->role; // 'carrier' or 'shipper'
 
             $org = Organization::create([
-                'name'      => $user->name . (str_ends_with($user->name, 's') ? "'" : "'s") . ' ' . ucfirst($orgType),
+                // The company is named by its legal business name when the profile has one
+                'name'      => ($orgType === 'carrier' ? $user->carrierProfile?->company_name : $user->shipperProfile?->company_name)
+                    ?: $user->name . (str_ends_with($user->name, 's') ? "'" : "'s") . ' ' . ucfirst($orgType),
                 'slug'      => Str::slug($user->name . '-' . $orgType . '-' . $user->id),
                 'type'      => $orgType,
                 'status'    => 'active',

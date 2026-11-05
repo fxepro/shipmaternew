@@ -13,8 +13,9 @@ class LocationSeeder extends Seeder
         $shipper = User::where('email', 'alex@demo.com')->first();
         if (!$shipper) return;
 
-        // Skip if already seeded
-        if (Location::where('shipper_id', $shipper->id)->exists()) return;
+        // Locations belong to the shipper company
+        $orgId = $shipper->current_org_id;
+        if (!$orgId || Location::where('org_id', $orgId)->exists()) return;
 
         // ── Pickup / Warehouse addresses ──────────────────────────────────
 
@@ -148,7 +149,7 @@ class LocationSeeder extends Seeder
 
         foreach ($pickups as $data) {
             Location::create(array_merge($data, [
-                'shipper_id' => $shipper->id,
+                'org_id'     => $orgId,
                 'type'       => 'pickup',
                 'country'    => 'US',
             ]));
@@ -156,7 +157,7 @@ class LocationSeeder extends Seeder
 
         foreach ($deliveries as $data) {
             Location::create(array_merge($data, [
-                'shipper_id' => $shipper->id,
+                'org_id'     => $orgId,
                 'type'       => 'delivery',
                 'country'    => 'US',
             ]));

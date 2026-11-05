@@ -37,8 +37,8 @@ class FactoringController extends Controller
         $q = Noa::with(['carrierOrg', 'factorOrg'])->withCount(['loads as open_loads' => fn ($l) => $l->whereIn('status', self::OPEN_LOAD)])->latest();
         if (!$user->isPlatformAdmin()) {
             match ($org->type) {
-                'carrier' => $q->where('carrier_org_id', $org->id),
-                'factor'  => $q->where('factor_org_id', $org->id),
+                'carrier' => $q->where('carrier_id', $org->id),
+                'factor'  => $q->where('factor_id', $org->id),
                 default   => abort(403),
             };
         }
@@ -54,8 +54,8 @@ class FactoringController extends Controller
         $q = FactoredLoad::with(['carrierOrg', 'factorOrg', 'noa'])->latest();
         if (!$user->isPlatformAdmin()) {
             match ($org->type) {
-                'carrier' => $q->where('carrier_org_id', $org->id),
-                'factor'  => $q->where('factor_org_id', $org->id),
+                'carrier' => $q->where('carrier_id', $org->id),
+                'factor'  => $q->where('factor_id', $org->id),
                 'shipper' => $q->whereIn('status', ['accepted', 'funded'])->where(fn ($w) => $this->whereShipperLoads($w, $org)),
                 default   => abort(403),
             };
@@ -68,7 +68,7 @@ class FactoringController extends Controller
     public function document(Request $request, Noa $noa)
     {
         [$user, $org] = $this->ctx($request);
-        abort_unless($user->isPlatformAdmin() || in_array($org?->id, [$noa->carrier_org_id, $noa->factor_org_id], true), 403);
+        abort_unless($user->isPlatformAdmin() || in_array($org?->id, [$noa->carrier_id, $noa->factor_id], true), 403);
 
         return PersonChecks::fileResponse($request->boolean('release') ? $noa->release_document_path : $noa->document_path);
     }
@@ -88,27 +88,27 @@ class FactoringController extends Controller
         ])]);
     }
 
-    // POST /api/v1/factoring/noas   multipart: factor_org_id, effective_date, document, notes?
+    // POST /api/v1/factoring/noas   multipart: factor_id, effective_date, document, notes?
     public function fileNoa(Request $request): JsonResponse
     {
         [$user, $org] = $this->carrier($request, true);
 
         $data = $request->validate([
-            'factor_org_id'  => ['required', 'integer', 'exists:organizations,id'],
+            'factor_id'  => ['required', 'integer', 'exists:organizations,id'],
             'effective_date' => ['required', 'date'],
             'document'       => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'notes'          => ['nullable', 'string', 'max:1000'],
         ]);
-        abort_unless(Organization::find($data['factor_org_id'])?->type === 'factor', 422, 'Choose a factoring company on Shipmater.');
+        abort_unless(Organization::find($data['factor_id'])?->type === 'factor', 422, 'Choose a factoring company on Shipmater.');
 
         // One NOA in force per carrier: a new one waits until the current one is released
-        if (Noa::where('carrier_org_id', $org->id)->whereIn('status', ['pending_factor', 'active'])->exists()) {
+        if (Noa::where('carrier_id', $org->id)->whereIn('status', ['pending_factor', 'active'])->exists()) {
             return response()->json(['error' => 'You already have an NOA that is active or waiting for the factor. It must be released or declined first.', 'code' => 'noa_exists'], 422);
         }
 
         $noa = Noa::create([
-            'carrier_org_id' => $org->id,
-            'factor_org_id'  => $data['factor_org_id'],
+            'carrier_id' => $org->id,
+            'factor_id'  => $data['factor_id'],
             'effective_date' => $data['effective_date'],
             'document_path'  => PersonChecks::storeFile($request->file('document'), $user->id, 'noa'),
             'notes'          => $data['notes'] ?? null,
@@ -122,7 +122,7 @@ class FactoringController extends Controller
     public function requestRelease(Request $request, Noa $noa): JsonResponse
     {
         [, $org] = $this->carrier($request, true);
-        abort_unless($noa->carrier_org_id === $org->id && $noa->status === 'active', 422, 'Only an active NOA can be released.');
+        abort_unless($noa->carrier_id === $org->id && $noa->status === 'active', 422, 'Only an active NOA can be released.');
         $noa->update(['release_requested_at' => now()]);
 
         return response()->json(['data' => $this->presentNoa($noa->load(['carrierOrg', 'factorOrg']))]);
@@ -132,14 +132,13 @@ class FactoringController extends Controller
     public function eligibleLoads(Request $request): JsonResponse
     {
         [, $org] = $this->carrier($request);
-        $ids   = $this->memberIds($org);
-        $taken = FactoredLoad::where('carrier_org_id', $org->id)->whereIn('status', self::OPEN_LOAD)->get(['load_type', 'load_id'])
+        $taken = FactoredLoad::where('carrier_id', $org->id)->whereIn('status', self::OPEN_LOAD)->get(['load_type', 'load_id'])
             ->map(fn ($f) => "{$f->load_type}:{$f->load_id}")->all();
 
-        $shipments = Shipment::whereIn('carrier_id', $ids)->whereNotIn('status', ['cancelled', 'delivered'])
+        $shipments = Shipment::where('carrier_id', $org->id)->whereNotIn('status', ['cancelled', 'delivered'])
             ->where(fn ($w) => $w->whereNull('payment_status')->orWhereIn('payment_status', ['unpaid', 'authorized']))
             ->latest()->limit(200)->get()->map(fn ($s) => $this->presentRecord('shipment', $s));
-        $jobs = FreightJob::whereIn('carrier_id', $ids)->whereNotIn('status', ['cancelled', 'completed', 'draft'])
+        $jobs = FreightJob::where('carrier_id', $org->id)->whereNotIn('status', ['cancelled', 'completed', 'draft'])
             ->where(fn ($w) => $w->whereNull('payment_status')->orWhereNotIn('payment_status', ['paid', 'captured']))
             ->latest()->limit(200)->get()->map(fn ($j) => $this->presentRecord('freight_job', $j));
 
@@ -159,20 +158,20 @@ class FactoringController extends Controller
             return response()->json(['error' => 'You have an unpaid Shipmater fee on a funded load. Pay it in Earnings before factoring more loads.', 'code' => 'fee_unpaid'], 422);
         }
 
-        $noa = Noa::where('carrier_org_id', $org->id)->where('status', 'active')->latest()->first();
+        $noa = Noa::where('carrier_id', $org->id)->where('status', 'active')->latest()->first();
         if (!$noa?->isInForce()) {
             return response()->json(['error' => 'You need an NOA confirmed by your factor, in effect today, before factoring a load.', 'code' => 'no_active_noa'], 422);
         }
 
         $record = $data['load_type'] === 'freight_job' ? FreightJob::find($data['load_id']) : Shipment::find($data['load_id']);
-        abort_unless($record && in_array($record->carrier_id, $this->memberIds($org), true), 404, 'Load not found.');
+        abort_unless($record && (int) $record->carrier_id === (int) $org->id, 404, 'Load not found.');
         abort_if(in_array($record->payment_status, ['captured', 'transferred', 'paid', 'processing'], true), 422, 'This load has already been paid.');
         abort_if(FactoredLoad::where('load_type', $data['load_type'])->where('load_id', $record->id)->whereIn('status', self::OPEN_LOAD)->exists(), 422, 'This load is already factored.');
 
         $fl = FactoredLoad::create([
             'noa_id'         => $noa->id,
-            'carrier_org_id' => $org->id,
-            'factor_org_id'  => $noa->factor_org_id,
+            'carrier_id'     => $org->id,
+            'factor_id'      => $noa->factor_id,
             'load_type'      => $data['load_type'],
             'load_id'        => $record->id,
             'load_amount'    => $this->amount($data['load_type'], $record),
@@ -186,7 +185,7 @@ class FactoringController extends Controller
     public function withdrawLoad(Request $request, FactoredLoad $load): JsonResponse
     {
         [, $org] = $this->carrier($request, true);
-        abort_unless($load->carrier_org_id === $org->id && $load->status === 'requested', 422, 'Only an unanswered request can be withdrawn.');
+        abort_unless($load->carrier_id === $org->id && $load->status === 'requested', 422, 'Only an unanswered request can be withdrawn.');
         $load->delete();
 
         return response()->json(['message' => 'Request withdrawn.']);
@@ -198,7 +197,7 @@ class FactoringController extends Controller
     public function decideNoa(Request $request, Noa $noa): JsonResponse
     {
         [$user, $org] = $this->factor($request);
-        abort_unless($noa->factor_org_id === $org->id && $noa->status === 'pending_factor', 422, 'This NOA is not waiting for you.');
+        abort_unless($noa->factor_id === $org->id && $noa->status === 'pending_factor', 422, 'This NOA is not waiting for you.');
         $data = $request->validate(['action' => ['required', 'in:confirm,decline'], 'reason' => ['nullable', 'string', 'max:500']]);
 
         $noa->update([
@@ -215,7 +214,7 @@ class FactoringController extends Controller
     public function release(Request $request, Noa $noa): JsonResponse
     {
         [$user, $org] = $this->factor($request);
-        abort_unless($noa->factor_org_id === $org->id && $noa->status === 'active', 422, 'Only an active NOA can be released.');
+        abort_unless($noa->factor_id === $org->id && $noa->status === 'active', 422, 'Only an active NOA can be released.');
         $request->validate(['document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240']]);
 
         // Loads already accepted or funded stay with the factor; unanswered requests lapse
@@ -235,7 +234,7 @@ class FactoringController extends Controller
     public function decideLoad(Request $request, FactoredLoad $load): JsonResponse
     {
         [$user, $org] = $this->factor($request);
-        abort_unless($load->factor_org_id === $org->id, 403);
+        abort_unless($load->factor_id === $org->id, 403);
         $data = $request->validate(['action' => ['required', 'in:accept,decline,funded'], 'reason' => ['nullable', 'string', 'max:500']]);
 
         if ($data['action'] === 'funded') {
@@ -268,7 +267,7 @@ class FactoringController extends Controller
     {
         [$user, $org] = $this->ctx($request);
         abort_unless($org?->type === 'shipper' && $load->routesToFactor(), 403);
-        abort_unless(in_array($load->loadRecord()?->shipper_id, $this->memberIds($org), true), 403);
+        abort_unless((int) $load->loadRecord()?->shipper_id === (int) $org->id, 403);
 
         if (!$load->shipper_acknowledged_at) {
             $load->update(['shipper_acknowledged_at' => now(), 'shipper_acknowledged_by' => $user->id]);
@@ -311,16 +310,10 @@ class FactoringController extends Controller
         return $owner ? PersonChecks::isCleared($owner) : false;
     }
 
-    private function memberIds(Organization $org): array
-    {
-        return OrgMember::where('org_id', $org->id)->pluck('user_id')->push($org->owner_id)->unique()->values()->all();
-    }
-
     private function whereShipperLoads($w, Organization $org): void
     {
-        $ids = $this->memberIds($org);
-        $w->where(fn ($s) => $s->where('load_type', 'shipment')->whereIn('load_id', Shipment::whereIn('shipper_id', $ids)->select('id')))
-          ->orWhere(fn ($s) => $s->where('load_type', 'freight_job')->whereIn('load_id', FreightJob::whereIn('shipper_id', $ids)->select('id')));
+        $w->where(fn ($s) => $s->where('load_type', 'shipment')->whereIn('load_id', Shipment::where('shipper_id', $org->id)->select('id')))
+          ->orWhere(fn ($s) => $s->where('load_type', 'freight_job')->whereIn('load_id', FreightJob::where('shipper_id', $org->id)->select('id')));
     }
 
     private function amount(string $type, $record): ?float
@@ -332,7 +325,7 @@ class FactoringController extends Controller
 
     private function presentRecord(string $type, $r): array
     {
-        $shipperOrg = Organization::whereIn('id', OrgMember::where('user_id', $r->shipper_id)->pluck('org_id'))->where('type', 'shipper')->first();
+        $shipperOrg = Organization::find($r->shipper_id);
         return [
             'type'           => $type,
             'id'             => $r->id,
@@ -353,8 +346,8 @@ class FactoringController extends Controller
             'status'               => $n->status,
             'in_force'             => $n->isInForce(),
             'effective_date'       => $n->effective_date?->toDateString(),
-            'carrier'              => ['id' => $n->carrier_org_id, 'name' => PersonChecks::companyName($n->carrierOrg)],
-            'factor'               => ['id' => $n->factor_org_id, 'name' => $n->factorOrg?->name, 'email' => $n->factorOrg?->email, 'phone' => $n->factorOrg?->phone],
+            'carrier'              => ['id' => $n->carrier_id, 'name' => PersonChecks::companyName($n->carrierOrg)],
+            'factor'               => ['id' => $n->factor_id, 'name' => $n->factorOrg?->name, 'email' => $n->factorOrg?->email, 'phone' => $n->factorOrg?->phone],
             'notes'                => $n->notes,
             'has_release_document' => (bool) $n->release_document_path,
             'decided_at'           => $n->decided_at?->toISOString(),
@@ -373,8 +366,8 @@ class FactoringController extends Controller
             'id'                      => $f->id,
             'status'                  => $f->status,
             'noa_id'                  => $f->noa_id,
-            'carrier'                 => ['id' => $f->carrier_org_id, 'name' => PersonChecks::companyName($f->carrierOrg)],
-            'factor'                  => ['id' => $f->factor_org_id, 'name' => $f->factorOrg?->name, 'stripe_connected' => (bool) $f->factorOrg?->stripe_connect_id],
+            'carrier'                 => ['id' => $f->carrier_id, 'name' => PersonChecks::companyName($f->carrierOrg)],
+            'factor'                  => ['id' => $f->factor_id, 'name' => $f->factorOrg?->name, 'stripe_connected' => (bool) $f->factorOrg?->stripe_connect_id],
             'load'                    => $record ? $this->presentRecord($f->load_type, $record) : ['type' => $f->load_type, 'id' => $f->load_id, 'title' => 'Load removed'],
             'amount'                  => $f->load_amount !== null ? (float) $f->load_amount : null,
             'decided_at'              => $f->decided_at?->toISOString(),

@@ -12,6 +12,7 @@ class FreightJobOffer extends Model
     protected $fillable = [
         'freight_job_id',
         'carrier_id',
+        'user_id',
         'rate_type',
         'rate_value',
         'amount',
@@ -40,8 +41,15 @@ class FreightJobOffer extends Model
         return $this->belongsTo(FreightJob::class);
     }
 
+    /** The carrier company */
     public function carrier(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'carrier_id');
+        return $this->belongsTo(Organization::class, 'carrier_id');
+    }
+
+    /** The person who placed it */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

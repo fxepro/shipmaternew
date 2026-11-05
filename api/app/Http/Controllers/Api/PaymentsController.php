@@ -67,8 +67,8 @@ class PaymentsController extends Controller
             $data['net_paid_cents']     = (int) $base()->where('status', 'paid')->where('payee_type', 'carrier')->selectRaw('coalesce(sum(amount_cents - fee_cents),0) as n')->value('n');
             $data['load_fees_cents']    = $sum($base()->where('status', 'paid'), 'fee_cents');
             $data['factored_cents']     = $sum($base()->where('payee_type', 'factor')->whereIn('status', ['paid', 'processing']));
-            $data['factored_fees_cents'] = (int) FeeCharge::where('carrier_org_id', $org->id)->where('status', 'paid')->sum('amount_cents');
-            $data['fees_owed_cents']    = (int) FeeCharge::where('carrier_org_id', $org->id)->where('status', 'failed')->sum('amount_cents');
+            $data['factored_fees_cents'] = (int) FeeCharge::where('carrier_id', $org->id)->where('status', 'paid')->sum('amount_cents');
+            $data['fees_owed_cents']    = (int) FeeCharge::where('carrier_id', $org->id)->where('status', 'failed')->sum('amount_cents');
         }
         if ($view === 'carrier' || $view === 'factor') {
             $data['stripe_connected'] = (bool) $this->connectedAccount($org);
@@ -116,7 +116,7 @@ class PaymentsController extends Controller
         abort_unless(in_array($view, ['carrier', 'admin'], true), 403);
 
         $q = FeeCharge::with(['factoredLoad.factorOrg', 'carrierOrg'])->latest('id');
-        if ($view === 'carrier') $q->where('carrier_org_id', $org->id);
+        if ($view === 'carrier') $q->where('carrier_id', $org->id);
 
         return response()->json(['data' => $q->limit(500)->get()->map(fn (FeeCharge $f) => [
             'id'             => $f->id,
@@ -138,7 +138,7 @@ class PaymentsController extends Controller
     public function retryFee(Request $request, FeeCharge $fee): JsonResponse
     {
         [$view, $org] = $this->view($request);
-        abort_unless($view === 'carrier' && $fee->carrier_org_id === $org->id, 403);
+        abort_unless($view === 'carrier' && $fee->carrier_id === $org->id, 403);
         abort_unless($request->user()->isOrgAdmin(), 403, 'Only the owner or staff can pay fees.');
         abort_unless($fee->status === 'failed', 422, 'This fee is not due.');
 
@@ -162,9 +162,9 @@ class PaymentsController extends Controller
     private function scoped(string $view, ?Organization $org): Builder
     {
         return match ($view) {
-            'shipper' => LoadPayment::where('shipper_org_id', $org->id),
-            'carrier' => LoadPayment::where('carrier_org_id', $org->id),
-            'factor'  => LoadPayment::where('payee_org_id', $org->id)->where('payee_type', 'factor'),
+            'shipper' => LoadPayment::where('shipper_id', $org->id),
+            'carrier' => LoadPayment::where('carrier_id', $org->id),
+            'factor'  => LoadPayment::where('payee_id', $org->id)->where('payee_type', 'factor'),
             default   => LoadPayment::query(),
         };
     }
@@ -172,8 +172,10 @@ class PaymentsController extends Controller
     private function shipperOwns(Request $request, LoadPayment $p): void
     {
         [$view, $org] = $this->view($request);
-        abort_unless($view === 'shipper' && $p->shipper_org_id === $org->id, 403);
+        abort_unless($view === 'shipper' && $p->shipper_id === $org->id, 403);
         abort_unless($request->user()->isOrgAdmin(), 403, 'Only the owner or staff can manage payments.');
+        // user_id is the shipper's person who paid
+        $p->forceFill(['user_id' => $request->user()->id])->save();
     }
 
     private function connectedAccount(?Organization $org): ?string

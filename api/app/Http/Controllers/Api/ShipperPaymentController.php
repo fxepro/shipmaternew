@@ -33,14 +33,12 @@ class ShipperPaymentController extends Controller
         $user     = $request->user();
         $shipment = $bid->shipment;
 
-        abort_unless($user->isShipper(), 403);
-        abort_unless($shipment->shipper_id === $user->id, 403);
+        abort_unless($user->isShipper() && $user->isShipperOf($shipment), 403);
         abort_unless($bid->status === 'pending', 422, 'This bid can no longer be accepted.');
 
         // A card or bank account must be on file; it is held the day before pickup (docs/fees-and-billing.md)
         $payments = app(\App\Services\Payments\LoadPayments::class);
-        $org = \App\Services\Payments\LoadPayments::orgOf($user->id, 'shipper');
-        if (!$payments->defaultMethod($org?->id)) {
+        if (!$payments->defaultMethod($shipment->shipper_id)) {
             return response()->json(['error' => 'Add a card or bank account in Payments before accepting a bid.', 'code' => 'payment_method_required'], 422);
         }
 
@@ -53,6 +51,8 @@ class ShipperPaymentController extends Controller
             'status'             => 'assigned',
             'payment_status'     => 'scheduled',
         ]);
+        $shipment->addPerson($shipment->shipper_id, $user->id);
+        $shipment->addPerson($bid->carrier_id, $bid->user_id);
         $payments->schedule('shipment', $shipment->fresh());
 
         return response()->json([

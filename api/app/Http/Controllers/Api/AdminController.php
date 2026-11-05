@@ -8,6 +8,7 @@ use App\Models\FreightJob;
 use App\Models\Organization;
 use App\Models\Shipment;
 use App\Models\User;
+use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -86,7 +87,7 @@ class AdminController extends Controller
 
         $shipment->load([
             'shipper.shipperProfile', 'carrier.carrierProfile', 'receiver',
-            'contract', 'serviceType', 'bids.carrier',
+            'contract', 'serviceType', 'bids.carrier', 'bids.user', 'people.user',
         ]);
 
         $pings = $shipment->gpsPings()->orderByDesc('pinged_at')->get();
@@ -94,19 +95,28 @@ class AdminController extends Controller
         return response()->json([
             'data' => [
                 'shipment'     => $shipment->attributesToArray(),
-                'organization' => $shipment->org_id ? Organization::find($shipment->org_id, ['id', 'name', 'type', 'stripe_mode', 'commission_rate']) : null,
                 'service_type' => $shipment->serviceType?->only(['id', 'key', 'name', 'category']),
-                'shipper'      => $this->partySummary($shipment->shipper),
-                'carrier'      => $this->partySummary($shipment->carrier),
+                'shipper'      => $this->companySummary($shipment->shipper),
+                'carrier'      => $this->companySummary($shipment->carrier),
                 'receiver'     => $this->partySummary($shipment->receiver),
+                'people'       => $shipment->people->map(fn ($p) => [
+                    'org_id'  => $p->org_id,
+                    'user_id' => $p->user_id,
+                    'name'    => $p->user?->name,
+                    'email'   => $p->user?->email,
+                    'role'    => \App\Models\OrgMember::where('org_id', $p->org_id)->where('user_id', $p->user_id)->value('role'),
+                    'side'    => (int) $p->org_id === (int) $shipment->shipper_id ? 'shipper' : 'carrier',
+                ])->values(),
                 'contract'     => $shipment->contract?->only([
                     'id', 'title', 'status', 'rate_type', 'rate', 'fuel_surcharge', 'detention_rate',
                     'payment_terms', 'equipment_type', 'valid_from', 'valid_to',
                 ]),
                 'bids' => $shipment->bids->sortByDesc('created_at')->values()->map(fn ($b) => [
                     'id'                      => $b->id,
-                    'carrier'                 => $b->carrier?->name,
+                    'carrier'                 => PersonChecks::companyName($b->carrier),
                     'carrier_id'              => $b->carrier_id,
+                    'user_id'                 => $b->user_id,
+                    'placed_by'               => $b->user?->name,
                     'amount'                  => (float) $b->amount,
                     'status'                  => $b->status,
                     'estimated_pickup_date'   => $b->estimated_pickup_date,
@@ -126,7 +136,30 @@ class AdminController extends Controller
         ]);
     }
 
-    /** Contact and status summary for a party on a shipment (no sensitive identity or bank fields). */
+    /** Summary of a company on a shipment (no sensitive identity or bank fields). */
+    private function companySummary(?Organization $org): ?array
+    {
+        if (!$org) return null;
+        $carrier = $org->relationLoaded('carrierProfile') ? $org->carrierProfile : null;
+        $shipper = $org->relationLoaded('shipperProfile') ? $org->shipperProfile : null;
+
+        return array_filter([
+            'id'      => $org->id,
+            'name'    => $org->name,
+            'type'    => $org->type,
+            'email'   => $org->email,
+            'company' => $carrier?->company_name ?? $shipper?->company_name,
+            'phone'   => $carrier?->phone ?? $shipper?->business_phone ?? $shipper?->phone ?? $org->phone,
+            'verification_status' => $carrier?->verification_status ?? $shipper?->verification_status,
+            'dot_number'   => $carrier?->dot_number,
+            'mc_number'    => $carrier?->mc_number,
+            'rating'       => $carrier?->rating ?? $shipper?->rating,
+            'stripe_account_status' => $carrier?->stripe_account_status,
+            'stripe_mode'  => $org->stripe_mode,
+        ], fn ($v) => $v !== null);
+    }
+
+    /** Contact and status summary for a person on a shipment (no sensitive identity or bank fields). */
     private function partySummary(?User $user): ?array
     {
         if (!$user) return null;
@@ -219,11 +252,13 @@ class AdminController extends Controller
                 ->get(['id', 'type', 'name', 'url', 'verified_at', 'created_at']);
         }
 
-        $asShipper = Shipment::where('shipper_id', $user->id);
-        $asCarrier = Shipment::where('carrier_id', $user->id);
+        // The person's loads are their load_people rows; the side is whichever company they were there for
+        $onLoad = fn (string $side) => Shipment::whereIn('id', \App\Models\LoadPerson::where('load_type', 'shipment')
+            ->where('user_id', $user->id)->whereColumn('load_people.org_id', "shipments.{$side}_id")->select('load_id'));
+        $asShipper = $onLoad('shipper');
+        $asCarrier = $onLoad('carrier');
 
-        $recent = Shipment::where(fn ($q) => $q->where('shipper_id', $user->id)
-                ->orWhere('carrier_id', $user->id)
+        $recent = Shipment::where(fn ($q) => $q->whereIn('id', \App\Models\LoadPerson::where('load_type', 'shipment')->where('user_id', $user->id)->select('load_id'))
                 ->orWhere('receiver_id', $user->id))
             ->latest()
             ->limit(10)
@@ -269,11 +304,10 @@ class AdminController extends Controller
                 'activity'     => [
                     'shipments_as_shipper' => (clone $asShipper)->count(),
                     'shipments_as_carrier' => (clone $asCarrier)->count(),
-                    'delivered'            => Shipment::where(fn ($q) => $q->where('shipper_id', $user->id)->orWhere('carrier_id', $user->id))
-                        ->where('status', 'delivered')->count(),
+                    'delivered'            => Shipment::forPerson($user->id)->where('status', 'delivered')->count(),
                     'total_spent'          => (float) (clone $asShipper)->where('status', 'delivered')->sum('agreed_cost'),
                     'total_earned'         => (float) (clone $asCarrier)->where('status', 'delivered')->sum('agreed_cost'),
-                    'bids'                 => DB::table('bids')->where('carrier_id', $user->id)->count(),
+                    'bids'                 => DB::table('bids')->where('user_id', $user->id)->count(),
                 ],
                 'recent_shipments' => $recent,
             ],
@@ -333,7 +367,7 @@ class AdminController extends Controller
             $query->where('payment_status', $status);
         }
         if ($orgId) {
-            $query->where('org_id', $orgId);
+            $query->forOrg((int) $orgId);
         }
 
         $jobs = $query->limit(500)->get();
@@ -351,8 +385,8 @@ class AdminController extends Controller
             'invoice_number'   => $j->invoice_number,
             'status'           => $j->status,
             'payment_status'   => $j->payment_status,
-            'shipper'          => $j->shipper?->name,
-            'carrier'          => $j->carrier?->name,
+            'shipper'          => PersonChecks::companyName($j->shipper),
+            'carrier'          => PersonChecks::companyName($j->carrier),
             'shipper_total'    => $j->cost_breakdown['shipper_total']  ?? null,
             'platform_fee'     => $j->cost_breakdown['platform_fee']   ?? null,
             'carrier_payout'   => $j->cost_breakdown['carrier_payout'] ?? null,
@@ -407,8 +441,8 @@ class AdminController extends Controller
                 $j->invoice_number   ?? '',
                 $j->status           ?? '',
                 $j->payment_status   ?? '',
-                '"' . str_replace('"', '""', $j->shipper?->name ?? '') . '"',
-                '"' . str_replace('"', '""', $j->carrier?->name ?? '') . '"',
+                '"' . str_replace('"', '""', PersonChecks::companyName($j->shipper) ?? '') . '"',
+                '"' . str_replace('"', '""', PersonChecks::companyName($j->carrier) ?? '') . '"',
                 $cbd['shipper_total']  ?? '',
                 $cbd['platform_fee']   ?? '',
                 $cbd['carrier_payout'] ?? '',
@@ -440,11 +474,11 @@ class AdminController extends Controller
                 'id'          => $s->id,
                 'shipment_id' => $s->id,
                 'item_name'   => $s->item_description,
-                'reason'      => 'Disputed by ' . ($s->shipper?->name ?? 'shipper'),
+                'reason'      => 'Disputed by ' . (PersonChecks::companyName($s->shipper) ?? 'shipper'),
                 'status'      => 'open',
                 'created_at'  => $s->updated_at?->toISOString(),
-                'shipper'     => $s->shipper?->name,
-                'carrier'     => $s->carrier?->name,
+                'shipper'     => PersonChecks::companyName($s->shipper),
+                'carrier'     => PersonChecks::companyName($s->carrier),
                 'value'       => $s->agreed_cost,
             ]);
 

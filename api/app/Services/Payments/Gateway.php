@@ -10,6 +10,16 @@ interface Gateway
 {
     public function createCustomer(string $name, ?string $email, array $metadata): string;
 
+    /**
+     * Start a monthly subscription charged to a saved payment method, without sending the person to Stripe.
+     * Returns the Stripe subscription (or a stand-in with id, status, current_period_end, items).
+     * Throws \RuntimeException with a message the person can read when the payment method is refused.
+     */
+    public function createSubscription(string $customerId, string $paymentMethodId, int $amountCents, string $name, array $metadata): object;
+
+    /** Whether a saved customer id still exists (and isn't deleted) in the Stripe account the current key belongs to */
+    public function customerExists(string $customerId): bool;
+
     /** A SetupIntent the browser confirms with Stripe Elements to save a card or bank account */
     public function setupIntent(string $customerId): array;
 

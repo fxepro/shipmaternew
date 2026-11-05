@@ -105,7 +105,7 @@ class EvidenceController extends Controller
 
         // Only the uploader or the shipper can delete
         $uid = $request->user()->id;
-        abort_if($evidence->uploaded_by !== $uid && $job->shipper_id !== $uid, 403);
+        abort_if($evidence->uploaded_by !== $uid && !$request->user()->isShipperOf($job), 403);
 
         Storage::disk(self::DISK)->delete($evidence->file_key);
         $evidence->delete();
@@ -207,8 +207,8 @@ class EvidenceController extends Controller
 
     private function authorise(Request $request, FreightJob $job): void
     {
-        $uid = $request->user()->id;
-        abort_if($job->shipper_id !== $uid && $job->carrier_id !== $uid, 403);
+        $user = $request->user();
+        abort_unless($user->isShipperOf($job) || $user->isCarrierOf($job), 403);
     }
 
     private function shape(JobEvidence $e): array

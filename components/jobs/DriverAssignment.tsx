@@ -26,7 +26,7 @@ export function DriverAssignment({ shipmentId, kind = 'shipments' }: { shipmentI
   });
 
   const assign = useMutation({
-    mutationFn: (driverId: number | null) => api.put(`/api/v1/${kind}/${shipmentId}/driver`, { driver_id: driverId }),
+    mutationFn: (driverId: number | null) => api.put(`/api/v1/${kind}/${shipmentId}/driver`, { user_id: driverId }),
     onSuccess: (_, driverId) => {
       toast.success(driverId ? 'Driver assigned' : 'Driver removed');
       qc.invalidateQueries({ queryKey: ['load-driver', kind, shipmentId] });

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class LoadPayment extends Model
 {
     protected $fillable = [
-        'load_type', 'load_id', 'shipper_org_id', 'carrier_org_id', 'payee_org_id', 'payee_type', 'factored_load_id',
+        'load_type', 'load_id', 'shipper_id', 'carrier_id', 'payee_id', 'payee_type', 'user_id', 'factored_load_id',
         'amount_cents', 'fee_cents', 'fee_rate', 'early', 'flow', 'method', 'pickup_date', 'status', 'payment_method_id',
         'stripe_account', 'payment_intent_id', 'charge_id', 'held_at', 'capture_before', 'paid_at', 'failure_reason',
         'failed_at', 'attempts', 'refunded_cents',
@@ -28,9 +28,9 @@ class LoadPayment extends Model
         ];
     }
 
-    public function shipperOrg(): BelongsTo    { return $this->belongsTo(Organization::class, 'shipper_org_id'); }
-    public function carrierOrg(): BelongsTo    { return $this->belongsTo(Organization::class, 'carrier_org_id'); }
-    public function payeeOrg(): BelongsTo      { return $this->belongsTo(Organization::class, 'payee_org_id'); }
+    public function shipperOrg(): BelongsTo    { return $this->belongsTo(Organization::class, 'shipper_id'); }
+    public function carrierOrg(): BelongsTo    { return $this->belongsTo(Organization::class, 'carrier_id'); }
+    public function payeeOrg(): BelongsTo      { return $this->belongsTo(Organization::class, 'payee_id'); }
     public function paymentMethod(): BelongsTo { return $this->belongsTo(PaymentMethod::class); }
     public function factoredLoad(): BelongsTo  { return $this->belongsTo(FactoredLoad::class); }
 

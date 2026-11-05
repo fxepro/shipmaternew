@@ -24,17 +24,17 @@ class RatingController extends Controller
             return response()->json(['message' => 'You can only leave a review after the job is completed.'], 422);
         }
 
-        // User must be shipper or carrier on this job
-        $isShipper = $job->shipper_id === $user->id;
-        $isCarrier = $job->carrier_id === $user->id;
+        // The person's company must be the shipper or the carrier on this job
+        $isShipper = $user->isShipperOf($job);
+        $isCarrier = $user->isCarrierOf($job);
 
         if (! $isShipper && ! $isCarrier) {
             return response()->json(['message' => 'You are not a party to this job.'], 403);
         }
 
-        // One rating per job per rater
-        if (Rating::where('freight_job_id', $job->id)->where('rater_id', $user->id)->exists()) {
-            return response()->json(['message' => 'You have already reviewed this job.'], 422);
+        // One rating per job per rating company
+        if (Rating::where('freight_job_id', $job->id)->where('rater_id', $user->current_org_id)->exists()) {
+            return response()->json(['message' => 'Your company has already reviewed this job.'], 422);
         }
 
         $data = $request->validate([
@@ -44,21 +44,15 @@ class RatingController extends Controller
             'comment'       => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Determine parties
+        // Company rates company; user_id is the person who wrote it
         $raterType   = $isShipper ? 'shipper' : 'carrier';
-        $rateeId     = $isShipper ? $job->carrier_id  : $job->shipper_id;
-        $raterOrgId  = $user->current_org_id;
-
-        // Ratee org — carrier profile or shipper user's org
-        $rateeUser   = \App\Models\User::find($rateeId);
-        $rateeOrgId  = $rateeUser?->current_org_id ?? $job->org_id;
+        $rateeOrgId  = $isShipper ? $job->carrier_id : $job->shipper_id;
 
         $rating = Rating::create(array_merge($data, [
             'freight_job_id' => $job->id,
-            'rater_id'       => $user->id,
-            'ratee_id'       => $rateeId,
-            'rater_org_id'   => $raterOrgId,
-            'ratee_org_id'   => $rateeOrgId,
+            'user_id'        => $user->id,
+            'rater_id'       => $user->current_org_id,
+            'ratee_id'       => $rateeOrgId,
             'rater_type'     => $raterType,
             'is_public'      => true,
         ]));
@@ -80,7 +74,7 @@ class RatingController extends Controller
     public function profileRatings(Request $request, Organization $org): JsonResponse
     {
         $ratings = Rating::with(['raterOrg', 'freightJob'])
-            ->where('ratee_org_id', $org->id)
+            ->where('ratee_id', $org->id)
             ->where('is_public', true)
             ->latest()
             ->paginate(10);
@@ -121,7 +115,7 @@ class RatingController extends Controller
      */
     private function recalculate(string $raterType, int $rateeOrgId): void
     {
-        $agg = Rating::where('ratee_org_id', $rateeOrgId)
+        $agg = Rating::where('ratee_id', $rateeOrgId)
             ->select(
                 DB::raw('ROUND(AVG((overall + communication + reliability) / 3.0), 2) as avg_rating'),
                 DB::raw('COUNT(*) as total')

@@ -14,7 +14,7 @@ class PreferredCarrierController extends Controller
     // ── GET /preferred-carriers ───────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $shipperId = $request->user()->id;
+        $shipperId = $request->user()->current_org_id;   // the shipper company
 
         $rows = PreferredCarrier::with(['carrier.carrierProfile'])
             ->where('shipper_id', $shipperId)
@@ -68,15 +68,19 @@ class PreferredCarrierController extends Controller
         ]);
 
         $profile = CarrierProfile::where('dot_number', $request->dot_number)
-            ->with('user')
+            ->with('org')
             ->first();
 
         if (! $profile) {
             return response()->json(['message' => 'No carrier found with that DOT number.'], 404);
         }
 
-        $carrier   = $profile->user;
-        $shipperId = $request->user()->id;
+        // Preferred carriers are company to company
+        $carrier   = $profile->org;
+        $shipperId = $request->user()->current_org_id;
+        if (!$carrier || !$shipperId) {
+            return response()->json(['message' => 'No carrier found with that DOT number.'], 404);
+        }
 
         if (PreferredCarrier::where('shipper_id', $shipperId)->where('carrier_id', $carrier->id)->exists()) {
             return response()->json(['message' => 'This carrier is already in your network.'], 422);
@@ -96,7 +100,7 @@ class PreferredCarrierController extends Controller
     // ── DELETE /preferred-carriers/{preferredCarrier} ─────────────────────────
     public function destroy(Request $request, PreferredCarrier $preferredCarrier): JsonResponse
     {
-        abort_if($preferredCarrier->shipper_id !== $request->user()->id, 403);
+        abort_unless($request->user()->isShipperOf($preferredCarrier), 403);
         $preferredCarrier->delete();
         return response()->json(['message' => 'Carrier removed from network']);
     }

@@ -200,6 +200,7 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::post('/shipper/subscription',         [\App\Http\Controllers\Api\SubscriptionController::class, 'subscribe']);
     Route::post('/shipper/subscription/confirm', [\App\Http\Controllers\Api\SubscriptionController::class, 'confirm']);
     Route::post('/shipper/subscription/cancel',  [\App\Http\Controllers\Api\SubscriptionController::class, 'cancel']);
+    Route::post('/shipper/subscription/resume',  [\App\Http\Controllers\Api\SubscriptionController::class, 'resume']);
 
     // Factor: own Stripe account for factored-load payments
     Route::post('/factor/stripe/connect', [\App\Http\Controllers\Api\FactorStripeController::class, 'connect']);
@@ -295,6 +296,10 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/admin/people/credentials/{credential}/file',    [AdminPeopleController::class, 'credentialFile']);
 
     // Admin: carrier and shipper companies (organizations)
+    Route::get('/admin/subscriptions',              [\App\Http\Controllers\Api\AdminSubscriptionController::class, 'index']);
+    Route::get('/admin/subscriptions/{org}',        [\App\Http\Controllers\Api\AdminSubscriptionController::class, 'show']);
+    Route::post('/admin/subscriptions/{org}/cancel',[\App\Http\Controllers\Api\AdminSubscriptionController::class, 'cancel']);
+    Route::post('/admin/subscriptions/{org}/resume',[\App\Http\Controllers\Api\AdminSubscriptionController::class, 'resume']);
     Route::get('/admin/companies',                  [AdminCompanyController::class, 'index']);
     Route::get('/admin/companies/{org}',            [AdminCompanyController::class, 'show']);
     Route::post('/admin/companies/{org}/review',    [AdminCompanyController::class, 'review']);

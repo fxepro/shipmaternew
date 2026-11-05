@@ -29,6 +29,9 @@ class Organization extends Model
         'stripe_requirements', 'stripe_submitted_at',
     ];
 
+    /** Columns safe to show another company (eager load as 'shipper:' . Organization::PUBLIC) */
+    public const PUBLIC = 'id,name,type,email,phone,city,state,logo_url';
+
     // Single-use Stripe bank token, only ever sent to Stripe
     protected $hidden = ['bank_token'];
 
@@ -92,9 +95,10 @@ class Organization extends Model
                     ->withTimestamps();
     }
 
-    public function shipments(): HasMany
+    /** Loads where this company is the shipper or the carrier */
+    public function shipments()
     {
-        return $this->hasMany(Shipment::class, 'org_id');
+        return Shipment::forOrg($this->id);
     }
 
     public function platformTenant(): HasOne
@@ -103,6 +107,19 @@ class Organization extends Model
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * The legal business name on the owner's profile is the company's name. Keep the company in step when the owner edits it.
+     */
+    public static function syncNameFromProfile($profile): void
+    {
+        if (!$profile->wasChanged('company_name') && !$profile->wasRecentlyCreated) return;
+        $name = trim((string) $profile->company_name);
+        if ($name === '' || !$profile->org_id) return;
+        $org = static::find($profile->org_id);
+        if (!$org || $org->owner_id !== $profile->user_id || $org->name === $name) return;
+        $org->update(['name' => $name, 'legal_name' => $org->legal_name ?: $name]);
+    }
 
     public function isCarrier(): bool        { return $this->type === 'carrier'; }
     public function isShipper(): bool        { return $this->type === 'shipper'; }

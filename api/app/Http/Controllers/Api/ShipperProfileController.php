@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ServiceType;
+use App\Models\ShipperDocument;
 use App\Models\ShipperProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -66,6 +67,10 @@ class ShipperProfileController extends Controller
             'dba'                    => $profile?->dba                   ?? '',
             'business_type'          => $profile?->business_type         ?? 'Limited Liability Company (LLC)',
             'ein'                    => $profile?->ein                   ?? '',
+            'tax_id'                 => $profile?->ein                   ?? '',
+            // Tax ID type and currency belong to the company
+            'tax_id_type'            => $org?->tax_id_type ?: 'EIN',
+            'currency'               => $org?->currency ?: 'USD',
             'state_of_incorporation' => $profile?->state_of_incorporation ?? '',
             'year_established'       => $profile?->year_established      ?? '',
             'employee_count'         => $profile?->employee_count        ?? '',
@@ -80,6 +85,7 @@ class ShipperProfileController extends Controller
             'biz_city'      => $profile?->biz_city       ?? '',
             'biz_state'     => $profile?->biz_state      ?? '',
             'biz_zip'       => $profile?->biz_zip        ?? '',
+            'biz_country'   => $profile?->biz_country    ?: 'US',
 
             // Operating address
             'ops_same_as_biz' => (bool) ($profile?->ops_same_as_biz ?? true),
@@ -87,6 +93,7 @@ class ShipperProfileController extends Controller
             'ops_city'        => $profile?->ops_city     ?? '',
             'ops_state'       => $profile?->ops_state    ?? '',
             'ops_zip'         => $profile?->ops_zip      ?? '',
+            'ops_country'     => $profile?->ops_country  ?: 'US',
 
             // Verification (read-only — set by platform processes, not self-service clicks)
             'verification_status' => $profile?->verification_status ?? 'incomplete',
@@ -108,6 +115,10 @@ class ShipperProfileController extends Controller
             'hipaa_baa_expiry' => $profile?->hipaa_baa_expiry,
             'hazmat_reg_url'   => $profile?->hazmat_reg_url   ?? '',
             'hazmat_reg_expiry'=> $profile?->hazmat_reg_expiry,
+            // Links to open the uploaded files (the *_url columns hold the stored path)
+            'coi_file'         => ShipperDocument::fileUrl($profile?->coi_url),
+            'hipaa_baa_file'   => ShipperDocument::fileUrl($profile?->hipaa_baa_url),
+            'hazmat_reg_file'  => ShipperDocument::fileUrl($profile?->hazmat_reg_url),
 
             // Notifications
             'notif_email'      => $profile?->notif_email ?? $this->defaultNotifEmail(),
@@ -124,9 +135,10 @@ class ShipperProfileController extends Controller
     {
         $user = $user ?? $profile->user;
         if (!$profile->company_name || !$profile->ein) return 'incomplete';
+        // Once Shipmater has verified the business, editing other fields must not undo it
+        if ($profile->ein_verified_at)                  return 'verified';
         if (!$user?->email_verified_at)               return 'incomplete';
-        if (!$profile->ein_verified_at)                 return 'submitted';
-        return 'verified';
+        return 'submitted';
     }
 
     // ── GET /api/v1/shipper/profile ───────────────────────────────────────────
@@ -167,6 +179,9 @@ class ShipperProfileController extends Controller
             'dba'                    => ['sometimes', 'nullable', 'string', 'max:200'],
             'business_type'          => ['sometimes', 'nullable', 'string', 'max:100'],
             'ein'                    => ['sometimes', 'nullable', 'string', 'max:30'],
+            'tax_id'                 => ['sometimes', 'nullable', 'string', 'max:30'],
+            'tax_id_type'            => ['sometimes', 'nullable', 'string', 'max:10'],
+            'currency'               => ['sometimes', 'nullable', 'string', 'size:3'],
             'state_of_incorporation' => ['sometimes', 'nullable', 'string', 'max:2'],
             'year_established'       => ['sometimes', 'nullable', 'string', 'max:4'],
             'employee_count'         => ['sometimes', 'nullable', 'string', 'max:30'],
@@ -181,6 +196,7 @@ class ShipperProfileController extends Controller
             'biz_city'      => ['sometimes', 'nullable', 'string', 'max:100'],
             'biz_state'     => ['sometimes', 'nullable', 'string', 'max:50'],
             'biz_zip'       => ['sometimes', 'nullable', 'string', 'max:20'],
+            'biz_country'   => ['sometimes', 'nullable', 'string', 'size:2'],
 
             // Operating address
             'ops_same_as_biz' => ['sometimes', 'boolean'],
@@ -188,6 +204,7 @@ class ShipperProfileController extends Controller
             'ops_city'        => ['sometimes', 'nullable', 'string', 'max:100'],
             'ops_state'       => ['sometimes', 'nullable', 'string', 'max:50'],
             'ops_zip'         => ['sometimes', 'nullable', 'string', 'max:20'],
+            'ops_country'     => ['sometimes', 'nullable', 'string', 'size:2'],
 
             // Shipping defaults
             'default_pickup_contact_name'  => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -219,8 +236,21 @@ class ShipperProfileController extends Controller
             $user->update($userFields);
         }
 
+        // Tax ID type and currency are kept on the company (owner or staff only)
+        $orgFields = array_intersect_key($validated, array_flip(['tax_id_type', 'currency']));
+        if ($orgFields && $user->currentOrg && $user->isOrgAdmin()) {
+            $user->currentOrg->update(array_map(fn ($v) => $v === null ? null : strtoupper($v), $orgFields));
+        }
+
         // Map frontend keys -> column names
-        $profileData = array_diff_key($validated, array_flip(['name', 'email']));
+        $profileData = array_diff_key($validated, array_flip(['name', 'email', 'tax_id_type', 'currency']));
+        // The page sends the tax ID as both tax_id and ein; it's kept in ein
+        if (array_key_exists('tax_id', $profileData)) {
+            $profileData['ein'] = $profileData['ein'] ?? $profileData['tax_id'];
+            unset($profileData['tax_id']);
+        }
+        // File paths for compliance documents are set by the upload, not by the form
+        $profileData = array_diff_key($profileData, array_flip(['coi_url', 'hipaa_baa_url', 'hazmat_reg_url']));
         if (isset($profileData['company'])) {
             $profileData['company_name'] = $profileData['company'];
             unset($profileData['company']);

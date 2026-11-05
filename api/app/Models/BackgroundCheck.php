@@ -14,7 +14,7 @@ class BackgroundCheck extends Model
     protected $fillable = [
         'user_id', 'org_id', 'provider', 'mode', 'kind', 'package', 'status',
         'candidate_id', 'invitation_id', 'invitation_url', 'report_id',
-        'paid_by', 'payer_user_id', 'payer_org_id', 'amount_cents', 'payment_intent_id', 'completed_at',
+        'paid_by', 'payer_user_id', 'payer_id', 'amount_cents', 'payment_intent_id', 'completed_at',
     ];
 
     protected function casts(): array
@@ -23,7 +23,7 @@ class BackgroundCheck extends Model
     }
 
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
-    public function payerOrg(): BelongsTo { return $this->belongsTo(Organization::class, 'payer_org_id'); }
+    public function payerOrg(): BelongsTo { return $this->belongsTo(Organization::class, 'payer_id'); }
 
     /** basic and full checks give the person the basic level; full and upgrade give the complete level */
     public function coversBasic(): bool { return in_array($this->kind, ['basic', 'full'], true); }

@@ -35,9 +35,14 @@ const schema = z.object({
   password_confirmation: z.string(),
   role:                  z.enum(['shipper', 'carrier', 'factor']),
   company_name:          z.string().optional(),
+  joining:               z.boolean().optional(),
 }).refine((d) => d.password === d.password_confirmation, {
   message: "Passwords don't match",
   path: ['password_confirmation'],
+}).refine((d) => d.joining || (d.company_name ?? '').trim().length >= 2, {
+  // The person signing up owns the company; its legal business name is the company's name
+  message: 'Legal business name is required',
+  path: ['company_name'],
 });
 
 type FormData = z.infer<typeof schema>;
@@ -123,6 +128,7 @@ function RegisterForm() {
         setInvite(info);
         setValue('email', info.email);
         if (info.company_type) setValue('role', info.company_type);
+        setValue('joining', !info.expired && !info.accepted);
       })
       .catch(() => setError('This invitation link is not valid. Ask for a new one.'));
   }, [inviteToken, setValue]);
@@ -132,7 +138,8 @@ function RegisterForm() {
   async function onSubmit(data: FormData) {
     setError('');
     try {
-      const res = await authApi.register(inviteUsable ? { ...data, invite_token: inviteToken } : data);
+      const { joining: _joining, ...fields } = data;
+      const res = await authApi.register(inviteUsable ? { ...fields, invite_token: inviteToken } : fields);
       const { token } = res.data as { token: string };
       establishSession(token);
       // Invited people start with their own verification checklist
@@ -267,14 +274,16 @@ function RegisterForm() {
             </div>
             <div style={{ display: inviteUsable ? 'none' : undefined }}>
               <label style={{ display: 'block', fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 6 }}>
-                Company <span style={{ color: B.gray50, fontWeight: 400 }}>(optional)</span>
+                Legal business name
               </label>
               <input
                 style={inputStyle}
                 className="outline-none focus:border-[#0096C7]"
-                placeholder="Acme Logistics"
+                placeholder="Acme Logistics LLC"
                 {...register('company_name')}
               />
+              {errors.company_name && <p style={{ fontFamily: BODY, fontSize: 12, color: B.red, marginTop: 4 }}>{errors.company_name.message}</p>}
+              <p style={{ fontFamily: BODY, fontSize: 12, color: B.gray50, marginTop: 4 }}>You&apos;ll own this company and can invite your team after signing up.</p>
             </div>
           </div>
 
