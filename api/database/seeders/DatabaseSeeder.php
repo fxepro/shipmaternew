@@ -2,9 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\CarrierProfile;
 use App\Models\Contract;
-use App\Models\ShipperProfile;
 use App\Models\GpsPing;
 use App\Models\PaymentMethod;
 use App\Models\PreferredCarrier;
@@ -72,96 +70,6 @@ class DatabaseSeeder extends Seeder
         );
         $factor->update(['current_org_id' => $factorOrg->id]);
 
-        // ── Carrier profiles ──────────────────────────────────────────────
-
-        CarrierProfile::firstOrCreate(
-            ['user_id' => $carrier1->id],
-            [
-                'company_name'            => 'Reyes Transport LLC',
-                'phone'                   => '+1 (555) 010-2030',
-                'dot_number'              => '3842910',
-                'dot_verified'            => true,
-                'mc_number'               => 'MC-291847',
-                'insurance_verified'      => true,
-                'background_check_status' => 'clear',
-                'rating'                  => 4.90,
-                'total_deliveries'        => 284,
-            ]
-        );
-
-        CarrierProfile::firstOrCreate(
-            ['user_id' => $carrier2->id],
-            [
-                'company_name'            => 'CRR Freight Inc',
-                'phone'                   => '+1 (555) 874-3310',
-                'dot_number'              => '4821055',
-                'dot_verified'            => true,
-                'mc_number'               => 'MC-482100',
-                'insurance_verified'      => true,
-                'background_check_status' => 'clear',
-                'rating'                  => 4.70,
-                'total_deliveries'        => 156,
-            ]
-        );
-
-        CarrierProfile::firstOrCreate(
-            ['user_id' => $carrier3->id],
-            [
-                'company_name'            => 'Webb Transport Co.',
-                'phone'                   => '+1 (214) 555-0777',
-                'dot_number'              => '2910483',
-                'dot_verified'            => false,
-                'mc_number'               => 'MC-511092',
-                'insurance_verified'      => false,
-                'background_check_status' => 'pending',
-                'rating'                  => 4.50,
-                'total_deliveries'        => 44,
-            ]
-        );
-
-        // ── Shipper profile for Alex Morgan ──────────────────────────────────
-
-        ShipperProfile::updateOrCreate(
-            ['user_id' => $shipper->id],
-            [
-                'phone'         => '+1 (555) 248-3910',
-                'street'        => '3600 Brighton Blvd',
-                'city'          => 'Denver',
-                'state'         => 'CO',
-                'zip'           => '80216',
-                'country'       => 'United States',
-                'company_name'  => 'Morgan Freight Co.',
-                'business_type' => 'Limited Liability Company (LLC)',
-                'ein'           => '82-4910372',
-                'industry'      => 'Manufacturing',
-                'website'       => 'https://morganfreight.com',
-                'biz_street'    => '3600 Brighton Blvd',
-                'biz_city'      => 'Denver',
-                'biz_state'     => 'CO',
-                'biz_zip'       => '80216',
-                'verification_status' => 'incomplete',
-                'email_verified_at'   => null,
-                'phone_verified_at'   => null,
-                'ein_verified_at'     => null,
-                'notif_email'   => [
-                    'carrier_assigned' => true,
-                    'pickup_confirmed'  => true,
-                    'in_transit'        => true,
-                    'delivered'         => true,
-                    'disputed'          => true,
-                    'weekly_summary'    => false,
-                    'marketing'         => false,
-                ],
-                'notif_sms' => [
-                    'carrier_assigned' => false,
-                    'pickup_confirmed'  => true,
-                    'in_transit'        => false,
-                    'delivered'         => true,
-                    'disputed'          => true,
-                ],
-            ]
-        );
-
         // ── Companies ─────────────────────────────────────────────────────
         // Every shipper and carrier person owns a company; loads, contracts and the rest point at the company
         $this->call(OrganizationMigrationSeeder::class);
@@ -169,6 +77,44 @@ class DatabaseSeeder extends Seeder
         $c1Org      = $carrier1->fresh()->current_org_id;
         $c2Org      = $carrier2->fresh()->current_org_id;
         $c3Org      = $carrier3->fresh()->current_org_id;
+
+        // Company details live on the company; phone and address on the person (person_identities)
+        $carriers = [
+            [$c1Org, $carrier1, 'Reyes Transport LLC', '+1 (555) 010-2030', '3842910', true,  '291847', true,  'clear',   4.90, 284],
+            [$c2Org, $carrier2, 'CRR Freight Inc',     '+1 (555) 874-3310', '4821055', true,  '482100', true,  'clear',   4.70, 156],
+            [$c3Org, $carrier3, 'Webb Transport Co.',  '+1 (214) 555-0777', '2910483', false, '511092', false, 'pending', 4.50, 44],
+        ];
+        foreach ($carriers as [$orgId, $person, $name, $phone, $dot, $dotOk, $mc, $insured, $bg, $rating, $deliveries]) {
+            $org = \App\Models\Organization::find($orgId);
+            $org->setLegalName($name);
+            $org->fill([
+                'phone' => $org->phone ?: $phone, 'carrier_type' => $org->carrier_type ?: 'sole_proprietor',
+                'carrier_dot_number' => $dot, 'carrier_dot_verified' => $dotOk, 'carrier_mc_number' => $mc,
+                'carrier_insurance_verified' => $insured, 'rating' => $rating, 'carrier_total_deliveries' => $deliveries,
+            ])->save();
+            \App\Models\PersonIdentity::firstOrCreate(['user_id' => $person->id], ['phone' => $phone]);
+            \App\Models\PersonVerification::firstOrCreate(['user_id' => $person->id], ['status' => 'incomplete', 'background_check_status' => $bg]);
+        }
+
+        $morgan = \App\Models\Organization::find($shipperOrg);
+        $morgan->setLegalName('Morgan Freight Co.');
+        $morgan->fill([
+            'business_type' => 'Limited Liability Company (LLC)', 'tax_id' => '82-4910372', 'tax_id_type' => 'EIN',
+            'industry' => 'Manufacturing', 'website' => 'https://morganfreight.com',
+            'street' => '3600 Brighton Blvd', 'city' => 'Denver', 'state' => 'CO', 'zip' => '80216', 'country' => 'US',
+            'shipper_verification_status' => $morgan->shipper_verification_status ?: 'incomplete',
+            'shipper_notif_email' => $morgan->shipper_notif_email ?? [
+                'carrier_assigned' => true, 'pickup_confirmed' => true, 'in_transit' => true, 'delivered' => true,
+                'disputed' => true, 'weekly_summary' => false, 'marketing' => false,
+            ],
+            'shipper_notif_sms' => $morgan->shipper_notif_sms ?? [
+                'carrier_assigned' => false, 'pickup_confirmed' => true, 'in_transit' => false, 'delivered' => true, 'disputed' => true,
+            ],
+        ])->save();
+        \App\Models\PersonIdentity::firstOrCreate(['user_id' => $shipper->id], [
+            'legal_first_name' => 'Alex', 'legal_last_name' => 'Morgan', 'phone' => '+1 (555) 248-3910',
+            'street' => '3600 Brighton Blvd', 'city' => 'Denver', 'state' => 'CO', 'zip' => '80216', 'country' => 'US',
+        ]);
 
         // ── Helper ────────────────────────────────────────────────────────
         // Adds a single GPS ping to a shipment if it has none yet

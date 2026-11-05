@@ -13,7 +13,6 @@ class ContractController extends Controller
 {
     private function shape(Contract $c): array
     {
-        $profile = $c->carrier->carrierProfile;
         $parts   = explode(' ', $c->carrier->name);
         $avatar  = strtoupper(substr($parts[0], 0, 1) . (isset($parts[1]) ? substr($parts[1], 0, 1) : ''));
 
@@ -21,7 +20,7 @@ class ContractController extends Controller
             'id'              => $c->id,
             'carrier_id'      => $c->carrier_id,
             'carrier'         => $c->carrier->name,
-            'carrier_company' => $profile?->company_name ?? '',
+            'carrier_company' => $c->carrier->name,
             'carrier_avatar'  => $avatar,
             'rate_type'       => $c->rate_type,
             'rate'            => '$' . number_format($c->rate, 2),
@@ -45,7 +44,7 @@ class ContractController extends Controller
     // ── GET /contracts ────────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $query = Contract::with('carrier.carrierProfile')
+        $query = Contract::with('carrier')
             ->where('shipper_id', $request->user()->current_org_id);
 
         if ($request->filled('status')) {
@@ -90,7 +89,7 @@ class ContractController extends Controller
             'shipments_under'=> 0,
         ]);
 
-        $contract->load('carrier.carrierProfile');
+        $contract->load('carrier');
 
         return response()->json(['data' => $this->shape($contract)], 201);
     }
@@ -106,7 +105,7 @@ class ContractController extends Controller
         ]);
 
         $contract->update($validated);
-        $contract->load('carrier.carrierProfile');
+        $contract->load('carrier');
 
         return response()->json(['data' => $this->shape($contract)]);
     }

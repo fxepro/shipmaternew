@@ -180,11 +180,8 @@ class PaymentsController extends Controller
 
     private function connectedAccount(?Organization $org): ?string
     {
-        if (!$org) return null;
-        if ($org->stripe_connect_id) return $org->stripe_connect_id;
-        if ($org->type !== 'carrier') return null;
-        $profile = User::find($org->owner_id)?->carrierProfile;
-        return $profile?->stripe_account_id ?: null;
+        // Carriers and factors are paid to the company's connected account
+        return $org?->stripe_connect_id ?: null;
     }
 
     /** Preload the shipments and freight jobs behind a page of payments */

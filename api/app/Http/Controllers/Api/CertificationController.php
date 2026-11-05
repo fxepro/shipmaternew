@@ -46,15 +46,16 @@ class CertificationController extends Controller
             'certification_keys.*' => ['string'],
         ]);
 
-        $profile = $user->carrierProfile()->firstOrCreate(['user_id' => $user->id]);
+        // Certifications belong to the carrier company (owner or staff)
+        $org = \App\Services\PersonChecks::companyOf($user, 'carrier');
+        abort_unless($org, 422, 'You are not part of a carrier company.');
+        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can change the company certifications.');
         $ids = Certification::whereIn('key', $validated['certification_keys'])->pluck('id');
-        $profile->certifications()->sync($ids);
-
-        $profile->load('certifications');
+        $org->certifications()->sync($ids);
 
         return response()->json([
             'data' => [
-                'certification_keys' => $profile->certifications->pluck('key')->toArray(),
+                'certification_keys' => $org->certifications()->pluck('key')->toArray(),
             ],
         ]);
     }

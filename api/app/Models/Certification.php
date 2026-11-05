@@ -28,9 +28,4 @@ class Certification extends Model
     {
         return $this->hasMany(Certification::class, 'parent_id')->orderBy('sort_order');
     }
-
-    public function carrierProfiles(): BelongsToMany
-    {
-        return $this->belongsToMany(CarrierProfile::class, 'carrier_profile_certifications');
-    }
 }

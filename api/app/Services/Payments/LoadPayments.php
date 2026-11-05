@@ -336,11 +336,8 @@ class LoadPayments
     private function carrierAccount(LoadPayment $p): ?string
     {
         $org = $p->carrier_id ? Organization::find($p->carrier_id) : null;
-        if ($org?->stripe_connect_id) return $org->stripe_connect_id;
 
-        $profile = $org?->carrierProfile;
-
-        return $profile?->stripe_account_id ?: null;
+        return $org?->stripe_connect_id ?: null;
     }
 
     private function intent(LoadPayment $p, PaymentMethod $pm, bool $manual): array

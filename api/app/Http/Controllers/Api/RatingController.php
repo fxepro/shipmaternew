@@ -3,11 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\CarrierProfile;
 use App\Models\FreightJob;
 use App\Models\Organization;
 use App\Models\Rating;
-use App\Models\ShipperProfile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -109,10 +107,7 @@ class RatingController extends Controller
         ];
     }
 
-    /**
-     * After a carrier-rated-by-shipper rating, update the carrier profile avg.
-     * After a shipper-rated-by-carrier rating, update the shipper profile avg.
-     */
+    /** Keep the rated company's average and count in step */
     private function recalculate(string $raterType, int $rateeOrgId): void
     {
         $agg = Rating::where('ratee_id', $rateeOrgId)
@@ -124,18 +119,9 @@ class RatingController extends Controller
 
         if (! $agg) return;
 
-        if ($raterType === 'shipper') {
-            // Shipper rated carrier → update carrier profile
-            CarrierProfile::where('org_id', $rateeOrgId)->update([
-                'rating'        => $agg->avg_rating,
-                'total_ratings' => $agg->total,
-            ]);
-        } else {
-            // Carrier rated shipper → update shipper profile
-            ShipperProfile::where('org_id', $rateeOrgId)->update([
-                'rating'        => $agg->avg_rating,
-                'total_ratings' => $agg->total,
-            ]);
-        }
+        Organization::whereKey($rateeOrgId)->update([
+            'rating'        => $agg->avg_rating,
+            'total_ratings' => $agg->total,
+        ]);
     }
 }

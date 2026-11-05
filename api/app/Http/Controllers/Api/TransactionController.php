@@ -12,7 +12,7 @@ class TransactionController extends Controller
     // ── GET /transactions ─────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $rows = Transaction::with(['carrier.carrierProfile', 'paymentMethod', 'user'])
+        $rows = Transaction::with(['carrier', 'paymentMethod', 'user'])
             ->where('shipper_id', $request->user()->current_org_id)
             ->orderByDesc('created_at')
             ->get()
@@ -36,7 +36,7 @@ class TransactionController extends Controller
                     'carrier_id'     => $t->carrier_id,
                     'user_id'        => $t->user_id,
                     'carrier'        => $t->user?->name ?? $name,
-                    'carrier_company'=> $t->carrier->carrierProfile?->company_name ?? $name,
+                    'carrier_company'=> $t->carrier?->name ?? $name,
                     'carrier_avatar' => $avatar,
                     'amount'         => $t->amount,
                     'date'           => $t->created_at->format('Y-m-d'),

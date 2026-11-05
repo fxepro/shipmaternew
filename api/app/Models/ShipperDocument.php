@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ShipperDocument extends Model
 {
     protected $fillable = [
-        'shipper_profile_id',
+        'shipper_id',
         'type', 'name', 'url', 'mime_type', 'size',
         'verified_by', 'verified_at', 'verification_notes',
     ];
@@ -35,9 +35,9 @@ class ShipperDocument extends Model
         }
     }
 
-    public function shipperProfile(): BelongsTo
+    public function shipper(): BelongsTo
     {
-        return $this->belongsTo(ShipperProfile::class);
+        return $this->belongsTo(Organization::class, 'shipper_id');
     }
 
     public function verifier(): BelongsTo

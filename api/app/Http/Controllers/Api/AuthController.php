@@ -4,10 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
-use App\Models\CarrierProfile;
 use App\Models\Organization;
 use App\Models\OrgMember;
-use App\Models\ShipperProfile;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
@@ -78,23 +76,16 @@ class AuthController extends Controller
             $user->setRelation('currentOrg', $org);
         }
 
-        // Carriers get an auto-created profile
-        if ($user->role === 'carrier') {
-            CarrierProfile::create([
-                'user_id'      => $user->id,
-                'org_id'       => $user->current_org_id,
-                'company_name' => $invitation ? null : $companyName,
-            ]);
+        // A new carrier company starts as an owner-operator; a new shipper company's business verification starts incomplete
+        if (isset($org) && $org->type === 'carrier') {
+            $org->update(['carrier_type' => 'sole_proprietor']);
+        }
+        if (isset($org) && $org->type === 'shipper') {
+            $org->update(['shipper_verification_status' => 'incomplete']);
         }
 
-        // Shippers get a profile shell so verification status can attach (company owners only)
-        if ($user->role === 'shipper' && !$invitation) {
-            ShipperProfile::create([
-                'user_id'      => $user->id,
-                'org_id'       => $user->current_org_id,
-                'company_name' => $companyName,
-            ]);
-        }
+        // The person's legal name starts as the name they signed up with
+        \App\Services\PersonChecks::identity($user)->fill(\App\Services\PersonChecks::splitName($user->name))->save();
 
         \App\Services\PersonChecks::refresh($user);
 
@@ -107,7 +98,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->load('currentOrg', 'carrierProfile');
+        $user->load('currentOrg');
         $token = $user->createToken('web')->plainTextToken;
 
         return response()->json([
@@ -140,7 +131,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->load('currentOrg', 'carrierProfile');
+        $user->load('currentOrg');
 
         $user->tokens()->delete();
         $token = $user->createToken('web')->plainTextToken;
@@ -166,7 +157,7 @@ class AuthController extends Controller
     public function user(Request $request): JsonResponse
     {
         $user = $request->user();
-        $user->load('currentOrg', 'carrierProfile');
+        $user->load('currentOrg');
 
         return response()->json(['data' => new UserResource($user)]);
     }
@@ -193,15 +184,15 @@ class AuthController extends Controller
             $user->markEmailAsVerified();
             event(new Verified($user));
 
-            if ($user->isShipper() && $user->shipperProfile) {
-                $profile = $user->shipperProfile;
+            // The owner's verified email counts toward their shipper company's business verification
+            foreach (Organization::where('type', 'shipper')->where('owner_id', $user->id)->get() as $org) {
                 $status = 'incomplete';
-                if ($profile->company_name && $profile->ein) {
-                    $status = $profile->ein_verified_at ? 'verified' : (
-                        $profile->verification_status === 'submitted' ? 'submitted' : 'incomplete'
+                if ($org->name && $org->tax_id) {
+                    $status = $org->shipper_ein_verified_at ? 'verified' : (
+                        $org->shipper_verification_status === 'submitted' ? 'submitted' : 'incomplete'
                     );
                 }
-                $profile->update(['verification_status' => $status]);
+                $org->update(['shipper_verification_status' => $status]);
             }
         }
 

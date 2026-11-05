@@ -108,7 +108,7 @@ class FreightJobOfferController extends Controller
         abort_unless($request->user()->isShipperOf($job), 403);
 
         $offers = $job->offers()
-            ->with('carrier.carrierProfile')
+            ->with('carrier')
             ->whereIn('status', ['pending', 'accepted', 'rejected'])
             ->get();
 
@@ -138,7 +138,7 @@ class FreightJobOfferController extends Controller
         $job->addPerson($offer->carrier_id, $offer->user_id);
         app(\App\Services\Payments\LoadPayments::class)->schedule('freight_job', $job);
 
-        $offer->load('carrier.carrierProfile');
+        $offer->load('carrier');
 
         return response()->json(['data' => $this->shape($offer)]);
     }
@@ -178,7 +178,7 @@ class FreightJobOfferController extends Controller
         $uid = $request->user()->current_org_id;   // the shipper company
 
         $offers = FreightJobOffer::with([
-            'carrier.carrierProfile',
+            'carrier',
             'freightJob' => fn($q) => $q->where('shipper_id', $uid)->withCount('stops'),
         ])
             ->whereHas('freightJob', fn($q) => $q->where('shipper_id', $uid))
@@ -243,7 +243,6 @@ class FreightJobOfferController extends Controller
     private function shape(FreightJobOffer $offer): array
     {
         $carrier = $offer->carrier;
-        $profile = $carrier?->carrierProfile;
 
         return [
             'id'             => $offer->id,
@@ -251,8 +250,8 @@ class FreightJobOfferController extends Controller
             'carrier_id'     => $offer->carrier_id,
             'user_id'        => $offer->user_id,
             'carrier_name'   => PersonChecks::companyName($carrier) ?? '',
-            'carrier_rating' => (float) ($profile?->rating ?? 5.0),
-            'carrier_dot'    => (bool)  ($profile?->dot_verified ?? false),
+            'carrier_rating' => (float) ($carrier?->rating ?? 5.0),
+            'carrier_dot'    => (bool)  $carrier?->carrier_dot_verified,
             'rate_type'      => $offer->rate_type ?? 'flat',
             'rate_value'     => $offer->rate_value !== null ? (float) $offer->rate_value : null,
             'amount'         => (float) $offer->amount,

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\CarrierProfile;
 use App\Models\OrgMember;
 use App\Models\PersonCredential;
 use App\Models\PersonIdentity;
@@ -114,12 +113,6 @@ class AdminPeopleController extends Controller
             'verified_by'         => $verified ? $request->user()->id : null,
         ]);
 
-        // Carrier screens still read identity from the carrier profile
-        CarrierProfile::where('user_id', $user->id)->first()?->updateQuietly([
-            'identity_verified'    => $verified,
-            'identity_verified_at' => $verified ? now() : null,
-        ]);
-
         PersonChecks::refresh($user);
 
         return response()->json(['message' => $verified ? 'Identity verified.' : 'Identity marked failed.']);
@@ -147,7 +140,6 @@ class AdminPeopleController extends Controller
             'background_check_notes'     => $data['notes'] ?? null,
             'background_checked_at'      => now(),
         ]);
-        CarrierProfile::where('user_id', $user->id)->first()?->updateQuietly(['background_check_status' => PersonChecks::backgroundForProfile($data['result'])]);
 
         PersonChecks::refresh($user);
 
@@ -242,13 +234,6 @@ class AdminPeopleController extends Controller
             'notes'       => $data['notes'] ?? null,
             'reviewed_at' => now(),
             'reviewed_by' => $request->user()->id,
-        ]);
-
-        // Carrier screens and access still read the carrier profile's status
-        CarrierProfile::where('user_id', $user->id)->first()?->updateQuietly([
-            'verification_status'            => $status,
-            'verification_notes'             => $data['notes'] ?? null,
-            'verification_status_updated_at' => now(),
         ]);
 
         return response()->json(['message' => "Person {$status}.", 'status' => $status]);

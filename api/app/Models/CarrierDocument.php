@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CarrierDocument extends Model
 {
     protected $fillable = [
-        'carrier_profile_id', 'carrier_vehicle_id',
+        'carrier_id', 'carrier_vehicle_id',
         'type', 'name', 'url', 'mime_type', 'size',
         'policy_number', 'insurer_name', 'coverage_amount',
         'effective_date', 'expiry_date',
@@ -25,9 +25,9 @@ class CarrierDocument extends Model
         ];
     }
 
-    public function carrierProfile(): BelongsTo
+    public function carrier(): BelongsTo
     {
-        return $this->belongsTo(CarrierProfile::class);
+        return $this->belongsTo(Organization::class, 'carrier_id');
     }
 
     public function vehicle(): BelongsTo

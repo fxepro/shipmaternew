@@ -33,7 +33,7 @@ class PaymentsDemoSeeder extends Seeder
         $card = null;
         if (config('payments.driver') === 'fake') {
             // Local test mode only: treat the demo carrier and factor as Stripe-connected
-            $jordan->carrierProfile?->update(['stripe_account_id' => 'acct_fake_jordan', 'stripe_account_status' => 'verified']);
+            if (!$carrier->stripe_connect_id) $carrier->update(['stripe_connect_id' => 'acct_fake_jordan', 'stripe_connect_status' => 'verified']);
             Organization::where('type', 'factor')->whereNull('stripe_connect_id')->update(['stripe_connect_id' => 'acct_fake_factor']);
             $card = PaymentMethod::firstOrCreate(['stripe_pm_id' => 'pm_fake_card_4242'], [
                 'user_id' => $alex->id, 'org_id' => $shipper->id, 'type' => 'card', 'brand' => 'visa', 'last4' => '4242',
@@ -54,7 +54,7 @@ class PaymentsDemoSeeder extends Seeder
             ['Art gallery installation',       'paid',        ['paid_at' => now()->subDays(5)]],
         ];
 
-        $carrierAccount = $jordan->carrierProfile?->fresh()?->stripe_account_id;
+        $carrierAccount = $carrier->fresh()->stripe_connect_id;
         foreach ($plan as [$title, $status, $extra]) {
             $s = $shipments->get($title);
             if (!$s) continue;

@@ -141,14 +141,13 @@ class PaymentService
             $shipment->update(['payment_status' => 'captured']);
 
             // 2. Transfer net to carrier (requires carrier to have a Connect account)
-            $carrier        = $shipment->carrier;
-            $carrierProfile = $carrier?->carrierProfile;
+            $carrier = $shipment->carrier;   // the carrier company
 
-            if ($netCents > 0 && $carrierProfile?->stripe_account_id) {
+            if ($netCents > 0 && $carrier?->stripe_connect_id) {
                 $transfer = $this->stripe->transfers->create([
                     'amount'             => $netCents,
                     'currency'           => 'usd',
-                    'destination'        => $carrierProfile->stripe_account_id,
+                    'destination'        => $carrier->stripe_connect_id,
                     'source_transaction' => $intent->latest_charge,
                     'metadata'           => [
                         'shipment_id' => (string) $shipment->id,

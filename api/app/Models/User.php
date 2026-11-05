@@ -57,18 +57,6 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Organization::class, 'owner_id');
     }
 
-    // ── Profile relationships ──────────────────────────────────────────────
-
-    public function carrierProfile(): HasOne
-    {
-        return $this->hasOne(CarrierProfile::class);
-    }
-
-    public function shipperProfile(): HasOne
-    {
-        return $this->hasOne(ShipperProfile::class);
-    }
-
     // ── Person checks (docs/people-types-and-checks.md) ────────────────────
 
     public function personVerification(): HasOne

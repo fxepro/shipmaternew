@@ -72,15 +72,14 @@ class ShipmentResource extends JsonResource
                     'id'              => $this->carrier->id,
                     'name'            => PersonChecks::companyName($this->carrier),
                     'email'           => $this->carrier->email,
-                    'carrier_profile' => $this->carrier->relationLoaded('carrierProfile') && $this->carrier->carrierProfile
-                        ? [
-                            'company_name'     => $this->carrier->carrierProfile->company_name,
-                            'dot_number'       => $this->carrier->carrierProfile->dot_number,
-                            'dot_verified'     => $this->carrier->carrierProfile->dot_verified,
-                            'rating'           => $this->carrier->carrierProfile->rating ? (float) $this->carrier->carrierProfile->rating : null,
-                            'total_deliveries' => $this->carrier->carrierProfile->total_deliveries,
-                        ]
-                        : null,
+                    // The carrier company's public details
+                    'carrier_profile' => [
+                        'company_name'     => $this->carrier->name,
+                        'dot_number'       => $this->carrier->carrier_dot_number,
+                        'dot_verified'     => (bool) $this->carrier->carrier_dot_verified,
+                        'rating'           => $this->carrier->rating ? (float) $this->carrier->rating : null,
+                        'total_deliveries' => (int) $this->carrier->carrier_total_deliveries,
+                    ],
                 ]
             ),
             'people' => $this->when(
@@ -114,8 +113,8 @@ class ShipmentResource extends JsonResource
                     'carrier_id'              => $bid->carrier_id,
                     'user_id'                 => $bid->user_id,
                     'carrier_name'            => PersonChecks::companyName($bid->carrier) ?? '',
-                    'carrier_rating'          => (float) ($bid->carrier?->carrierProfile?->rating ?? 5.0),
-                    'carrier_dot_verified'    => (bool) ($bid->carrier?->carrierProfile?->dot_verified ?? false),
+                    'carrier_rating'          => (float) ($bid->carrier?->rating ?? 5.0),
+                    'carrier_dot_verified'    => (bool) $bid->carrier?->carrier_dot_verified,
                     'amount'                  => (float) $bid->amount,
                     'estimated_pickup_date'   => $bid->estimated_pickup_date?->toDateString(),
                     'estimated_delivery_date' => $bid->estimated_delivery_date?->toDateString(),

@@ -15,6 +15,8 @@ class PersonVerification extends Model
         'user_id', 'status', 'notes', 'reviewed_at', 'reviewed_by',
         'background_check_status', 'background_check_reference', 'background_check_notes', 'background_checked_at',
         'bg_provider', 'bg_candidate_id', 'complete_check_status', 'check_level', 'check_level_at', 'complete_expires_at',
+        'bg_report_id', 'clearinghouse_query_id', 'clearinghouse_query_status', 'clearinghouse_queried_at',
+        'clearinghouse_completed_at', 'clearinghouse_result_data',
     ];
 
     protected function casts(): array
@@ -24,6 +26,9 @@ class PersonVerification extends Model
             'background_checked_at' => 'datetime',
             'check_level_at'        => 'datetime',
             'complete_expires_at'   => 'datetime',
+            'clearinghouse_queried_at'   => 'datetime',
+            'clearinghouse_completed_at' => 'datetime',
+            'clearinghouse_result_data'  => 'json',
         ];
     }
 

@@ -32,10 +32,10 @@ class UserResource extends JsonResource
             ] : null,
             'org_role' => $this->orgRole(),
 
-            // Carrier profile (for carrier orgs)
+            // The carrier company's public details (for carrier companies)
             'carrier_profile' => $this->when(
-                $this->isCarrier() && $this->relationLoaded('carrierProfile'),
-                fn () => new CarrierProfileResource($this->carrierProfile)
+                $org?->type === 'carrier',
+                fn () => new CarrierProfileResource($org)
             ),
         ];
     }

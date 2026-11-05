@@ -20,7 +20,7 @@ class BidController extends Controller
             abort(403);
         }
 
-        $bids = $shipment->bids()->with('carrier.carrierProfile')->latest()->get();
+        $bids = $shipment->bids()->with('carrier')->latest()->get();
 
         return response()->json(['data' => $bids->map(fn ($b) => $this->shape($b))]);
     }
@@ -51,7 +51,7 @@ class BidController extends Controller
             $shipment->update(['status' => 'bidding']);
         }
 
-        $bid->load('carrier.carrierProfile');
+        $bid->load('carrier');
 
         return response()->json(['data' => $this->shape($bid)], 201);
     }
@@ -75,7 +75,7 @@ class BidController extends Controller
         $shipment->addPerson($user->current_org_id, $user->id);
         $shipment->addPerson($bid->carrier_id, $bid->user_id);
 
-        $bid->load('carrier.carrierProfile');
+        $bid->load('carrier');
 
         return response()->json(['data' => $this->shape($bid)]);
     }
@@ -128,7 +128,6 @@ class BidController extends Controller
     private function shape(Bid $bid): array
     {
         $carrier = $bid->carrier;
-        $profile = $carrier?->carrierProfile;
 
         return [
             'id'                      => $bid->id,
@@ -136,8 +135,8 @@ class BidController extends Controller
             'carrier_id'              => $bid->carrier_id,
             'user_id'                 => $bid->user_id,
             'carrier_name'            => PersonChecks::companyName($carrier) ?? '',
-            'carrier_rating'          => (float) ($profile?->rating ?? 5.0),
-            'carrier_dot_verified'    => (bool) ($profile?->dot_verified ?? false),
+            'carrier_rating'          => (float) ($carrier?->rating ?? 5.0),
+            'carrier_dot_verified'    => (bool) $carrier?->carrier_dot_verified,
             'amount'                  => (float) $bid->amount,
             'estimated_pickup_date'   => $bid->estimated_pickup_date?->toDateString(),
             'estimated_delivery_date' => $bid->estimated_delivery_date?->toDateString(),

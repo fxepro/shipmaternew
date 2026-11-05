@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class CarrierVehicle extends Model
 {
     protected $fillable = [
-        'carrier_profile_id',
+        'carrier_id',
         'type', 'year', 'make', 'model', 'vin',
         'license_plate', 'license_plate_state',
         'gvwr', 'max_payload',
@@ -34,9 +34,9 @@ class CarrierVehicle extends Model
         ];
     }
 
-    public function carrierProfile(): BelongsTo
+    public function carrier(): BelongsTo
     {
-        return $this->belongsTo(CarrierProfile::class);
+        return $this->belongsTo(Organization::class, 'carrier_id');
     }
 
     public function documents(): HasMany

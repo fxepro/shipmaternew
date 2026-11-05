@@ -3,7 +3,6 @@
 namespace App\Services\Background;
 
 use App\Models\BackgroundCheck;
-use App\Models\CarrierProfile;
 use App\Models\CarrierVerification;
 use App\Models\Contract;
 use App\Models\OrgMember;
@@ -157,15 +156,14 @@ class BackgroundChecks
     public static function personData(User $user): array
     {
         $identity = PersonIdentity::where('user_id', $user->id)->first();
-        $profile  = CarrierProfile::where('user_id', $user->id)->first();
         $parts    = preg_split('/\s+/', trim((string) $user->name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         $first = $identity?->legal_first_name ?: ($parts[0] ?? '');
         $last  = $identity?->legal_last_name ?: (count($parts) > 1 ? $parts[count($parts) - 1] : '');
-        $dob   = $identity?->date_of_birth ?? $profile?->date_of_birth;
+        $dob   = $identity?->date_of_birth;
 
         if (!$first || !$last || !$dob) {
-            throw new \RuntimeException($profile
+            throw new \RuntimeException($user->isCarrier()
                 ? 'Complete your first name, last name, and date of birth in the Personal tab before running a background check.'
                 : 'Add your legal name and date of birth under Identity before running a background check.');
         }
@@ -176,7 +174,7 @@ class BackgroundChecks
 
         return [
             'first_name' => $first, 'last_name' => $last, 'email' => $user->email,
-            'dob' => $dob->format('Y-m-d'), 'state' => $identity?->state ?: $profile?->state,
+            'dob' => $dob->format('Y-m-d'), 'state' => $identity?->state,
         ];
     }
 
@@ -211,11 +209,10 @@ class BackgroundChecks
             ]);
 
             // The owner's paid basic level is what the carrier onboarding steps check for
-            if ($check->coversBasic() && $profile = CarrierProfile::where('user_id', $subject->id)->first()) {
-                $profile->update(array_filter([
-                    'onboarding_fee_paid' => true,
-                    'verification_status' => $profile->verification_status === 'approved' ? null : 'pending_background',
-                ], fn ($v) => $v !== null));
+            if ($check->coversBasic() && ($carrier = self::ownedCarrier($subject))) {
+                $carrier->update(['carrier_onboarding_fee_paid' => true]);
+                $pv = PersonChecks::verification($subject);
+                if (!in_array($pv->status, ['approved', 'rejected'], true)) $pv->update(['status' => 'pending_background']);
             }
 
             try {
@@ -305,12 +302,18 @@ class BackgroundChecks
             ?? $q()->where('candidate_id', $event['candidate_id'])->latest('id')->first();
     }
 
-    /** Copy a check's state onto the person (and the carrier profile, for an owner), then their level */
+    /** The carrier company the person owns, if any */
+    private static function ownedCarrier(User $user): ?Organization
+    {
+        return Organization::where('type', 'carrier')->where('owner_id', $user->id)->first();
+    }
+
+    /** Copy a check's state onto the person, then their level */
     public static function apply(BackgroundCheck $check): void
     {
         $user    = $check->user;
         $pv      = PersonChecks::verification($user);
-        $profile = CarrierProfile::where('user_id', $user->id)->first();
+        $owner   = (bool) self::ownedCarrier($user);
         $s       = $check->status;
 
         if ($check->coversComplete()) {
@@ -318,37 +321,32 @@ class BackgroundChecks
         }
 
         if ($check->coversBasic()) {
-            if ($profile) {
-                // carrier_profiles.background_check_status: not_started | invitation_sent | pending | clear | consider | suspended
-                $profile->update(array_filter([
-                    'background_check_status'        => match ($s) { 'paid', 'expired' => 'not_started', default => $s },
-                    'bg_report_id'                   => $check->report_id ?? $profile->bg_report_id,
-                    'verification_status'            => match ($s) { 'clear' => 'approved', 'suspended' => 'rejected', 'consider' => 'pending_review', default => null },
-                    'verification_status_updated_at' => in_array($s, BackgroundCheck::FINISHED, true) ? now() : null,
-                ], fn ($v) => $v !== null));
+            $finished = in_array($s, BackgroundCheck::FINISHED, true);
+            // Person records use not_started | invitation_sent | pending | clear | consider | failed
+            $pv->update(array_filter([
+                'background_check_status'    => match ($s) { 'paid', 'expired' => 'not_started', 'suspended' => 'failed', default => $s },
+                'background_check_reference' => $check->report_id ?? $pv->background_check_reference,
+                'bg_report_id'               => $check->report_id ?? $pv->bg_report_id,
+                'background_checked_at'      => $finished ? now() : $pv->background_checked_at,
+                // The carrier owner's onboarding step is done once the check finishes; refresh() decides the rest
+                'status'                     => $owner && $finished && in_array($pv->status, ['pending_payment', 'pending_background'], true) ? 'incomplete' : null,
+            ], fn ($v) => $v !== null));
 
+            if ($owner) {
                 CarrierVerification::updateOrCreate(
-                    ['carrier_profile_id' => $profile->id, 'check_type' => 'background'],
+                    ['user_id' => $user->id, 'check_type' => 'background'],
                     [
                         'status'      => match ($s) { 'clear' => 'passed', 'suspended' => 'failed', 'consider' => 'manual_review', default => 'pending' },
                         'external_id' => $check->report_id ?? $check->candidate_id,
                         'result_data' => ['provider' => $check->provider, 'kind' => $check->kind, 'status' => $s, 'report_id' => $check->report_id, 'completed_at' => $check->completed_at?->toISOString()],
                     ]
                 );
-            } else {
-                // Person records use not_started | invitation_sent | pending | clear | consider | failed
-                $pv->update([
-                    'background_check_status'    => match ($s) { 'paid', 'expired' => 'not_started', 'suspended' => 'failed', default => $s },
-                    'background_check_reference' => $check->report_id ?? $pv->background_check_reference,
-                    'background_checked_at'      => in_array($s, BackgroundCheck::FINISHED, true) ? now() : $pv->background_checked_at,
-                ]);
             }
         }
 
-        // Not passed after the adverse-action process, at either level
-        if ($s === 'suspended' && $check->kind === 'upgrade') {
-            if ($profile) $profile->update(['verification_status' => 'rejected', 'verification_status_updated_at' => now()]);
-            else $pv->update(['status' => 'rejected', 'notes' => 'Did not pass the complete background check.']);
+        // Not passed after the adverse-action process: a carrier owner at either level, anyone at the complete level
+        if ($s === 'suspended' && ($owner || $check->kind === 'upgrade')) {
+            $pv->update(['status' => 'rejected', 'notes' => $check->kind === 'upgrade' ? 'Did not pass the complete background check.' : 'Did not pass the background check.']);
         }
 
         PersonChecks::refresh($user->fresh());
@@ -364,7 +362,7 @@ class BackgroundChecks
     public static function refreshLevel(User $user): ?string
     {
         $pv       = PersonChecks::verification($user);
-        $profile  = CarrierProfile::where('user_id', $user->id)->first();
+        $carrier  = self::ownedCarrier($user);
         $identity = PersonIdentity::where('user_id', $user->id)->first();
 
         $basic = $pv->backgroundPassed() && $identity?->status === 'verified';
@@ -373,10 +371,10 @@ class BackgroundChecks
             ->where('status', 'clear')->latest('completed_at')->first();
         $expires = $completeCheck?->completed_at?->copy()->addMonths(self::COMPLETE_VALID_MONTHS);
 
-        $needsClearinghouse = PersonChecks::membership($user)['role'] === 'driver' || (bool) $profile?->cdl_number;
+        $needsClearinghouse = PersonChecks::membership($user)['role'] === 'driver' || (bool) PersonChecks::credential($user->id, 'cdl')?->number;
         $clearinghouse = !$needsClearinghouse
             || PersonChecks::credentialState(PersonCredential::where('user_id', $user->id)->where('type', 'clearinghouse')->latest('id')->first()) === 'met';
-        $authority = !$profile || ($profile->operating_country ?? 'US') !== 'US' || $profile->dot_verified;
+        $authority = !$carrier || ($carrier->carrier_operating_country ?? 'US') !== 'US' || $carrier->carrier_dot_verified;
 
         $complete = $basic && $completeCheck && $expires->isFuture() && $clearinghouse && $authority;
         $level    = $complete ? 'complete' : ($basic ? 'basic' : null);

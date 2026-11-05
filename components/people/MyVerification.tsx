@@ -335,7 +335,7 @@ function CredentialsSection({ credentials, types, onSaved }: { credentials: Cred
                   <p className="text-xs text-[var(--color-text-faint)]">
                     {[c.number, c.class && `Class ${c.class}`, c.issuing_state, c.expires_at && `Expires ${c.expires_at}`, c.has_document && 'Document uploaded']
                       .filter(Boolean).join(' · ') || 'No details'}
-                    {c.source === 'carrier_profile' && ' · From your profile'}
+                    {(c.source === 'profile' || c.source === 'carrier_profile') && ' · From your profile'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -343,7 +343,7 @@ function CredentialsSection({ credentials, types, onSaved }: { credentials: Cred
                   {c.source === 'self' && (
                     <button onClick={() => edit(c)} title="Edit" className="text-[var(--color-text-faint)] hover:text-[var(--color-teal)]"><Pencil size={14} /></button>
                   )}
-                  {c.source === 'carrier_profile' && (
+                  {(c.source === 'profile' || c.source === 'carrier_profile') && (
                     <Link href="/carrier/profile" className="text-xs text-[var(--color-teal)] hover:underline">Edit in profile</Link>
                   )}
                   {!c.verified_at && c.source === 'self' && (

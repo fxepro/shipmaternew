@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\CarrierProfile;
 use App\Models\Organization;
 use App\Models\Shipment;
-use App\Models\ShipperProfile;
 use App\Models\User;
 use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  * Admin views of carrier and shipper companies (organizations) and their members.
  *
  * Company and person are approved separately, and each needs a clear background check first.
- * Until profiles are split by company (phase 2), company details are read from the owner's profile.
+ * Company details are columns on the organization (shipper_ and carrier_ columns for each type).
  */
 class AdminCompanyController extends Controller
 {
@@ -48,25 +46,20 @@ class AdminCompanyController extends Controller
             $query->where('name', 'ilike', "%{$data['q']}%");
         }
 
-        $orgs     = $query->limit(500)->get();
-        $profiles = [
-            'carrier' => $this->ownerProfiles($orgs->where('type', 'carrier'), 'carrier'),
-            'shipper' => $this->ownerProfiles($orgs->where('type', 'shipper'), 'shipper'),
-            'factor'  => collect(), // factors keep company details on the org
-        ];
+        $orgs = $query->limit(500)->get();
 
         return response()->json([
-            'data' => $orgs->map(function (Organization $o) use ($profiles) {
-                $p = $profiles[$o->type]->get($o->owner_id);
+            'data' => $orgs->map(function (Organization $o) {
+                $carrier = $o->type === 'carrier';
                 return [
                     'id'                      => $o->id,
-                    'name'                    => $p?->company_name ?: $o->name,
+                    'name'                    => $o->name,
                     'type'                    => $o->type,
                     'members'                 => $o->org_members_count,
                     'owner'                   => $o->owner?->only(['id', 'name', 'email']),
-                    'dot_number'              => $p?->dot_number ?? null,
-                    'mc_number'               => $p?->mc_number ?? null,
-                    'ein'                     => $p?->ein ?? ($o->type === 'factor' ? $o->tax_id : null),
+                    'dot_number'              => $carrier ? $o->carrier_dot_number : null,
+                    'mc_number'               => $carrier ? $o->carrier_mc_number : null,
+                    'ein'                     => $carrier ? null : $o->tax_id,
                     'verification_status'     => $o->verification_status,
                     'background_check_status' => $o->background_check_status,
                     'status'                  => $o->status,
@@ -85,12 +78,6 @@ class AdminCompanyController extends Controller
         $isCarrier = $org->type === 'carrier';
         $isFactor  = $org->type === 'factor';
 
-        $profile = match ($org->type) {
-            'carrier' => CarrierProfile::where('user_id', $org->owner_id)->first(),
-            'shipper' => ShipperProfile::where('user_id', $org->owner_id)->first(),
-            default   => null,
-        };
-
         // Loads hold the company directly
         $partyColumn = $isCarrier ? 'carrier_id' : 'shipper_id';
         $shipments   = Shipment::where($partyColumn, $org->id);
@@ -99,22 +86,22 @@ class AdminCompanyController extends Controller
             'data' => [
                 'company' => [
                     'id'         => $org->id,
-                    'name'       => $profile?->company_name ?: $org->name,
+                    'name'       => $org->name,
                     'org_name'   => $org->name,
                     'type'       => $org->type,
                     'status'     => $org->status,
                     'plan'       => $org->plan,
-                    'phone'      => $org->phone ?? ($isCarrier ? $profile?->phone : $profile?->business_phone),
-                    'email'      => $org->email ?? ($isCarrier ? null : $profile?->business_email),
-                    'website'    => $org->website ?? ($isCarrier ? null : $profile?->website),
+                    'phone'      => $org->phone,
+                    'email'      => $org->email,
+                    'website'    => $org->website,
                     'created_at' => $org->created_at?->toISOString(),
                     'owner'      => $org->owner?->only(['id', 'name', 'email']),
                     'address'    => collect([$org->street, $org->city, $org->state, $org->zip])->filter()->implode(', ') ?: null,
-                    'tax_id'     => $isFactor ? $org->tax_id : null,
+                    'tax_id'     => $isCarrier ? null : $org->tax_id,
                     'stripe_mode'     => $org->stripe_mode,
                     'commission_rate' => $org->commission_rate,
                 ],
-                'company_profile' => $profile ? $this->companyFields($profile, $isCarrier) : null,
+                'company_profile' => $isFactor ? null : $this->companyFields($org, $isCarrier),
                 'verification' => [
                     'status'               => $org->verification_status,
                     'notes'                => $org->verification_notes,
@@ -126,11 +113,11 @@ class AdminCompanyController extends Controller
                     'background_checked_at'=> $org->background_checked_at?->toISOString(),
                 ],
                 'documents' => $isFactor ? [] : ($isCarrier
-                    ? DB::table('carrier_documents')->where('org_id', $org->id)->orderByDesc('created_at')
+                    ? DB::table('carrier_documents')->where('carrier_id', $org->id)->orderByDesc('created_at')
                         ->get(['id', 'type', 'name', 'url', 'expiry_date', 'verified_at', 'created_at'])
-                    : ($profile ? DB::table('shipper_documents')->where('shipper_profile_id', $profile->id)->orderByDesc('created_at')
+                    : DB::table('shipper_documents')->where('shipper_id', $org->id)->orderByDesc('created_at')
                         ->get(['id', 'type', 'name', 'url', 'verified_at', 'created_at'])
-                        ->map(fn ($d) => tap($d, fn ($d) => $d->url = \App\Models\ShipperDocument::fileUrl($d->url))) : [])),
+                        ->map(fn ($d) => tap($d, fn ($d) => $d->url = \App\Models\ShipperDocument::fileUrl($d->url)))),
                 'members' => $org->orgMembers->filter(fn ($m) => $m->user)->map(function ($m) use ($org) {
                     $role      = $m->user_id === $org->owner_id ? 'owner' : $m->role;
                     $checklist = PersonChecks::checklist($m->user, ['org' => $org, 'type' => $org->type, 'role' => $role]);
@@ -155,7 +142,7 @@ class AdminCompanyController extends Controller
                     'value'     => (float) (clone $shipments)->where('status', 'delivered')->sum('agreed_cost'),
                     'bids'      => $isCarrier ? DB::table('bids')->where('carrier_id', $org->id)->count() : null,
                 ],
-                'tabs' => $isFactor ? null : $this->tabs($org, $profile, $isCarrier),
+                'tabs' => $isFactor ? null : $this->tabs($org, $isCarrier),
                 'recent_shipments' => (clone $shipments)->latest()->limit(10)
                     ->get(['id', 'item_description', 'status', 'pickup_city', 'pickup_state', 'delivery_city', 'delivery_state', 'agreed_cost', 'created_at'])
                     ->map(fn (Shipment $s) => [
@@ -201,22 +188,17 @@ class AdminCompanyController extends Controller
             ], 422);
         }
 
-        $org->update([
-            'verification_status'     => $data['action'] === 'approve' ? 'approved' : 'rejected',
+        $approved = $data['action'] === 'approve';
+        $org->update(array_merge([
+            'verification_status'     => $approved ? 'approved' : 'rejected',
             'verification_notes'      => $data['notes'] ?? null,
             'verification_updated_at' => now(),
             'verification_updated_by' => $request->user()->id,
-        ]);
-
-        // Shipper screens still read business verification from the owner's profile (until phase 2)
-        if ($org->type === 'shipper' && $profile = ShipperProfile::where('user_id', $org->owner_id)->first()) {
-            $approved = $data['action'] === 'approve';
-            $profile->update([
-                'verification_status' => $approved ? 'verified' : 'incomplete',
-                'ein_verified_at'     => $approved ? now() : null,
-                'verification_notes'  => $data['notes'] ?? null,
-            ]);
-        }
+        ], $org->type === 'shipper' ? [
+            // The shipper's business verification shown on their own screens
+            'shipper_verification_status' => $approved ? 'verified' : 'incomplete',
+            'shipper_ein_verified_at'     => $approved ? now() : null,
+        ] : []));
 
         return response()->json(['message' => "Company {$org->verification_status}.", 'status' => $org->verification_status]);
     }
@@ -243,56 +225,52 @@ class AdminCompanyController extends Controller
         return response()->json(['message' => 'Background check recorded.', 'status' => $org->background_check_status]);
     }
 
-    /** Owner profiles keyed by user id, for the company-level fields they still hold. */
-    private function ownerProfiles($orgs, string $type)
+    /** Company fields for the admin page. Person fields (CDL, DOB, etc.) stay on the person. */
+    private function companyFields(Organization $o, bool $isCarrier): array
     {
-        $model = $type === 'carrier' ? CarrierProfile::class : ShipperProfile::class;
-        return $model::whereIn('user_id', $orgs->pluck('owner_id')->filter())->get()->keyBy('user_id');
-    }
+        $day = fn ($d) => $d?->toDateString();
 
-    /** Company-level fields from the owner's profile. Person fields (CDL, DOB, etc.) stay on the person. */
-    private function companyFields($p, bool $isCarrier): array
-    {
         if ($isCarrier) {
             return [
-                'company_name' => $p->company_name, 'carrier_type' => $p->carrier_type,
-                'dot_number' => $p->dot_number, 'dot_verified' => (bool) $p->dot_verified,
-                'mc_number' => $p->mc_number, 'mc_verified' => (bool) $p->mc_verified,
-                'operating_authority_type' => $p->operating_authority_type, 'operating_authority_number' => $p->operating_authority_number,
-                'insurance_verified' => (bool) $p->insurance_verified,
-                'auto_insurer_name' => $p->auto_insurer_name, 'auto_policy_number' => $p->auto_policy_number,
-                'auto_coverage_amount' => $p->auto_coverage_amount, 'auto_expiry_date' => $p->auto_expiry_date,
-                'cargo_insurer_name' => $p->cargo_insurer_name, 'cargo_policy_number' => $p->cargo_policy_number,
-                'cargo_coverage_amount' => $p->cargo_coverage_amount, 'cargo_expiry_date' => $p->cargo_expiry_date,
-                'stripe_account_status' => $p->stripe_account_status,
-                'street' => $p->street, 'city' => $p->city, 'state' => $p->state, 'zip' => $p->zip, 'country' => $p->country,
-                'rating' => $p->rating, 'total_deliveries' => $p->total_deliveries,
+                'company_name' => $o->name, 'carrier_type' => $o->carrier_type,
+                'dot_number' => $o->carrier_dot_number, 'dot_verified' => (bool) $o->carrier_dot_verified,
+                'mc_number' => $o->carrier_mc_number, 'mc_verified' => (bool) $o->carrier_mc_verified,
+                'operating_authority_type' => $o->carrier_operating_authority_type, 'operating_authority_number' => $o->carrier_operating_authority_number,
+                'insurance_verified' => (bool) $o->carrier_insurance_verified,
+                'auto_insurer_name' => $o->carrier_auto_insurer_name, 'auto_policy_number' => $o->carrier_auto_policy_number,
+                'auto_coverage_amount' => $o->carrier_auto_coverage_amount, 'auto_expiry_date' => $day($o->carrier_auto_expiry_date),
+                'cargo_insurer_name' => $o->carrier_cargo_insurer_name, 'cargo_policy_number' => $o->carrier_cargo_policy_number,
+                'cargo_coverage_amount' => $o->carrier_cargo_coverage_amount, 'cargo_expiry_date' => $day($o->carrier_cargo_expiry_date),
+                'stripe_account_status' => $o->stripe_connect_status ?? ($o->stripe_connect_id ? 'reviewing' : 'not_connected'),
+                'street' => $o->street, 'city' => $o->city, 'state' => $o->state, 'zip' => $o->zip, 'country' => $o->country,
+                'rating' => $o->rating, 'total_deliveries' => $o->carrier_total_deliveries,
             ];
         }
 
+        $iso = fn ($d) => $d?->toISOString();
         return [
-            'company_name' => $p->company_name, 'dba' => $p->dba, 'business_type' => $p->business_type,
-            'industry' => $p->industry, 'ein' => $p->ein, 'ein_verified_at' => $p->ein_verified_at,
-            'state_of_incorporation' => $p->state_of_incorporation, 'year_established' => $p->year_established,
-            'employee_count' => $p->employee_count, 'business_phone' => $p->business_phone, 'business_email' => $p->business_email,
-            'website' => $p->website, 'biz_street' => $p->biz_street, 'biz_city' => $p->biz_city,
-            'biz_state' => $p->biz_state, 'biz_zip' => $p->biz_zip,
-            'ops_same_as_biz' => (bool) $p->ops_same_as_biz, 'ops_street' => $p->ops_street, 'ops_city' => $p->ops_city,
-            'ops_state' => $p->ops_state, 'ops_zip' => $p->ops_zip,
-            'phone' => $p->phone, 'whatsapp' => $p->whatsapp,
-            'verification_status' => $p->verification_status, 'verification_submitted_at' => $p->verification_submitted_at,
-            'coi_url' => \App\Models\ShipperDocument::fileUrl($p->coi_url), 'coi_expiry' => $p->coi_expiry,
-            'hipaa_baa_url' => \App\Models\ShipperDocument::fileUrl($p->hipaa_baa_url), 'hipaa_baa_expiry' => $p->hipaa_baa_expiry,
-            'hazmat_reg_url' => \App\Models\ShipperDocument::fileUrl($p->hazmat_reg_url), 'hazmat_reg_expiry' => $p->hazmat_reg_expiry,
-            'biz_country' => $p->biz_country, 'ops_country' => $p->ops_country,
-            'sam_gov_number' => $p->sam_gov_number,
-            'bank_institution_name' => $p->bank_institution_name ?: $p->bank_name, 'bank_last4' => $p->bank_last4,
-            'bank_connected_at' => $p->plaid_connected_at,
-            'default_pickup_contact_name' => $p->default_pickup_contact_name, 'default_pickup_contact_phone' => $p->default_pickup_contact_phone,
-            'internal_ref_format' => $p->internal_ref_format, 'preferred_categories' => $p->preferred_categories ?? [],
-            'notif_email' => $this->enabledKeys($p->notif_email), 'notif_sms' => $this->enabledKeys($p->notif_sms),
-            'notif_recipients' => collect($p->notif_recipients ?? [])->map(fn ($r) => is_array($r) ? ($r['email'] ?? $r['name'] ?? json_encode($r)) : (string) $r)->values()->all(),
-            'rating' => $p->rating, 'total_ratings' => $p->total_ratings,
+            'company_name' => $o->name, 'dba' => $o->dba, 'business_type' => $o->business_type,
+            'industry' => $o->industry, 'ein' => $o->tax_id, 'ein_verified_at' => $iso($o->shipper_ein_verified_at),
+            'state_of_incorporation' => $o->state_of_incorporation, 'year_established' => $o->year_established,
+            'employee_count' => $o->employee_count, 'business_phone' => $o->phone, 'business_email' => $o->email,
+            'website' => $o->website, 'biz_street' => $o->street, 'biz_city' => $o->city,
+            'biz_state' => $o->state, 'biz_zip' => $o->zip,
+            'ops_same_as_biz' => (bool) $o->ops_same_as_biz, 'ops_street' => $o->ops_street, 'ops_city' => $o->ops_city,
+            'ops_state' => $o->ops_state, 'ops_zip' => $o->ops_zip,
+            'phone' => $o->phone, 'whatsapp' => $o->whatsapp,
+            'verification_status' => $o->shipper_verification_status, 'verification_submitted_at' => $iso($o->verification_submitted_at),
+            'coi_url' => \App\Models\ShipperDocument::fileUrl($o->shipper_coi_url), 'coi_expiry' => $day($o->shipper_coi_expiry),
+            'hipaa_baa_url' => \App\Models\ShipperDocument::fileUrl($o->shipper_hipaa_baa_url), 'hipaa_baa_expiry' => $day($o->shipper_hipaa_baa_expiry),
+            'hazmat_reg_url' => \App\Models\ShipperDocument::fileUrl($o->shipper_hazmat_reg_url), 'hazmat_reg_expiry' => $day($o->shipper_hazmat_reg_expiry),
+            'biz_country' => $o->country, 'ops_country' => $o->ops_country,
+            'sam_gov_number' => $o->sam_gov_number,
+            'bank_institution_name' => $o->shipper_bank_institution_name ?: $o->bank_name, 'bank_last4' => $o->bank_last4,
+            'bank_connected_at' => $iso($o->shipper_plaid_connected_at),
+            'default_pickup_contact_name' => $o->shipper_default_pickup_contact_name, 'default_pickup_contact_phone' => $o->shipper_default_pickup_contact_phone,
+            'internal_ref_format' => $o->shipper_internal_ref_format, 'preferred_categories' => $o->shipper_preferred_categories ?? [],
+            'notif_email' => $this->enabledKeys($o->shipper_notif_email), 'notif_sms' => $this->enabledKeys($o->shipper_notif_sms),
+            'notif_recipients' => collect($o->shipper_notif_recipients ?? [])->map(fn ($r) => is_array($r) ? ($r['email'] ?? $r['name'] ?? json_encode($r)) : (string) $r)->values()->all(),
+            'rating' => $o->rating, 'total_ratings' => $o->total_ratings,
         ];
     }
 
@@ -308,10 +286,9 @@ class AdminCompanyController extends Controller
      * Company-level data for the admin tabs: services, compliance, payment, subscription, team and loads.
      * Only display-safe values: no Plaid, Stripe or bank tokens, only names, last 4 digits and statuses.
      */
-    private function tabs(Organization $org, $profile, bool $isCarrier): array
+    private function tabs(Organization $org, bool $isCarrier): array
     {
         $services = $org->serviceTypes()->orderBy('name')->pluck('name');
-        if ($isCarrier && $profile) $services = $services->merge($profile->serviceTypes()->pluck('name'))->unique()->sort()->values();
 
         $names = fn ($ids) => DB::table('organizations')->whereIn('id', $ids)->pluck('name', 'id');
 
@@ -323,14 +300,14 @@ class AdminCompanyController extends Controller
 
         return [
             'services'       => $services->values(),
-            'certifications' => $isCarrier && $profile ? $profile->certifications()->orderBy('name')->pluck('name') : [],
-            'vehicles'       => $isCarrier ? DB::table('carrier_vehicles')->where('org_id', $org->id)
+            'certifications' => $isCarrier ? $org->certifications()->orderBy('name')->pluck('name') : [],
+            'vehicles'       => $isCarrier ? DB::table('carrier_vehicles')->where('carrier_id', $org->id)
                 ->get(['id', 'type', 'year', 'make', 'model', 'license_plate', 'license_plate_state', 'max_payload', 'registration_expiry', 'is_primary']) : [],
             'payment' => [
                 'stripe_mode'        => $org->stripe_mode,
                 'stripe_connected'   => (bool) $org->stripe_connect_id,
                 'stripe_customer'    => (bool) $org->stripe_customer_id,
-                'payout_status'      => $isCarrier ? $profile?->stripe_account_status : null,
+                'payout_status'      => $isCarrier ? ($org->stripe_connect_status ?? ($org->stripe_connect_id ? 'reviewing' : 'not_connected')) : null,
                 'bank_name'          => $org->bank_name,
                 'bank_last4'         => $org->bank_last4,
                 'legal_name'         => $org->legal_name,

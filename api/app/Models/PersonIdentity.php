@@ -17,15 +17,18 @@ class PersonIdentity extends Model
         'street', 'unit', 'city', 'state', 'zip', 'country', 'phone',
         'id_type', 'id_number', 'id_number_last4', 'id_issuing_state', 'id_issuing_country', 'id_issue_date', 'id_expiry_date',
         'id_front_path', 'id_back_path', 'selfie_path', 'ssn_last4',
+        'photo_url', 'phone_country_code', 'phone_e164', 'whatsapp', 'whatsapp_country_code', 'national_id_type', 'national_id_number',
         'status', 'verification_method', 'provider_reference', 'failure_reason', 'submitted_at', 'verified_at', 'verified_by',
     ];
 
-    protected $hidden = ['id_number', 'id_front_path', 'id_back_path', 'selfie_path'];
+    protected $hidden = ['id_number', 'national_id_number', 'ssn_last4', 'id_front_path', 'id_back_path', 'selfie_path'];
 
     protected function casts(): array
     {
         return [
             'id_number'      => 'encrypted',
+            'national_id_number' => 'encrypted',
+            'ssn_last4'      => 'encrypted',
             'date_of_birth'  => 'date',
             'id_issue_date'  => 'date',
             'id_expiry_date' => 'date',

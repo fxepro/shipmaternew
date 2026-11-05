@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CarrierVerification;
+use App\Models\Organization;
 use App\Services\FmcsaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,14 +15,14 @@ class CarrierVerificationController extends Controller
 
     // ── POST /api/v1/carrier/verify/dot ──────────────────────────────────────
     // Lookup a USDOT number against the live FMCSA SAFER database.
-    // Saves dot_verified on the carrier profile if result is positive.
+    // Saves the result on the carrier company.
 
     public function verifyDot(Request $request): JsonResponse
     {
         abort_unless($request->user()->isCarrier(), 403);
 
-        $profile = $request->user()->carrierProfile;
-        if ($profile && ($profile->operating_country ?? 'US') !== 'US') {
+        $org = $this->carrier($request);
+        if (($org->carrier_operating_country ?? 'US') !== 'US') {
             return response()->json([
                 'status'  => 'not_applicable',
                 'message' => 'FMCSA DOT verification only applies to US-based carriers. For other countries, submit your operating authority documents for manual review.',
@@ -40,24 +41,19 @@ class CarrierVerificationController extends Controller
             ], 404);
         }
 
-        $profile = $request->user()->carrierProfile()->firstOrCreate(
-            ['user_id' => $request->user()->id]
-        );
-
-        // Update profile with verified status and auto-fill legal name if not set
-        $profile->update([
-            'dot_number'          => preg_replace('/\D/', '', $validated['dot_number']),
-            'usdot_number'        => preg_replace('/\D/', '', $validated['dot_number']),
-            'dot_verified'        => $result['allowed_to_operate'],
-            'company_name'        => $profile->company_name ?: ($result['legal_name'] ?? null),
-            'last_verification_at'=> now(),
+        // The company's DOT number and whether it is authorized; the legal name is filled in if missing
+        $org->update([
+            'carrier_dot_number'           => Organization::digits($validated['dot_number']),
+            'carrier_dot_verified'         => $result['allowed_to_operate'],
+            'carrier_last_verification_at' => now(),
         ]);
+        if (!$org->legal_name && !empty($result['legal_name'])) $org->update(['legal_name' => $result['legal_name']]);
 
         // Upsert verification record
         CarrierVerification::updateOrCreate(
             [
-                'carrier_profile_id' => $profile->id,
-                'check_type'         => 'fmcsa',
+                'carrier_id' => $org->id,
+                'check_type' => 'fmcsa',
             ],
             [
                 'status'      => $result['allowed_to_operate'] ? 'passed' : 'failed',
@@ -83,6 +79,7 @@ class CarrierVerificationController extends Controller
     public function verifyMc(Request $request): JsonResponse
     {
         abort_unless($request->user()->isCarrier(), 403);
+        $org = $this->carrier($request);
 
         $validated = $request->validate([
             'mc_number' => ['required', 'string', 'max:30'],
@@ -96,20 +93,16 @@ class CarrierVerificationController extends Controller
             ], 404);
         }
 
-        $profile = $request->user()->carrierProfile()->firstOrCreate(
-            ['user_id' => $request->user()->id]
-        );
-
-        $profile->update([
-            'mc_number'           => preg_replace('/\D/', '', $validated['mc_number']),
-            'mc_verified'         => $result['allowed_to_operate'],
-            'last_verification_at'=> now(),
+        $org->update([
+            'carrier_mc_number'            => Organization::digits($validated['mc_number']),
+            'carrier_mc_verified'          => $result['allowed_to_operate'],
+            'carrier_last_verification_at' => now(),
         ]);
 
         CarrierVerification::updateOrCreate(
             [
-                'carrier_profile_id' => $profile->id,
-                'check_type'         => 'mc',
+                'carrier_id' => $org->id,
+                'check_type' => 'mc',
             ],
             [
                 'status'      => $result['allowed_to_operate'] ? 'passed' : 'failed',
@@ -135,10 +128,12 @@ class CarrierVerificationController extends Controller
     {
         abort_unless($request->user()->isCarrier(), 403);
 
-        $profile = $request->user()->carrierProfile;
-        if (!$profile) return response()->json(['data' => []]);
+        // The company's checks (FMCSA, MC) and the person's own (identity, background)
+        $user = $request->user();
+        $org  = \App\Services\PersonChecks::companyOf($user, 'carrier');
 
-        $verifications = $profile->verifications()
+        $verifications = CarrierVerification::where(fn ($q) => $q->where('user_id', $user->id)
+                ->when($org, fn ($w) => $w->orWhere(fn ($c) => $c->where('carrier_id', $org->id)->whereIn('check_type', ['fmcsa', 'mc']))))
             ->orderByDesc('updated_at')
             ->get()
             ->map(fn($v) => [
@@ -150,5 +145,14 @@ class CarrierVerificationController extends Controller
             ]);
 
         return response()->json(['data' => $verifications]);
+    }
+
+    /** The carrier company; checks change company details, so only the owner or staff run them */
+    private function carrier(Request $request): Organization
+    {
+        $org = \App\Services\PersonChecks::companyOf($request->user(), 'carrier');
+        abort_unless($org, 422, 'You are not part of a carrier company.');
+        abort_unless($request->user()->isOrgAdmin(), 403, 'Only the owner or staff can verify the company.');
+        return $org;
     }
 }

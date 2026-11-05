@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CarrierVerification extends Model
 {
     protected $fillable = [
-        'carrier_profile_id', 'check_type', 'status',
+        'carrier_id', 'user_id', 'check_type', 'status',
         'result_data', 'external_id', 'admin_notes',
         'reviewed_by', 'reviewed_at', 'expires_at',
     ];
@@ -22,8 +22,15 @@ class CarrierVerification extends Model
         ];
     }
 
-    public function carrierProfile(): BelongsTo
+    /** Company checks (FMCSA, MC) */
+    public function carrier(): BelongsTo
     {
-        return $this->belongsTo(CarrierProfile::class);
+        return $this->belongsTo(Organization::class, 'carrier_id');
+    }
+
+    /** Person checks (identity, background) */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

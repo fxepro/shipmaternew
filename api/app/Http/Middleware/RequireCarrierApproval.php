@@ -34,8 +34,8 @@ class RequireCarrierApproval
                     }
                 }
             } else {
-                // No carrier company on record (older accounts): fall back to the carrier profile
-                $status = $user->carrierProfile?->verification_status ?? 'incomplete';
+                // No carrier company on record: the person's own approval decides
+                $status = PersonVerification::where('user_id', $user->id)->value('status') ?? 'incomplete';
                 if ($status !== 'approved') {
                     return $this->deny('Platform access requires carrier approval.', $status, 'carrier_not_approved');
                 }

@@ -86,7 +86,7 @@ class AdminController extends Controller
         if ($err = $this->requireAdmin($request)) return $err;
 
         $shipment->load([
-            'shipper.shipperProfile', 'carrier.carrierProfile', 'receiver',
+            'shipper', 'carrier', 'receiver',
             'contract', 'serviceType', 'bids.carrier', 'bids.user', 'people.user',
         ]);
 
@@ -136,25 +136,61 @@ class AdminController extends Controller
         ]);
     }
 
+    /** The admin user page's company and person fields (no SSN, ID numbers or tokens) */
+    private function profileSummary(User $user, Organization $org): array
+    {
+        $me  = \App\Models\PersonIdentity::where('user_id', $user->id)->first();
+        $pv  = \App\Models\PersonVerification::where('user_id', $user->id)->first();
+        $day = fn ($d) => $d?->toDateString();
+
+        if ($org->type === 'carrier') {
+            $cdl     = PersonChecks::credential($user->id, 'cdl');
+            $medical = PersonChecks::credential($user->id, 'dot_medical');
+            return [
+                'company_name' => $org->name, 'carrier_type' => $org->carrier_type, 'phone' => $me?->phone ?: $org->phone,
+                'dot_number' => $org->carrier_dot_number, 'dot_verified' => (bool) $org->carrier_dot_verified,
+                'mc_number' => $org->carrier_mc_number, 'mc_verified' => (bool) $org->carrier_mc_verified,
+                'rating' => $org->rating, 'total_deliveries' => $org->carrier_total_deliveries,
+                'verification_status' => $pv?->status, 'company_status' => $org->verification_status,
+                'identity_verified' => $me?->status === 'verified',
+                'background_check_status' => $pv?->background_check_status, 'clearinghouse_query_status' => $pv?->clearinghouse_query_status,
+                'insurance_verified' => (bool) $org->carrier_insurance_verified,
+                'cdl_class' => $cdl?->class, 'cdl_expiry_date' => $day($cdl?->expires_at), 'dot_medical_expiry' => $day($medical?->expires_at),
+                'onboarding_fee_paid' => (bool) $org->carrier_onboarding_fee_paid,
+                'stripe_account_status' => $org->stripe_connect_status ?? ($org->stripe_connect_id ? 'reviewing' : 'not_connected'),
+                'date_of_birth' => $day($me?->date_of_birth), 'city' => $me?->city, 'state' => $me?->state,
+            ];
+        }
+
+        return [
+            'company_name' => $org->name, 'dba' => $org->dba, 'business_type' => $org->business_type, 'industry' => $org->industry,
+            'business_phone' => $org->phone, 'business_email' => $org->email, 'website' => $org->website, 'rating' => $org->rating,
+            'phone' => $me?->phone,
+            'verification_status' => $org->shipper_verification_status, 'ein_verified_at' => $org->shipper_ein_verified_at?->toISOString(),
+            'email_verified_at' => $user->email_verified_at?->toISOString(), 'phone_verified_at' => $org->shipper_phone_verified_at?->toISOString(),
+            'coi_expiry' => $day($org->shipper_coi_expiry), 'bank_institution_name' => $org->shipper_bank_institution_name,
+            'bank_last4' => $org->bank_last4, 'plaid_connected_at' => $org->shipper_plaid_connected_at?->toISOString(),
+        ];
+    }
+
     /** Summary of a company on a shipment (no sensitive identity or bank fields). */
     private function companySummary(?Organization $org): ?array
     {
         if (!$org) return null;
-        $carrier = $org->relationLoaded('carrierProfile') ? $org->carrierProfile : null;
-        $shipper = $org->relationLoaded('shipperProfile') ? $org->shipperProfile : null;
+        $isCarrier = $org->type === 'carrier';
 
         return array_filter([
             'id'      => $org->id,
             'name'    => $org->name,
             'type'    => $org->type,
             'email'   => $org->email,
-            'company' => $carrier?->company_name ?? $shipper?->company_name,
-            'phone'   => $carrier?->phone ?? $shipper?->business_phone ?? $shipper?->phone ?? $org->phone,
-            'verification_status' => $carrier?->verification_status ?? $shipper?->verification_status,
-            'dot_number'   => $carrier?->dot_number,
-            'mc_number'    => $carrier?->mc_number,
-            'rating'       => $carrier?->rating ?? $shipper?->rating,
-            'stripe_account_status' => $carrier?->stripe_account_status,
+            'company' => $org->name,
+            'phone'   => $org->phone,
+            'verification_status' => $org->verification_status,
+            'dot_number'   => $isCarrier ? $org->carrier_dot_number : null,
+            'mc_number'    => $isCarrier ? $org->carrier_mc_number : null,
+            'rating'       => $org->rating,
+            'stripe_account_status' => $isCarrier ? ($org->stripe_connect_status ?? ($org->stripe_connect_id ? 'reviewing' : 'not_connected')) : null,
             'stripe_mode'  => $org->stripe_mode,
         ], fn ($v) => $v !== null);
     }
@@ -164,21 +200,12 @@ class AdminController extends Controller
     {
         if (!$user) return null;
 
-        $carrier = $user->relationLoaded('carrierProfile') ? $user->carrierProfile : null;
-        $shipper = $user->relationLoaded('shipperProfile') ? $user->shipperProfile : null;
-
         return array_filter([
             'id'      => $user->id,
             'name'    => $user->name,
             'email'   => $user->email,
             'role'    => $user->role,
-            'company' => $carrier?->company_name ?? $shipper?->company_name,
-            'phone'   => $carrier?->phone ?? $shipper?->business_phone ?? $shipper?->phone,
-            'verification_status' => $carrier?->verification_status ?? $shipper?->verification_status,
-            'dot_number'   => $carrier?->dot_number,
-            'mc_number'    => $carrier?->mc_number,
-            'rating'       => $carrier?->rating ?? $shipper?->rating,
-            'stripe_account_status' => $carrier?->stripe_account_status,
+            'phone'   => \App\Models\PersonIdentity::where('user_id', $user->id)->value('phone'),
         ], fn ($v) => $v !== null);
     }
 
@@ -229,25 +256,20 @@ class AdminController extends Controller
     {
         if ($err = $this->requireAdmin($request)) return $err;
 
-        $user->load(['currentOrg', 'carrierProfile', 'shipperProfile']);
+        $user->load(['currentOrg']);
 
-        $profile     = $user->carrierProfile ?? $user->shipperProfile;
-        $profileData = $profile ? $profile->attributesToArray() : null;
-        if ($profileData) {
-            // Secrets and full ID numbers stay out of the admin UI
-            unset($profileData['plaid_access_token'], $profileData['stripe_verification_data']);
-            if (!empty($profileData['national_id_number'])) {
-                $profileData['national_id_number'] = '•••• ' . substr((string) $profileData['national_id_number'], -4);
-            }
-        }
+        // The person's company and their own records; secrets and full ID numbers stay out of the admin UI
+        $company     = PersonChecks::membership($user)['org'];
+        $profileType = in_array($company?->type, ['carrier', 'shipper'], true) ? $company->type : null;
+        $profileData = $profileType ? $this->profileSummary($user, $company) : null;
 
         $documents = collect();
-        if ($user->carrierProfile) {
-            $documents = DB::table('carrier_documents')->where('carrier_profile_id', $user->carrierProfile->id)
+        if ($profileType === 'carrier') {
+            $documents = DB::table('carrier_documents')->where('carrier_id', $company->id)
                 ->orderByDesc('created_at')
                 ->get(['id', 'type', 'name', 'url', 'expiry_date', 'verified_at', 'created_at']);
-        } elseif ($user->shipperProfile) {
-            $documents = DB::table('shipper_documents')->where('shipper_profile_id', $user->shipperProfile->id)
+        } elseif ($profileType === 'shipper') {
+            $documents = DB::table('shipper_documents')->where('shipper_id', $company->id)
                 ->orderByDesc('created_at')
                 ->get(['id', 'type', 'name', 'url', 'verified_at', 'created_at']);
         }
@@ -298,7 +320,7 @@ class AdminController extends Controller
                     ->where('org_members.user_id', $user->id)
                     ->get(['organizations.id', 'organizations.name', 'organizations.type',
                            'org_members.role', 'org_members.status', 'org_members.joined_at']),
-                'profile_type' => $user->carrierProfile ? 'carrier' : ($user->shipperProfile ? 'shipper' : null),
+                'profile_type' => $profileType,
                 'profile'      => $profileData,
                 'documents'    => $documents,
                 'activity'     => [

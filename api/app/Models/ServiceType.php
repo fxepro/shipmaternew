@@ -36,11 +36,6 @@ class ServiceType extends Model
         return $this->hasMany(ServiceType::class, 'parent_id')->orderBy('sort_order');
     }
 
-    public function carrierProfiles(): BelongsToMany
-    {
-        return $this->belongsToMany(CarrierProfile::class, 'carrier_profile_service_types');
-    }
-
     public function isCategory(): bool
     {
         return $this->parent_id === null;

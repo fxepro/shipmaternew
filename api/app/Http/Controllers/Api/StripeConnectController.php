@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\CarrierProfile;
 use App\Services\Payments\StripeOnboarding;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,8 +74,6 @@ class StripeConnectController extends Controller
             return response()->json(['url' => $session->url]);
         }
 
-        $profile = $user->carrierProfile()->firstOrCreate(['user_id' => $user->id]);
-
         $session = $stripe->identity->verificationSessions->create([
             'type'       => 'document',
             'options'    => [
@@ -89,14 +86,16 @@ class StripeConnectController extends Controller
             ],
             'return_url' => config('app.frontend_url') . '/carrier/verification?identity=success',
             'metadata'   => [
-                'user_id'            => (string) $user->id,
-                'carrier_profile_id' => (string) $profile->id,
+                'user_id' => (string) $user->id,
+                'carrier' => '1',
             ],
         ]);
+        \App\Models\PersonIdentity::firstOrCreate(['user_id' => $user->id])
+            ->update(['provider_reference' => $session->id, 'verification_method' => 'stripe_identity']);
 
-        // Track session ID so we can match the webhook
+        // Track session ID so we can match the webhook (a check on the person)
         \App\Models\CarrierVerification::updateOrCreate(
-            ['carrier_profile_id' => $profile->id, 'check_type' => 'identity'],
+            ['user_id' => $user->id, 'check_type' => 'identity'],
             [
                 'status'      => 'pending',
                 'external_id' => $session->id,
@@ -162,8 +161,8 @@ class StripeConnectController extends Controller
                 $intent = $event->data->object;
                 $meta   = $intent->metadata?->toArray() ?? [];
                 // Intents made before checks had levels: the carrier's own basic check
-                if (($meta['type'] ?? '') === 'onboarding_fee' && ($profile = CarrierProfile::find($meta['carrier_profile_id'] ?? 0))) {
-                    $meta = ['type' => 'background_check', 'level' => 'basic', 'subjects' => (string) $profile->user_id, 'paid_by' => 'carrier', 'payer_user_id' => (string) $profile->user_id];
+                if (($meta['type'] ?? '') === 'onboarding_fee' && ($payer = (int) ($meta['user_id'] ?? 0))) {
+                    $meta = ['type' => 'background_check', 'level' => 'basic', 'subjects' => (string) $payer, 'paid_by' => 'carrier', 'payer_user_id' => (string) $payer];
                 }
                 if (($meta['type'] ?? '') !== 'background_check') return;
                 \App\Services\Background\BackgroundChecks::paid($meta, $intent->id, (int) $intent->amount_received);
@@ -174,42 +173,19 @@ class StripeConnectController extends Controller
 
             // ── Stripe Identity: verification completed ─────────────────────
             'identity.verification_session.verified' => (function () use ($event) {
-                $session   = $event->data->object;
-                $profileId = $session->metadata['carrier_profile_id'] ?? null;
-                if (!$profileId) {
-                    // Not a carrier (e.g. a factor owner): just the person record
-                    if ($userId = $session->metadata['user_id'] ?? null) $this->saveVerifiedIdentity($session->id, (int) $userId);
-                    return;
-                }
+                $session = $event->data->object;
+                $userId  = (int) ($session->metadata['user_id'] ?? 0);
+                if (!$userId) return;
 
-                $profile = CarrierProfile::find($profileId);
-                if (!$profile) return;
+                // The verified name, date of birth and address go on the person's identity record
+                $this->saveVerifiedIdentity($session->id, $userId);
+                if (empty($session->metadata['carrier']) && empty($session->metadata['carrier_profile_id'])) return;
 
-                // Extract verified DOB from document scan — more authoritative than self-reported
-                $verifiedDob  = $session->verified_outputs?->dob ?? null;
-                $dobString    = $verifiedDob
-                    ? sprintf('%04d-%02d-%02d', $verifiedDob->year, $verifiedDob->month, $verifiedDob->day)
-                    : null;
-                $isAdult      = $dobString ? \Carbon\Carbon::parse($dobString)->age >= 18 : null;
-
-                $updates = [
-                    'identity_verified'    => true,
-                    'identity_verified_at' => now(),
-                ];
-
-                // Only overwrite DOB + age_verified if Stripe gave us a verified date
-                if ($dobString) {
-                    $updates['date_of_birth']  = $dobString;
-                    $updates['age_verified']   = (bool) $isAdult;
-                    $updates['age_verified_at']= $isAdult ? now() : null;
-                }
-
-                $profile->update($updates);
-
-                $this->saveVerifiedIdentity($session->id, (int) ($session->metadata['user_id'] ?? $profile->user_id));
+                $verifiedDob = $session->verified_outputs?->dob ?? null;
+                $dobString   = $verifiedDob ? sprintf('%04d-%02d-%02d', $verifiedDob->year, $verifiedDob->month, $verifiedDob->day) : null;
 
                 \App\Models\CarrierVerification::updateOrCreate(
-                    ['carrier_profile_id' => $profile->id, 'check_type' => 'identity'],
+                    ['user_id' => $userId, 'check_type' => 'identity'],
                     [
                         'status'      => 'passed',
                         'external_id' => $session->id,
@@ -226,10 +202,11 @@ class StripeConnectController extends Controller
 
             // ── Stripe Identity: verification requires input (failed) ────────
             'identity.verification_session.requires_input' => (function () use ($event) {
-                $session   = $event->data->object;
-                $profileId = $session->metadata['carrier_profile_id'] ?? null;
+                $session = $event->data->object;
+                $userId  = $session->metadata['user_id'] ?? null;
+                $isCarrier = !empty($session->metadata['carrier']) || !empty($session->metadata['carrier_profile_id']);
 
-                if ($userId = $session->metadata['user_id'] ?? null) {
+                if ($userId) {
                     $identity = \App\Models\PersonIdentity::firstOrCreate(['user_id' => (int) $userId]);
                     if ($identity->status !== 'verified') {
                         $identity->update([
@@ -239,13 +216,10 @@ class StripeConnectController extends Controller
                         ]);
                     }
                 }
-                if (!$profileId) return;
-
-                $profile = CarrierProfile::find($profileId);
-                if (!$profile) return;
+                if (!$userId || !$isCarrier) return;
 
                 \App\Models\CarrierVerification::updateOrCreate(
-                    ['carrier_profile_id' => $profile->id, 'check_type' => 'identity'],
+                    ['user_id' => (int) $userId, 'check_type' => 'identity'],
                     [
                         'status'      => 'manual_review',
                         'external_id' => $session->id,

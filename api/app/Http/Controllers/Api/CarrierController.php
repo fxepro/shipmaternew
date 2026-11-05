@@ -4,217 +4,241 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CarrierDocument;
-use App\Models\CarrierProfile;
-use App\Models\CarrierVehicle;
+use App\Models\CarrierVerification;
+use App\Models\Certification;
+use App\Models\Organization;
+use App\Models\PersonIdentity;
+use App\Models\PersonVerification;
 use App\Models\ServiceType;
 use App\Models\Shipment;
 use App\Models\User;
+use App\Services\PersonChecks;
 use App\Services\ServiceTypeRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
+/**
+ * The carrier profile page. The company's details (DOT, MC, insurance, payout account) are kept on the
+ * carrier company (organizations, carrier_ columns); the person's own details (identity, licences,
+ * medical card, checks) in the person tables by user_id. The page sees one set of fields.
+ */
 class CarrierController extends Controller
 {
-    // ── Profile shape helper (matches ShipperProfileController pattern) ────────
+    /** Fields kept on the carrier company: page field => organizations column */
+    private const COMPANY = [
+        'auto_policy_number'    => 'carrier_auto_policy_number',
+        'auto_insurer_name'     => 'carrier_auto_insurer_name',
+        'auto_coverage_amount'  => 'carrier_auto_coverage_amount',
+        'auto_effective_date'   => 'carrier_auto_effective_date',
+        'auto_expiry_date'      => 'carrier_auto_expiry_date',
+        'cargo_policy_number'   => 'carrier_cargo_policy_number',
+        'cargo_insurer_name'    => 'carrier_cargo_insurer_name',
+        'cargo_coverage_amount' => 'carrier_cargo_coverage_amount',
+        'cargo_expiry_date'     => 'carrier_cargo_expiry_date',
+    ];
 
-    private function shape(Request $request): array
+    /** Fields kept on the person's identity record: page field => person_identities column */
+    private const IDENTITY = [
+        'date_of_birth'         => 'date_of_birth',
+        'photo_url'             => 'photo_url',
+        'phone'                 => 'phone',
+        'phone_country_code'    => 'phone_country_code',
+        'whatsapp'              => 'whatsapp',
+        'whatsapp_country_code' => 'whatsapp_country_code',
+        'street'                => 'street',
+        'city'                  => 'city',
+        'state'                 => 'state',
+        'zip'                   => 'zip',
+        'dl_state'              => 'id_issuing_state',
+        'dl_expiry'             => 'id_expiry_date',
+    ];
+
+    private function carrier(User $user): ?Organization
     {
-        $user    = $request->user();
-        $profile = $user->carrierProfile;
+        return PersonChecks::companyOf($user, 'carrier');
+    }
 
-        // Calculate completion percentage
-        $completion = $this->calculateCompletion($profile);
+    private static function day($date): ?string
+    {
+        return $date ? \Carbon\Carbon::parse($date)->toDateString() : null;
+    }
+
+    // ── Profile shape ─────────────────────────────────────────────────────────
+
+    private function shape(User $user): array
+    {
+        $org      = $this->carrier($user);
+        $identity = PersonIdentity::where('user_id', $user->id)->first();
+        $pv       = PersonVerification::where('user_id', $user->id)->first();
+        $cred     = fn (string $type) => PersonChecks::credential($user->id, $type);
+        $cdl = $cred('cdl'); $hazmat = $cred('hazmat_endorsement'); $medical = $cred('dot_medical'); $drug = $cred('drug_test');
+
+        $companyCheck = fn (string $type) => $org
+            ? CarrierVerification::where('carrier_id', $org->id)->where('check_type', $type)->latest()->first() : null;
+        $fmcsa = $companyCheck('fmcsa');
+        $mc    = $companyCheck('mc');
+        $background = CarrierVerification::where('user_id', $user->id)->where('check_type', 'background')->latest()->first();
+
+        $serviceKeys = $org?->serviceTypes()->pluck('key')->toArray() ?? [];
+        $passport    = $identity?->id_type === 'passport';
 
         return [
             'name'                    => $user->name,
             'email'                   => $user->email,
-            'carrier_type'            => $profile?->carrier_type ?? 'sole_proprietor',
-            'verification_status'     => $profile?->verification_status ?? 'incomplete',
-            'onboarding_fee_paid'     => (bool) ($profile?->onboarding_fee_paid ?? false),
-            'completion_percentage'   => $completion,
+            'carrier_type'            => $org?->carrier_type ?? 'sole_proprietor',
+            'verification_status'     => $pv?->status ?? 'incomplete',
+            'onboarding_fee_paid'     => (bool) $org?->carrier_onboarding_fee_paid,
+            'completion_percentage'   => $this->completion($org, $identity, $cdl, $medical, $hazmat),
 
             // Personal
-            'date_of_birth'           => $profile?->date_of_birth?->toDateString(),
+            'date_of_birth'           => $identity?->date_of_birth?->toDateString(),
             // Never sent back to the browser; stored encrypted
-            'ssn_last_4'              => $profile?->ssn_last_4 ? '••••' : null,
-            'has_ssn_last_4'          => (bool) $profile?->ssn_last_4,
-            'photo_url'               => $profile?->photo_url,
+            'ssn_last_4'              => $identity?->ssn_last4 ? '••••' : null,
+            'has_ssn_last_4'          => (bool) $identity?->ssn_last4,
+            'photo_url'               => $identity?->photo_url,
 
-            // DOT-Commercial
-            'dot_number'              => $profile?->dot_number ?? '',
-            'mc_number'               => $profile?->mc_number ?? '',
-            'cdl_number'              => $profile?->cdl_number,
-            'cdl_issuing_state'       => $profile?->cdl_issuing_state,
-            'cdl_expiry_date'         => $profile?->cdl_expiry_date,
-            'cdl_class'               => $profile?->cdl_class,
-            'usdot_number'            => $profile?->usdot_number,
-            'hazmat_endorsement'      => (bool) ($profile?->hazmat_endorsement ?? false),
-            'hazmat_expiry_date'      => $profile?->hazmat_expiry_date,
-            'tanker_endorsement'      => (bool) ($profile?->tanker_endorsement ?? false),
-            'passenger_endorsement'   => (bool) ($profile?->passenger_endorsement ?? false),
-            // Personal tab — address
-            'street'                  => $profile?->street ?? '',
-            'city'                    => $profile?->city ?? '',
-            'state'                   => $profile?->state ?? '',
-            'zip'                     => $profile?->zip ?? '',
+            // Company (DOT / MC)
+            'dot_number'              => $org?->carrier_dot_number ?? '',
+            'usdot_number'            => $org?->carrier_dot_number,
+            'mc_number'               => $org?->carrier_mc_number ?? '',
 
-            // Personal tab — government ID
-            'id_type'                 => $profile?->id_type ?? 'dl',
-            'dl_number'               => $profile?->dl_number ?? '',
-            'dl_state'                => $profile?->dl_state ?? '',
-            'dl_expiry'               => $profile?->dl_expiry?->toDateString() ?? '',
+            // Licences and endorsements (the person's credentials)
+            'cdl_number'              => $cdl?->number,
+            'cdl_issuing_state'       => $cdl?->issuing_state,
+            'cdl_expiry_date'         => $cdl?->expires_at?->toDateString(),
+            'cdl_class'               => $cdl?->class,
+            'hazmat_endorsement'      => (bool) $hazmat,
+            'hazmat_expiry_date'      => $hazmat?->expires_at?->toDateString(),
+            'tanker_endorsement'      => (bool) $cred('tanker_endorsement'),
+            'passenger_endorsement'   => (bool) $cred('passenger_endorsement'),
 
-            'dot_verified'            => (bool) ($profile?->dot_verified ?? false),
-            'identity_verified'       => (bool) ($profile?->identity_verified ?? false),
-            'identity_verified_at'    => $profile?->identity_verified_at?->toISOString(),
+            // Home address and government ID
+            'street'                  => $identity?->street ?? '',
+            'city'                    => $identity?->city ?? '',
+            'state'                   => $identity?->state ?? '',
+            'zip'                     => $identity?->zip ?? '',
+            'id_type'                 => $passport ? 'passport' : 'dl',
+            'dl_number'               => $passport ? '' : ($identity?->id_number ?? ''),
+            'dl_state'                => $identity?->id_issuing_state ?? '',
+            'dl_country'              => $identity?->id_issuing_country,
+            'dl_expiry'               => $identity?->id_expiry_date?->toDateString() ?? '',
 
-            // Last DOT/FMCSA verification result
-            'fmcsa_result'            => $profile?->verifications
-                                            ?->firstWhere('check_type', 'fmcsa')
-                                            ?->result_data,
-            'fmcsa_checked_at'        => $profile?->verifications
-                                            ?->firstWhere('check_type', 'fmcsa')
-                                            ?->updated_at?->toISOString(),
-            'fmcsa_expires_at'        => $profile?->verifications
-                                            ?->firstWhere('check_type', 'fmcsa')
-                                            ?->expires_at?->toDateString(),
+            'dot_verified'            => (bool) $org?->carrier_dot_verified,
+            'identity_verified'       => $identity?->status === 'verified',
+            'identity_verified_at'    => $identity?->status === 'verified' ? $identity->verified_at?->toISOString() : null,
 
-            // Last MC verification result
-            'mc_verified'             => (bool) ($profile?->mc_verified ?? false),
-            'mc_result'               => $profile?->verifications
-                                            ?->firstWhere('check_type', 'mc')
-                                            ?->result_data,
-            'mc_checked_at'           => $profile?->verifications
-                                            ?->firstWhere('check_type', 'mc')
-                                            ?->updated_at?->toISOString(),
-            'mc_expires_at'           => $profile?->verifications
-                                            ?->firstWhere('check_type', 'mc')
-                                            ?->expires_at?->toDateString(),
-            'company_name'            => $profile?->company_name ?? '',
-            'phone'                   => $profile?->phone ?? '',
-            'phone_country_code'      => $profile?->phone_country_code ?? 'US',
-            'whatsapp'                => $profile?->whatsapp ?? '',
-            'whatsapp_country_code'   => $profile?->whatsapp_country_code
-                ?? ($profile?->phone_country_code ?? 'US'),
+            // Last DOT/FMCSA and MC checks (company)
+            'fmcsa_result'            => $fmcsa?->result_data,
+            'fmcsa_checked_at'        => $fmcsa?->updated_at?->toISOString(),
+            'fmcsa_expires_at'        => $fmcsa?->expires_at?->toDateString(),
+            'mc_verified'             => (bool) $org?->carrier_mc_verified,
+            'mc_result'               => $mc?->result_data,
+            'mc_checked_at'           => $mc?->updated_at?->toISOString(),
+            'mc_expires_at'           => $mc?->expires_at?->toDateString(),
 
-            // Medical
-            'medical_examiner_name'   => $profile?->medical_examiner_name,
-            'dot_medical_expiry'      => $profile?->dot_medical_expiry,
-            'drug_test_date'          => $profile?->drug_test_date,
-            'drug_test_result'        => $profile?->drug_test_result,
+            'company_name'            => $org?->name ?? '',
+            'phone'                   => $identity?->phone ?? '',
+            'phone_country_code'      => $identity?->phone_country_code ?? 'US',
+            'whatsapp'                => $identity?->whatsapp ?? '',
+            'whatsapp_country_code'   => $identity?->whatsapp_country_code ?? ($identity?->phone_country_code ?? 'US'),
 
-            // Insurance
-            'insurance_verified'      => (bool) ($profile?->insurance_verified ?? false),
-            'background_check_status'       => $profile?->background_check_status ?? 'not_started',
-            'background_check_invitation_url' => $profile?->verifications
-                                                    ?->firstWhere('check_type', 'background')
-                                                    ?->result_data['invitation_url'] ?? null,
-            'background_check_completed_at' => $profile?->verifications
-                                                    ?->firstWhere('check_type', 'background')
-                                                    ?->updated_at?->toISOString(),
-            'auto_policy_number'      => $profile?->auto_policy_number,
-            'auto_insurer_name'       => $profile?->auto_insurer_name,
-            'auto_coverage_amount'    => $profile?->auto_coverage_amount,
-            'auto_effective_date'     => $profile?->auto_effective_date,
-            'auto_expiry_date'        => $profile?->auto_expiry_date,
-            'cargo_policy_number'     => $profile?->cargo_policy_number,
-            'cargo_insurer_name'      => $profile?->cargo_insurer_name,
-            'cargo_coverage_amount'   => $profile?->cargo_coverage_amount,
-            'cargo_expiry_date'       => $profile?->cargo_expiry_date,
+            // Medical (the person's credentials)
+            'medical_examiner_name'   => $medical?->issuer,
+            'dot_medical_expiry'      => $medical?->expires_at?->toDateString(),
+            'drug_test_date'          => $drug?->issued_at?->toDateString(),
+            'drug_test_result'        => $drug?->result,
 
-            // Clearinghouse
-            'clearinghouse_query_status' => $profile?->clearinghouse_query_status ?? 'not_run',
-            'clearinghouse_queried_at'   => $profile?->clearinghouse_queried_at?->toISOString(),
-            'clearinghouse_completed_at' => $profile?->clearinghouse_completed_at?->toISOString(),
+            // Insurance (company)
+            'insurance_verified'      => (bool) $org?->carrier_insurance_verified,
+            'background_check_status'       => PersonChecks::backgroundForProfile($pv?->background_check_status),
+            'background_check_invitation_url' => $background?->result_data['invitation_url'] ?? null,
+            'background_check_completed_at' => $background?->updated_at?->toISOString(),
+            'auto_policy_number'      => $org?->carrier_auto_policy_number,
+            'auto_insurer_name'       => $org?->carrier_auto_insurer_name,
+            'auto_coverage_amount'    => $org?->carrier_auto_coverage_amount,
+            'auto_effective_date'     => $org?->carrier_auto_effective_date?->toDateString(),
+            'auto_expiry_date'        => $org?->carrier_auto_expiry_date?->toDateString(),
+            'cargo_policy_number'     => $org?->carrier_cargo_policy_number,
+            'cargo_insurer_name'      => $org?->carrier_cargo_insurer_name,
+            'cargo_coverage_amount'   => $org?->carrier_cargo_coverage_amount,
+            'cargo_expiry_date'       => $org?->carrier_cargo_expiry_date?->toDateString(),
 
-            // Stripe
-            'stripe_account_id'       => $profile?->stripe_account_id,
-            'stripe_account_status'   => $profile?->stripe_account_status ?? 'not_connected',
+            // Clearinghouse (the person)
+            'clearinghouse_query_status' => $pv?->clearinghouse_query_status ?? 'not_run',
+            'clearinghouse_queried_at'   => $pv?->clearinghouse_queried_at?->toISOString(),
+            'clearinghouse_completed_at' => $pv?->clearinghouse_completed_at?->toISOString(),
 
-            // Stats
-            'rating'                  => $profile?->rating ? (float) $profile->rating : null,
-            'total_ratings'           => $profile?->total_ratings ?? 0,
-            'total_deliveries'        => $profile?->total_deliveries ?? 0,
-            'org_id'                  => $profile?->org_id,
+            // Payout account (company)
+            'stripe_account_id'       => $org?->stripe_connect_id,
+            'stripe_account_status'   => $org?->stripe_connect_id ? ($org->stripe_connect_status ?? 'reviewing') : 'not_connected',
+
+            // Stats (company)
+            'rating'                  => $org?->rating ? (float) $org->rating : null,
+            'total_ratings'           => $org?->total_ratings ?? 0,
+            'total_deliveries'        => $org?->carrier_total_deliveries ?? 0,
+            'org_id'                  => $org?->id,
+            'can_edit_company'        => $user->isOrgAdmin(),
             'member_since'            => $user->created_at->format('M Y'),
 
-            // Service types
-            'service_type_keys'       => $profile?->serviceTypes->pluck('key')->toArray() ?? [],
-            'certification_keys'      => $profile?->certifications->pluck('key')->toArray() ?? [],
-            'required_fields'         => ServiceTypeRules::requiredFields(
-                $profile?->serviceTypes->pluck('key')->toArray() ?? []
-            ),
-            'relevant_tabs'           => ServiceTypeRules::relevantTabs(
-                $profile?->serviceTypes->pluck('key')->toArray() ?? []
-            ),
+            // Services and certifications (company)
+            'service_type_keys'       => $serviceKeys,
+            'certification_keys'      => $org?->certifications()->pluck('key')->toArray() ?? [],
+            'required_fields'         => ServiceTypeRules::requiredFields($serviceKeys),
+            'relevant_tabs'           => ServiceTypeRules::relevantTabs($serviceKeys),
         ];
     }
 
-    private function calculateCompletion($profile): int
+    private function completion(?Organization $org, ?PersonIdentity $identity, $cdl, $medical, $hazmat): int
     {
-        if (!$profile) return 0;
-
-        $fields = [
-            'photo_url'           => 10,
-            'date_of_birth'       => 10,
-            'ssn_last_4'          => 10,
-            'cdl_number'          => 15,
-            'usdot_number'        => 15,
-            'dot_medical_expiry'  => 15,
-            'hazmat_endorsement'  => 5,
+        $items = [
+            [(bool) $identity?->photo_url,        10],
+            [(bool) $identity?->date_of_birth,    10],
+            [(bool) $identity?->ssn_last4,        10],
+            [(bool) $cdl?->number,                15],
+            [(bool) $org?->carrier_dot_number,    15],
+            [(bool) $medical?->expires_at,        15],
+            [(bool) $hazmat,                       5],
         ];
-
-        $completed = 0;
-        foreach ($fields as $field => $weight) {
-            if ($profile->{$field}) $completed += $weight;
-        }
-
-        return min($completed, 100);
+        return min(array_sum(array_map(fn ($i) => $i[0] ? $i[1] : 0, $items)), 100);
     }
 
-    // ── GET /api/v1/carrier/profile ──────────────────────────────────────────
+    // ── GET /api/v1/carrier/kyc-status ──────────────────────────────────────
 
     public function kycStatus(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isCarrier(), 403);
+        $user = $request->user();
+        abort_unless($user->isCarrier(), 403);
 
-        $profile = $request->user()->carrierProfile;
-        if (!$profile) {
-            return response()->json(['data' => [
-                'identity_verified'  => false,
-                'age_verified'       => false,
-                'identity_check'     => null,
-            ]]);
-        }
-
-        $identityCheck = $profile->verifications()
-            ->where('check_type', 'identity')
-            ->latest()
-            ->first();
+        $identity = PersonIdentity::where('user_id', $user->id)->first();
+        $check = CarrierVerification::where('user_id', $user->id)->where('check_type', 'identity')->latest()->first();
+        $verified = $identity?->status === 'verified';
+        $adult = $identity?->date_of_birth && $identity->age() >= 18;
 
         return response()->json(['data' => [
-            'identity_verified'    => (bool) $profile->identity_verified,
-            'identity_verified_at' => $profile->identity_verified_at?->toISOString(),
-            'age_verified'         => (bool) $profile->age_verified,
-            'age_verified_at'      => $profile->age_verified_at?->toISOString(),
-            'date_of_birth'        => $profile->date_of_birth?->toDateString(),
-            'identity_check'       => $identityCheck ? [
-                'status'      => $identityCheck->status,
-                'external_id' => $identityCheck->external_id,
-                'last_error'  => $identityCheck->result_data['last_error'] ?? null,
-                'verified_at' => $identityCheck->result_data['verified_at'] ?? null,
+            'identity_verified'    => $verified,
+            'identity_verified_at' => $verified ? $identity->verified_at?->toISOString() : null,
+            'age_verified'         => (bool) $adult,
+            'age_verified_at'      => $adult ? $identity->updated_at?->toISOString() : null,
+            'date_of_birth'        => $identity?->date_of_birth?->toDateString(),
+            'identity_check'       => $check ? [
+                'status'      => $check->status,
+                'external_id' => $check->external_id,
+                'last_error'  => $check->result_data['last_error'] ?? null,
+                'verified_at' => $check->result_data['verified_at'] ?? null,
             ] : null,
         ]]);
     }
 
+    // ── GET /api/v1/carrier/profile ──────────────────────────────────────────
+
     public function show(Request $request): JsonResponse
     {
         abort_unless($request->user()->isCarrier(), 403);
-        $request->user()->load('carrierProfile.serviceTypes', 'carrierProfile.certifications', 'carrierProfile.verifications');
 
-        return response()->json(['data' => $this->shape($request)]);
+        return response()->json(['data' => $this->shape($request->user())]);
     }
 
     // ── PUT /api/v1/carrier/profile ──────────────────────────────────────────
@@ -231,21 +255,25 @@ class CarrierController extends Controller
             // Personal
             'date_of_birth'       => ['sometimes', 'nullable', 'date'],
             'ssn_last_4'          => ['sometimes', 'nullable', 'digits:4'],
-            'photo_url'           => ['sometimes', 'nullable', 'string'],
+            'photo_url'           => ['sometimes', 'nullable', 'string', 'max:255'],
 
-            // DOT-Commercial
+            // Licences
             'cdl_number'            => ['sometimes', 'nullable', 'string', 'max:20'],
             'cdl_issuing_state'     => ['sometimes', 'nullable', 'string', 'max:2'],
             'cdl_expiry_date'       => ['sometimes', 'nullable', 'date'],
             'cdl_class'             => ['sometimes', 'nullable', 'string', 'max:5'],
-            'usdot_number'          => ['sometimes', 'nullable', 'string', 'max:20'],
-            'mc_number'             => ['sometimes', 'nullable', 'string', 'max:30'],
             'hazmat_endorsement'    => ['sometimes', 'boolean'],
             'hazmat_expiry_date'    => ['sometimes', 'nullable', 'date'],
             'tanker_endorsement'    => ['sometimes', 'boolean'],
             'passenger_endorsement' => ['sometimes', 'boolean'],
+
+            // Company
+            'usdot_number'          => ['sometimes', 'nullable', 'string', 'max:20'],
             'dot_number'            => ['sometimes', 'nullable', 'string', 'max:20'],
+            'mc_number'             => ['sometimes', 'nullable', 'string', 'max:30'],
             'company_name'          => ['sometimes', 'nullable', 'string', 'max:200'],
+
+            // Contact and home address
             'phone'                 => ['sometimes', 'nullable', 'string', 'max:40'],
             'phone_country_code'    => ['sometimes', 'nullable', 'string', 'size:2'],
             'whatsapp'              => ['sometimes', 'nullable', 'string', 'max:40'],
@@ -259,14 +287,14 @@ class CarrierController extends Controller
             'dl_state'              => ['sometimes', 'nullable', 'string', 'max:2'],
             'dl_expiry'             => ['sometimes', 'nullable', 'date'],
 
-            // Insurance
-            'auto_policy_number'   => ['sometimes', 'nullable', 'string'],
-            'auto_insurer_name'    => ['sometimes', 'nullable', 'string'],
+            // Insurance (company)
+            'auto_policy_number'   => ['sometimes', 'nullable', 'string', 'max:255'],
+            'auto_insurer_name'    => ['sometimes', 'nullable', 'string', 'max:255'],
             'auto_coverage_amount' => ['sometimes', 'nullable', 'numeric'],
             'auto_effective_date'  => ['sometimes', 'nullable', 'date'],
             'auto_expiry_date'     => ['sometimes', 'nullable', 'date'],
-            'cargo_policy_number'  => ['sometimes', 'nullable', 'string'],
-            'cargo_insurer_name'   => ['sometimes', 'nullable', 'string'],
+            'cargo_policy_number'  => ['sometimes', 'nullable', 'string', 'max:255'],
+            'cargo_insurer_name'   => ['sometimes', 'nullable', 'string', 'max:255'],
             'cargo_coverage_amount'=> ['sometimes', 'nullable', 'numeric'],
             'cargo_expiry_date'    => ['sometimes', 'nullable', 'date'],
 
@@ -276,76 +304,103 @@ class CarrierController extends Controller
             'drug_test_date'        => ['sometimes', 'nullable', 'date'],
             'drug_test_result'      => ['sometimes', 'nullable', 'string', 'max:20'],
 
-            // Service types
+            // Services (company)
             'service_type_keys'     => ['sometimes', 'array'],
             'service_type_keys.*'   => ['string'],
         ]);
+        $has = fn (string $k) => array_key_exists($k, $validated);
 
-        // Update users table fields
-        $userFields = array_intersect_key($validated, array_flip(['name', 'email']));
-        if ($userFields) {
-            $user->update($userFields);
+        if (!empty($validated['date_of_birth']) && \Carbon\Carbon::parse($validated['date_of_birth'])->age < 18) {
+            return response()->json([
+                'message' => 'You must be 18 or older.',
+                'errors'  => ['date_of_birth' => ['You must be 18 or older.']],
+            ], 422);
         }
 
-        // Handle service types separately (pivot)
-        $serviceTypeKeys = $validated['service_type_keys'] ?? null;
-        $profileData = array_diff_key($validated, array_flip(['name', 'email', 'service_type_keys']));
+        $org = $this->carrier($user);
 
-        // Sanitize number-only fields — strip prefixes like "MC-", "DOT-", spaces
-        foreach (['mc_number', 'dot_number', 'usdot_number'] as $field) {
-            if (isset($profileData[$field]) && $profileData[$field] !== null) {
-                $profileData[$field] = preg_replace('/\D/', '', $profileData[$field]) ?: null;
+        // ── The company: owner or staff only ──
+        $company = [];
+        foreach (self::COMPANY as $field => $col) {
+            if ($has($field)) $company[$col] = $validated[$field];
+        }
+        if ($has('usdot_number') || $has('dot_number')) {
+            $company['carrier_dot_number'] = Organization::digits($validated['usdot_number'] ?? $validated['dot_number'] ?? null);
+        }
+        if ($has('mc_number')) $company['carrier_mc_number'] = Organization::digits($validated['mc_number']);
+        if ($has('company_name') && trim((string) $validated['company_name']) !== '') {
+            $company['name'] = $company['legal_name'] = trim($validated['company_name']);
+        }
+        $changed = $org ? array_filter($company, fn ($v, $col) => (string) $org->{$col} !== (string) $v, ARRAY_FILTER_USE_BOTH) : $company;
+        $serviceChange = $has('service_type_keys');
+
+        // Only the owner or staff change the company; drivers and dispatchers save just their own details
+        if ($org && $user->isOrgAdmin() && ($changed || $serviceChange)) {
+            if ($changed) $org->update($changed);
+            if ($serviceChange) {
+                $org->serviceTypes()->sync(ServiceType::whereIn('key', $validated['service_type_keys'])->pluck('id'));
             }
         }
 
-        // Auto-compute age verification when DOB is saved
-        if (isset($profileData['date_of_birth']) && $profileData['date_of_birth']) {
-            $dob = \Carbon\Carbon::parse($profileData['date_of_birth']);
-            $isAdult = $dob->age >= 18;
-            if (! $isAdult) {
-                return response()->json([
-                    'message' => 'You must be 18 or older.',
-                    'errors'  => ['date_of_birth' => ['You must be 18 or older.']],
-                ], 422);
-            }
-            $profileData['age_verified']    = true;
-            $profileData['age_verified_at'] = now();
-        }
+        DB::transaction(function () use ($user, $validated, $has) {
+            // ── The person's login ──
+            $userFields = array_intersect_key($validated, array_flip(['name', 'email']));
+            if ($userFields) $user->update($userFields);
 
-        // Build E.164 from national phone + country dial code
-        if (array_key_exists('phone', $profileData) || array_key_exists('phone_country_code', $profileData)) {
-            $existing = $user->carrierProfile;
-            $national = $profileData['phone'] ?? $existing?->phone ?? '';
-            $cc = strtoupper($profileData['phone_country_code'] ?? $existing?->phone_country_code ?? 'US');
-            $profileData['phone_country_code'] = $cc;
-            if ($national !== '' && $national !== null) {
-                try {
-                    $profileData['phone_e164'] = app(\App\Services\SmsOtpService::class)
-                        ->normalizeE164((string) $national, $cc);
-                } catch (\Throwable) {
-                    $profileData['phone_e164'] = null;
+            // ── The person's identity record ──
+            $identity = PersonChecks::identity($user);
+            foreach (self::IDENTITY as $field => $col) {
+                if ($has($field)) $identity->{$col} = $validated[$field];
+            }
+            if ($has('name')) $identity->fill(PersonChecks::splitName($validated['name']));
+            if (!empty($validated['ssn_last_4'])) $identity->ssn_last4 = $validated['ssn_last_4'];
+            if ($has('id_type')) {
+                $identity->id_type = $validated['id_type'] === 'passport' ? 'passport' : 'driver_license';
+            }
+            if ($has('dl_number')) {
+                $identity->id_number = $validated['dl_number'] ?: null;
+                if ($validated['dl_number'] && !$identity->id_type) $identity->id_type = 'driver_license';
+            }
+            if ($has('phone') || $has('phone_country_code')) {
+                $cc = strtoupper($identity->phone_country_code ?: 'US');
+                $identity->phone_country_code = $cc;
+                $identity->phone_e164 = null;
+                if ($identity->phone) {
+                    try {
+                        $identity->phone_e164 = app(\App\Services\SmsOtpService::class)->normalizeE164((string) $identity->phone, $cc);
+                    } catch (\Throwable) {}
                 }
-            } else {
-                $profileData['phone_e164'] = null;
             }
-        }
+            if ($identity->whatsapp_country_code) $identity->whatsapp_country_code = strtoupper($identity->whatsapp_country_code);
+            $identity->save();
 
-        if (array_key_exists('whatsapp_country_code', $profileData) && $profileData['whatsapp_country_code']) {
-            $profileData['whatsapp_country_code'] = strtoupper($profileData['whatsapp_country_code']);
-        }
+            // ── The person's licences, endorsements and medical card ──
+            $cred = function (string $type, array $map, callable $present) use ($user, $validated) {
+                $given = array_intersect_key($validated, $map);
+                if (!$given) return;
+                $current = PersonChecks::credential($user->id, $type);
+                $fields = [];
+                foreach ($map as $field => $col) {
+                    if ($col === null) continue;
+                    $fields[$col] = array_key_exists($field, $validated) ? $validated[$field] : $current?->{$col};
+                }
+                PersonChecks::setCredential($user->id, $type, $present($validated, $current), $fields);
+            };
+            $cred('cdl', ['cdl_number' => 'number', 'cdl_issuing_state' => 'issuing_state', 'cdl_class' => 'class', 'cdl_expiry_date' => 'expires_at'],
+                fn ($v, $c) => (bool) (array_key_exists('cdl_number', $v) ? $v['cdl_number'] : $c?->number));
+            $cred('hazmat_endorsement', ['hazmat_endorsement' => null, 'hazmat_expiry_date' => 'expires_at'],
+                fn ($v, $c) => array_key_exists('hazmat_endorsement', $v) ? (bool) $v['hazmat_endorsement'] : (bool) $c);
+            $cred('tanker_endorsement', ['tanker_endorsement' => null], fn ($v) => (bool) $v['tanker_endorsement']);
+            $cred('passenger_endorsement', ['passenger_endorsement' => null], fn ($v) => (bool) $v['passenger_endorsement']);
+            $cred('dot_medical', ['medical_examiner_name' => 'issuer', 'dot_medical_expiry' => 'expires_at'],
+                fn ($v, $c) => (bool) (($v['dot_medical_expiry'] ?? $c?->expires_at) || ($v['medical_examiner_name'] ?? $c?->issuer)));
+            $cred('drug_test', ['drug_test_date' => 'issued_at', 'drug_test_result' => 'result'],
+                fn ($v, $c) => (bool) (array_key_exists('drug_test_date', $v) ? $v['drug_test_date'] : $c?->issued_at));
+        });
 
-        // Update profile table fields
-        $profile = CarrierProfile::updateOrCreate(['user_id' => $user->id], $profileData ?: []);
+        PersonChecks::refresh($user->fresh());
 
-        // Sync service types if provided
-        if ($serviceTypeKeys !== null) {
-            $ids = ServiceType::whereIn('key', $serviceTypeKeys)->pluck('id');
-            $profile->serviceTypes()->sync($ids);
-        }
-
-        $user->load('carrierProfile.serviceTypes');
-
-        return response()->json(['data' => $this->shape($request)]);
+        return response()->json(['data' => $this->shape($user->fresh())]);
     }
 
     // ── GET /api/v1/carrier/earnings ────────────────────────────────────────
@@ -391,9 +446,9 @@ class CarrierController extends Controller
             'method' => ['required', 'in:stripe,bank'],
         ]);
 
-        $profile = $request->user()->carrierProfile;
+        $org = $this->carrier($request->user());
 
-        if (!$profile?->stripe_account_id || $profile->stripe_account_status !== 'verified') {
+        if (!$org?->stripe_connect_id || $org->stripe_connect_status !== 'verified') {
             return response()->json([
                 'error' => 'You must connect and verify your Stripe account before requesting a payout.',
             ], 422);
@@ -413,11 +468,11 @@ class CarrierController extends Controller
     {
         abort_unless($request->user()->isCarrier(), 403);
 
-        $profile = $request->user()->carrierProfile;
-        if (!$profile) return response()->json(['data' => []]);
+        $org = $this->carrier($request->user());
+        if (!$org) return response()->json(['data' => []]);
 
         return response()->json([
-            'data' => $profile->documents()
+            'data' => $org->carrierDocuments()
                 ->orderBy('type')
                 ->get()
                 ->map(function ($d) {
@@ -466,17 +521,21 @@ class CarrierController extends Controller
             'expiry_date'     => ['sometimes', 'nullable', 'date'],
         ]);
 
-        $profile = $request->user()->carrierProfile()->firstOrCreate(['user_id' => $request->user()->id]);
+        $org = $this->carrier($request->user());
+        abort_unless($org, 422, 'You are not part of a carrier company.');
+        if (!empty($validated['vehicle_id'])) {
+            abort_unless($org->vehicles()->whereKey($validated['vehicle_id'])->exists(), 422, 'That vehicle is not on your company.');
+        }
 
         $file = $request->file('document');
         $path = $file->storeAs(
-            "carrier-docs/{$profile->id}",
+            "carrier-docs/org-{$org->id}",
             time() . '_' . $file->getClientOriginalName(),
             'r2'
         );
 
         $doc = CarrierDocument::create([
-            'carrier_profile_id' => $profile->id,
+            'carrier_id'         => $org->id,
             'carrier_vehicle_id' => $validated['vehicle_id'] ?? null,
             'type'               => $validated['type'],
             'name'               => $validated['name'] ?? $file->getClientOriginalName(),
@@ -499,11 +558,11 @@ class CarrierController extends Controller
     {
         abort_unless($request->user()->isCarrier(), 403);
 
-        $profile = $request->user()->carrierProfile;
-        if (!$profile) return response()->json(['data' => []]);
+        $org = $this->carrier($request->user());
+        if (!$org) return response()->json(['data' => []]);
 
         return response()->json([
-            'data' => $profile->vehicles()
+            'data' => $org->vehicles()
                 ->orderByDesc('is_primary')
                 ->orderBy('created_at')
                 ->get()
@@ -556,19 +615,20 @@ class CarrierController extends Controller
             'registration_expiry'  => ['sometimes', 'nullable', 'date'],
         ]);
 
-        $profile = $request->user()->carrierProfile()->firstOrCreate(['user_id' => $request->user()->id]);
+        $org = $this->carrier($request->user());
+        abort_unless($org, 422, 'You are not part of a carrier company.');
 
         // If setting as primary, demote all others
         if (!empty($validated['is_primary'])) {
-            $profile->vehicles()->update(['is_primary' => false]);
+            $org->vehicles()->update(['is_primary' => false]);
         }
 
         // First vehicle is always primary
-        if ($profile->vehicles()->count() === 0) {
+        if ($org->vehicles()->count() === 0) {
             $validated['is_primary'] = true;
         }
 
-        $vehicle = $profile->vehicles()->create($validated);
+        $vehicle = $org->vehicles()->create($validated);
 
         return response()->json(['data' => $vehicle], 201);
     }
@@ -579,8 +639,9 @@ class CarrierController extends Controller
     {
         abort_unless($request->user()->isCarrier(), 403);
 
-        $profile = $request->user()->carrierProfile;
-        $vehicle = $profile->vehicles()->findOrFail($id);
+        $org = $this->carrier($request->user());
+        abort_unless($org, 404);
+        $vehicle = $org->vehicles()->findOrFail($id);
 
         $validated = $request->validate([
             'type'                 => ['sometimes', 'string'],
@@ -603,7 +664,7 @@ class CarrierController extends Controller
         ]);
 
         if (!empty($validated['is_primary'])) {
-            $profile->vehicles()->update(['is_primary' => false]);
+            $org->vehicles()->update(['is_primary' => false]);
         }
 
         $vehicle->update($validated);
@@ -617,132 +678,99 @@ class CarrierController extends Controller
     {
         abort_unless($request->user()->isCarrier(), 403);
 
-        $profile = $request->user()->carrierProfile;
-        $vehicle = $profile->vehicles()->findOrFail($id);
+        $org = $this->carrier($request->user());
+        abort_unless($org, 404);
+        $vehicle = $org->vehicles()->findOrFail($id);
         $wasPrimary = $vehicle->is_primary;
         $vehicle->delete();
 
         // Promote next vehicle to primary if we deleted the primary
         if ($wasPrimary) {
-            $profile->vehicles()->oldest()->first()?->update(['is_primary' => true]);
+            $org->vehicles()->oldest()->first()?->update(['is_primary' => true]);
         }
 
         return response()->json(['message' => 'Vehicle deleted']);
     }
 
     // ── GET /api/v1/carriers ────────────────────────────────────────────────
-    // Supports: ?zip= ?distance_miles= ?verified= ?service_types[]= ?dot= ?sort=
+    // One row per carrier company. Supports: ?zip= ?distance_miles= ?verified= ?service_types[]= ?dot= ?sort=
 
     public function index(Request $request): JsonResponse
     {
-        $query = User::where('role', 'carrier')
-                     ->with('carrierProfile.serviceTypes', 'currentOrg');
+        $query = Organization::where('type', 'carrier')->with('serviceTypes', 'owner');
 
         // Exact DOT lookup (for add-carrier modal)
         if ($dot = $request->query('dot')) {
-            $query->whereHas('carrierProfile', fn ($q) =>
-                $q->where('dot_number', $dot)->orWhere('usdot_number', $dot)
-            );
+            $query->where('carrier_dot_number', Organization::digits($dot));
         }
 
-        // Verified only
+        // Approved companies only
         if ($request->query('verified')) {
-            $query->whereHas('carrierProfile', fn ($q) =>
-                $q->where('verification_status', 'verified')
-            );
+            $query->where('verification_status', 'approved');
         }
 
-        // Service types filter
         if ($serviceTypes = $request->query('service_types')) {
             $keys = is_array($serviceTypes) ? $serviceTypes : explode(',', $serviceTypes);
-            // Carriers now store service types at org level
-            $query->whereHas('currentOrg.serviceTypes', fn ($q) => $q->whereIn('key', $keys));
+            $query->whereHas('serviceTypes', fn ($q) => $q->whereIn('key', $keys));
         }
 
-        // ZIP + distance filter
-        // Primary source: carrier_profiles.zip / .state (saved from Personal tab).
-        // Fallback: org address (for multi-org carriers that set location at org level).
+        // ZIP + distance: the company's address, or its owner's home address for owner-operators
         if ($zip = $request->query('zip')) {
             $distance = (int) ($request->query('distance_miles', 50));
+            $ownerHome = fn (string $col, string $op, string $value) => fn ($q) => $q->whereExists(fn ($e) => $e
+                ->from('person_identities')->whereColumn('person_identities.user_id', 'organizations.owner_id')->where($col, $op, $value));
 
             if ($distance <= 25) {
                 // Tight radius — match first 3 digits of ZIP (same metro)
                 $prefix = substr(preg_replace('/\D/', '', $zip), 0, 3);
-                $query->where(function ($q) use ($prefix) {
-                    $q->whereHas('carrierProfile', fn ($cp) =>
-                        $cp->where('zip', 'like', $prefix . '%')
-                    )
-                    ->orWhereHas('currentOrg', fn ($o) =>
-                        $o->where('zip', 'like', $prefix . '%')
-                    );
-                });
-            } else {
+                $query->where(fn ($q) => $q->where('zip', 'like', $prefix . '%')->orWhere($ownerHome('person_identities.zip', 'like', $prefix . '%')));
+            } elseif ($state = $this->zipToState($zip)) {
                 // Broad radius — match by state derived from ZIP prefix
-                $state = $this->zipToState($zip);
-                if ($state) {
-                    $query->where(function ($q) use ($state) {
-                        $q->whereHas('carrierProfile', fn ($cp) =>
-                            $cp->where('state', $state)
-                        )
-                        ->orWhereHas('currentOrg', fn ($o) =>
-                            $o->where('state', $state)
-                        );
-                    });
-                }
+                $query->where(fn ($q) => $q->where('state', $state)->orWhere($ownerHome('person_identities.state', '=', $state)));
             }
         }
 
-        // Sorting — LEFT JOIN so carriers without a profile still appear
-        $sort = $request->query('sort', 'rating');
-        $query->leftJoin('carrier_profiles as cp', 'cp.user_id', '=', 'users.id');
-        match ($sort) {
-            'rating'      => $query->orderByDesc('cp.rating'),
-            'deliveries'  => $query->orderByDesc('cp.total_deliveries'),
-            'newest'      => $query->orderByDesc('users.created_at'),
-            'oldest'      => $query->orderBy('users.created_at'),
-            default       => $query->orderByDesc('cp.rating'),
+        match ($request->query('sort', 'rating')) {
+            'deliveries' => $query->orderByDesc('carrier_total_deliveries'),
+            'newest'     => $query->orderByDesc('created_at'),
+            'oldest'     => $query->orderBy('created_at'),
+            default      => $query->orderByRaw('rating DESC NULLS LAST'),
         };
 
-        $carriers = $query->select('users.*')->get();
+        $carriers = $query->get();
+        $homes = PersonIdentity::whereIn('user_id', $carriers->pluck('owner_id')->filter())->get()->keyBy('user_id');
 
         return response()->json([
-            'data' => $carriers->map(function ($c) {
-                $profile = $c->carrierProfile;
-                $parts   = explode(' ', $c->name);
-                $avatar  = strtoupper(
-                    substr($parts[0], 0, 1) . (isset($parts[1]) ? substr($parts[1], 0, 1) : '')
-                );
-
-                $org = $c->currentOrg;
-                // Service types are org-level for multi-org carriers
-                $serviceTypes = $org?->serviceTypes ?? $profile?->serviceTypes;
+            'data' => $carriers->map(function (Organization $org) use ($homes) {
+                $owner = $org->owner;
+                $home  = $homes->get($org->owner_id);
+                $parts = explode(' ', (string) ($owner?->name ?? $org->name));
+                $avatar = strtoupper(substr($parts[0], 0, 1) . (isset($parts[1]) ? substr($parts[1], 0, 1) : ''));
 
                 return [
-                    'id'                   => $c->id,
-                    'org_id'               => $profile?->org_id ?? $org?->id,   // the carrier company
-                    'name'                 => $c->name,
-                    'email'                => $c->email,
-                    'company_name'         => $profile?->company_name ?? $org?->name ?? '',
-                    'dot_number'           => $profile?->dot_number ?? $profile?->usdot_number ?? '',
-                    'mc_number'            => $profile?->mc_number ?? '',
-                    'phone'                => $profile?->phone ?? $org?->phone ?? '',
-                    'verification_status'  => $profile?->verification_status ?? 'incomplete',
-                    'dot_verified'         => (bool) ($profile?->dot_verified ?? false),
-                    'insurance_verified'   => (bool) ($profile?->insurance_verified ?? false),
-                    'rating'               => (float) ($profile?->rating ?? 0),
-                    'total_deliveries'     => $profile?->total_deliveries ?? 0,
-                    'member_since'         => $c->created_at->format('M Y'),
+                    'id'                   => $owner?->id,       // the owner (who the shipper deals with)
+                    'org_id'               => $org->id,          // the carrier company
+                    'name'                 => $owner?->name ?? $org->name,
+                    'email'                => $org->email ?: $owner?->email,
+                    'company_name'         => $org->name,
+                    'dot_number'           => $org->carrier_dot_number ?? '',
+                    'mc_number'            => $org->carrier_mc_number ?? '',
+                    'phone'                => $org->phone ?: ($home?->phone ?? ''),
+                    'verification_status'  => $org->verification_status ?? 'incomplete',
+                    'dot_verified'         => (bool) $org->carrier_dot_verified,
+                    'insurance_verified'   => (bool) $org->carrier_insurance_verified,
+                    'rating'               => (float) ($org->rating ?? 0),
+                    'total_deliveries'     => $org->carrier_total_deliveries ?? 0,
+                    'member_since'         => $org->created_at->format('M Y'),
                     'avatar'               => $avatar,
-                    // Location
-                    'city'                 => $org?->city ?? '',
-                    'state'                => $org?->state ?? '',
-                    'zip'                  => $org?->zip ?? '',
-                    // Service types (org-level)
-                    'service_types'        => $serviceTypes?->map(fn($t) => [
+                    'city'                 => $org->city ?: ($home?->city ?? ''),
+                    'state'                => $org->state ?: ($home?->state ?? ''),
+                    'zip'                  => $org->zip ?: ($home?->zip ?? ''),
+                    'service_types'        => $org->serviceTypes->map(fn ($t) => [
                         'key'  => $t->key,
                         'name' => $t->name,
                         'icon' => $t->icon,
-                    ])->toArray() ?? [],
+                    ])->values()->toArray(),
                 ];
             }),
         ]);

@@ -59,10 +59,10 @@ class ShipmentController extends Controller
             $query->where('job_type', $request->input('job_type'));
         }
 
-        $with = ['shipper', 'carrier.carrierProfile', 'receiver', 'latestPing'];
+        $with = ['shipper', 'carrier', 'receiver', 'latestPing'];
 
         if ($request->boolean('with_bids')) {
-            $with[] = 'bids.carrier.carrierProfile';
+            $with[] = 'bids.carrier';
         }
 
         $shipments = $query->with($with)->latest()->paginate(50);
@@ -204,7 +204,7 @@ class ShipmentController extends Controller
         // Payment is scheduled once a carrier is assigned (docs/fees-and-billing.md)
         if ($status === 'assigned') app(\App\Services\Payments\LoadPayments::class)->schedule('shipment', $shipment);
 
-        $shipment->load(['shipper', 'carrier.carrierProfile', 'receiver']);
+        $shipment->load(['shipper', 'carrier', 'receiver']);
 
         return response()->json(['data' => new ShipmentResource($shipment)], 201);
     }
@@ -213,7 +213,7 @@ class ShipmentController extends Controller
     public function show(Request $request, Shipment $shipment): JsonResponse
     {
         $this->authorizeView($request->user(), $shipment);
-        $shipment->load(['shipper', 'carrier.carrierProfile', 'receiver', 'latestPing', 'bids.carrier.carrierProfile']);
+        $shipment->load(['shipper', 'carrier', 'receiver', 'latestPing', 'bids.carrier']);
 
         return response()->json(['data' => new ShipmentResource($shipment)]);
     }
@@ -315,7 +315,7 @@ class ShipmentController extends Controller
             ?? $payments->schedule('shipment', $shipment);
         if ($payment) $payments->charge($payment);
 
-        $shipment->load(['shipper', 'carrier.carrierProfile', 'receiver', 'latestPing']);
+        $shipment->load(['shipper', 'carrier', 'receiver', 'latestPing']);
 
         return response()->json(['data' => new ShipmentResource($shipment)]);
     }

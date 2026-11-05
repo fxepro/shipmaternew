@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\CarrierProfile;
 use App\Models\OrgMember;
 use App\Models\Organization;
 use App\Models\PersonCredential;
@@ -83,16 +82,36 @@ class PersonChecks
         return ['org' => null, 'type' => $type, 'role' => $type ? 'owner' : null];
     }
 
-    /** Display name for a company: the owner's registered company name until profiles move to the company (phase 2) */
+    /** Display name for a company (its legal business name) */
     public static function companyName(?Organization $org): ?string
     {
-        if (!$org) return null;
-        if ($org->type === 'factor') return $org->name;
-        $profile = $org->type === 'carrier'
-            ? CarrierProfile::where('org_id', $org->id)->value('company_name')
-            : \App\Models\ShipperProfile::where('org_id', $org->id)->value('company_name');
+        return $org?->name;
+    }
 
-        return $profile ?: $org->name;
+    /** The person's company of a type: the current company if it is one, otherwise their membership */
+    public static function companyOf(User $user, string $type): ?Organization
+    {
+        $current = $user->currentOrg;
+        if ($current && $current->type === $type) return $current;
+        $m = self::membership($user);
+        return $m['org'] && $m['org']->type === $type ? $m['org'] : null;
+    }
+
+    /** "Ana María Reyes Jr" -> first Ana, middle María, last Reyes, suffix Jr */
+    public static function splitName(?string $name): array
+    {
+        $parts = preg_split('/\s+/', trim((string) $name)) ?: [];
+        $parts = array_values(array_filter($parts, fn ($w) => $w !== ''));
+        $suffix = null;
+        if (count($parts) > 2 && in_array(rtrim(end($parts), '.'), ['Jr', 'Sr', 'II', 'III', 'IV'], true)) {
+            $suffix = array_pop($parts);
+        }
+        return [
+            'legal_first_name'  => $parts[0] ?? null,
+            'legal_middle_name' => count($parts) > 2 ? implode(' ', array_slice($parts, 1, -1)) : null,
+            'legal_last_name'   => count($parts) > 1 ? end($parts) : null,
+            'suffix'            => $suffix,
+        ];
     }
 
     public static function verification(User $user): PersonVerification
@@ -222,13 +241,6 @@ class PersonChecks
         if ($status !== $pv->status) {
             $pv->status = $status;
             $pv->save();
-
-            // Carrier screens and access still read the carrier profile's status
-            if ($status === 'pending_review' && $profile = CarrierProfile::where('user_id', $user->id)->first()) {
-                if ($profile->verification_status === 'approved') {
-                    $profile->updateQuietly(['verification_status' => 'pending_review', 'verification_status_updated_at' => now()]);
-                }
-            }
         }
 
         \App\Services\Background\BackgroundChecks::refreshLevel($user);
@@ -243,111 +255,50 @@ class PersonChecks
         return $pv?->status === 'approved' && self::checklist($user)['ready'];
     }
 
-    // ── Mirroring from carrier_profiles ──────────────────────────────────────
-
-    private const PROFILE_FIELDS = [
-        'verification_status', 'verification_notes', 'background_check_status', 'identity_verified', 'identity_verified_at',
-        'date_of_birth', 'street', 'city', 'state', 'zip', 'country', 'phone', 'id_type', 'dl_number', 'dl_state', 'dl_expiry', 'ssn_last_4',
-        'cdl_number', 'cdl_issuing_state', 'cdl_class', 'cdl_expiry_date', 'dot_medical_expiry', 'drug_test_date', 'drug_test_result',
-        'hazmat_endorsement', 'hazmat_expiry_date', 'tanker_endorsement', 'passenger_endorsement',
-        'clearinghouse_query_id', 'clearinghouse_query_status', 'clearinghouse_completed_at', 'dot_verified',
-    ];
-
-    /** Copy what the carrier profile collects into the person's records. Called whenever a carrier profile is saved. */
-    public static function syncFromCarrierProfile(CarrierProfile $p): void
-    {
-        if (!$p->wasRecentlyCreated && !$p->wasChanged(self::PROFILE_FIELDS)) {
-            return;
-        }
-        $user = User::find($p->user_id);
-        if (!$user) return;
-
-        // Approval and background
-        $pv = self::verification($user);
-        $pv->background_check_status = self::backgroundFromProfile($p->background_check_status);
-        if (in_array($p->verification_status, ['pending_payment', 'pending_background'], true)
-            && !in_array($pv->status, ['approved', 'rejected'], true)) {
-            $pv->status = $p->verification_status;
-        } elseif (in_array($pv->status, ['pending_payment', 'pending_background'], true)
-            && !in_array($p->verification_status, ['pending_payment', 'pending_background'], true)) {
-            $pv->status = 'incomplete';   // onboarding steps done; refresh() decides the rest
-        }
-        $pv->save();
-
-        // Identity record
-        $identity = self::identity($user);
-        $identity->fill(array_filter([
-            'date_of_birth'    => $p->date_of_birth,
-            'street'           => $p->street,
-            'city'             => $p->city,
-            'state'            => $p->state,
-            'zip'              => $p->zip,
-            'country'          => $p->country ? substr($p->country, 0, 2) : null,
-            'phone'            => $p->phone,
-            'id_type'          => $p->id_type === 'passport' ? 'passport' : ($p->dl_number ? 'driver_license' : null),
-            'id_issuing_state' => $p->dl_state,
-            'id_expiry_date'   => $p->dl_expiry,
-            'ssn_last4'        => $p->ssn_last_4 ? substr($p->ssn_last_4, -4) : null,
-        ], fn ($v) => $v !== null && $v !== ''));
-        if ($p->dl_number && $p->dl_number !== $identity->id_number) {
-            $identity->id_number = $p->dl_number;
-        }
-        if ($p->identity_verified && $identity->status !== 'verified') {
-            $identity->fill([
-                'status' => 'verified', 'verification_method' => $identity->verification_method ?? 'stripe_identity',
-                'verified_at' => $p->identity_verified_at ?? now(), 'failure_reason' => null,
-            ]);
-        }
-        $identity->save();
-
-        // Credentials
-        $mirror = fn (string $type, bool $present, array $fields) => self::mirrorCredential($user->id, $type, $present, $fields);
-        $mirror('cdl', (bool) $p->cdl_number, [
-            'number' => $p->cdl_number, 'issuing_state' => $p->cdl_issuing_state, 'class' => $p->cdl_class, 'expires_at' => $p->cdl_expiry_date,
-        ]);
-        $mirror('dot_medical', (bool) $p->dot_medical_expiry, ['expires_at' => $p->dot_medical_expiry]);
-        $mirror('drug_test', (bool) $p->drug_test_date, ['issued_at' => $p->drug_test_date, 'result' => $p->drug_test_result]);
-        $mirror('hazmat_endorsement', (bool) $p->hazmat_endorsement, ['expires_at' => $p->hazmat_expiry_date]);
-        $mirror('tanker_endorsement', (bool) $p->tanker_endorsement, []);
-        $mirror('passenger_endorsement', (bool) $p->passenger_endorsement, []);
-
-        $chStatus = $p->clearinghouse_query_status;
-        if ($chStatus && $chStatus !== 'not_run') {
-            $c = self::mirrorCredential($user->id, 'clearinghouse', true, [
-                'number' => $p->clearinghouse_query_id, 'issued_at' => $p->clearinghouse_completed_at, 'result' => self::clearinghouseResult($chStatus),
-            ]);
-            // The query itself verifies the result
-            if ($c && $c->result === 'clear' && !$c->verified_at) {
-                $c->update(['verified_at' => $p->clearinghouse_completed_at ?? now()]);
-            }
-        }
-
-        self::refresh($user);
-    }
-
     /**
-     * carrier_profiles.background_check_status holds the provider's states:
+     * The carrier screens show the provider's background states:
      * not_started | invitation_sent | pending | clear | consider | suspended ('suspended' = not passed).
-     * Person records use not_started | pending | clear | consider | failed.
+     * Person records use not_started | invitation_sent | pending | clear | consider | failed.
      */
-    public static function backgroundForProfile(string $result): string
+    public static function backgroundForProfile(?string $result): string
     {
         return match ($result) {
-            'clear', 'approved', 'passed' => 'clear',
-            'failed'                      => 'suspended',
-            'not_started', 'consider'     => $result,
-            default                       => 'pending',
+            'clear', 'approved', 'passed'                  => 'clear',
+            'failed', 'rejected', 'suspended'              => 'suspended',
+            null, '', 'not_started', 'not_submitted'       => 'not_started',
+            'consider', 'invitation_sent'                  => $result,
+            default                                        => 'pending',
         };
     }
 
-    private static function backgroundFromProfile(?string $status): string
+    /** Provider background state (as above) to the person record's state */
+    public static function backgroundFromProvider(?string $status): string
     {
         return match ($status) {
             null, '', 'not_submitted' => 'not_started',
-            'approved'                => 'clear',
+            'approved', 'passed'      => 'clear',
             'rejected', 'suspended'   => 'failed',
             default                   => $status,
         };
+    }
+
+    /** Record the Clearinghouse query on the person and keep the clearinghouse credential in step */
+    public static function recordClearinghouse(User $user, array $fields): void
+    {
+        $pv = self::verification($user);
+        $pv->fill($fields)->save();
+
+        $status = $pv->clearinghouse_query_status;
+        if ($status && $status !== 'not_run') {
+            $c = self::setCredential($user->id, 'clearinghouse', true, [
+                'number' => $pv->clearinghouse_query_id, 'issued_at' => $pv->clearinghouse_completed_at, 'result' => self::clearinghouseResult($status),
+            ]);
+            // The query itself verifies the result
+            if ($c && $c->result === 'clear' && !$c->verified_at) {
+                $c->update(['verified_at' => $pv->clearinghouse_completed_at ?? now()]);
+            }
+        }
+        self::refresh($user);
     }
 
     private static function clearinghouseResult(string $status): string
@@ -360,17 +311,27 @@ class PersonChecks
         };
     }
 
-    /** Upsert the profile-sourced credential of a type. Changing its number, expiry or result clears the admin's verification. */
-    private static function mirrorCredential(int $userId, string $type, bool $present, array $fields): ?PersonCredential
+    /** The person's latest credential of a type */
+    public static function credential(int $userId, string $type): ?PersonCredential
     {
-        $c = PersonCredential::where('user_id', $userId)->where('type', $type)->where('source', 'carrier_profile')->first();
+        return PersonCredential::where('user_id', $userId)->where('type', $type)->orderByDesc('updated_at')->orderByDesc('id')->first();
+    }
+
+    /**
+     * Save the credential of a type the person entered on their profile (their latest one, or a new one).
+     * Not present (e.g. the CDL number cleared) removes it unless an admin verified it.
+     * Changing its number, expiry or result clears the admin's verification.
+     */
+    public static function setCredential(int $userId, string $type, bool $present, array $fields): ?PersonCredential
+    {
+        $c = self::credential($userId, $type);
 
         if (!$present) {
             if ($c && !$c->verified_at) $c->delete();
             return null;
         }
 
-        $c ??= new PersonCredential(['user_id' => $userId, 'type' => $type, 'source' => 'carrier_profile', 'name' => self::CREDENTIAL_LABELS[$type]]);
+        $c ??= new PersonCredential(['user_id' => $userId, 'type' => $type, 'source' => 'profile', 'name' => self::CREDENTIAL_LABELS[$type]]);
         $c->fill($fields);
         if ($c->exists && $c->isDirty(['number', 'expires_at', 'result', 'class', 'issuing_state'])) {
             $c->verified_at = null;

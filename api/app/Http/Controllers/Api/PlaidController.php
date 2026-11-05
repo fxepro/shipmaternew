@@ -73,10 +73,12 @@ class PlaidController extends Controller
 
             // 5. Attach bank account to Stripe customer as a source
             // Remove old bank source first if present
-            $profile = $user->shipperProfile()->firstOrCreate(['user_id' => $user->id]);
-            if ($profile->stripe_bank_source_id) {
+            // The bank account belongs to the shipper company
+            $org = \App\Services\PersonChecks::companyOf($user, 'shipper');
+            abort_unless($org, 422, 'You are not part of a shipper company.');
+            if ($org->shipper_stripe_bank_source_id) {
                 try {
-                    $stripe->customers->deleteSource($customerId, $profile->stripe_bank_source_id);
+                    $stripe->customers->deleteSource($customerId, $org->shipper_stripe_bank_source_id);
                 } catch (\Exception) {}
             }
 
@@ -84,16 +86,16 @@ class PlaidController extends Controller
                 'source' => $stripeBankToken,
             ]);
 
-            // 6. Save everything to shipper profile
-            $profile->update([
-                'plaid_access_token'    => $accessToken,
-                'plaid_item_id'         => $itemId,
-                'plaid_account_id'      => $data['account_id'],
-                'bank_last4'            => $account['mask'] ?? null,
-                'bank_name'             => $account['name'] ?? null,
-                'bank_institution_name' => $data['institution_name'] ?? null,
-                'plaid_connected_at'    => now(),
-                'stripe_bank_source_id' => $source->id,
+            // 6. Save everything on the company
+            $org->update([
+                'shipper_plaid_access_token'    => $accessToken,
+                'shipper_plaid_item_id'         => $itemId,
+                'shipper_plaid_account_id'      => $data['account_id'],
+                'bank_last4'                    => $account['mask'] ?? null,
+                'bank_name'                     => $account['name'] ?? null,
+                'shipper_bank_institution_name' => $data['institution_name'] ?? null,
+                'shipper_plaid_connected_at'    => now(),
+                'shipper_stripe_bank_source_id' => $source->id,
             ]);
 
             return response()->json([
@@ -117,18 +119,18 @@ class PlaidController extends Controller
         $user    = $request->user();
         abort_unless($user->isShipper(), 403);
 
-        $profile = $user->shipperProfile;
+        $org = \App\Services\PersonChecks::companyOf($user, 'shipper');
 
-        if (!$profile?->plaid_access_token) {
+        if (!$org?->shipper_plaid_access_token) {
             return response()->json(['connected' => false]);
         }
 
         return response()->json([
             'connected'        => true,
-            'bank_name'        => $profile->bank_name,
-            'bank_last4'       => $profile->bank_last4,
-            'institution_name' => $profile->bank_institution_name,
-            'connected_at'     => $profile->plaid_connected_at?->toISOString(),
+            'bank_name'        => $org->bank_name,
+            'bank_last4'       => $org->bank_last4,
+            'institution_name' => $org->shipper_bank_institution_name,
+            'connected_at'     => $org->shipper_plaid_connected_at?->toISOString(),
         ]);
     }
 
@@ -140,26 +142,27 @@ class PlaidController extends Controller
         $user    = $request->user();
         abort_unless($user->isShipper(), 403);
 
-        $profile = $user->shipperProfile;
-        if (!$profile) return response()->json(['disconnected' => true]);
+        $org = \App\Services\PersonChecks::companyOf($user, 'shipper');
+        if (!$org) return response()->json(['disconnected' => true]);
+        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can disconnect the company bank account.');
 
         // Remove Stripe bank source
-        if ($profile->stripe_bank_source_id && $user->stripe_customer_id) {
+        if ($org->shipper_stripe_bank_source_id && $user->stripe_customer_id) {
             try {
                 $stripe = new StripeClient(config('services.stripe.secret'));
-                $stripe->customers->deleteSource($user->stripe_customer_id, $profile->stripe_bank_source_id);
+                $stripe->customers->deleteSource($user->stripe_customer_id, $org->shipper_stripe_bank_source_id);
             } catch (\Exception) {}
         }
 
-        $profile->update([
-            'plaid_access_token'    => null,
-            'plaid_item_id'         => null,
-            'plaid_account_id'      => null,
-            'bank_last4'            => null,
-            'bank_name'             => null,
-            'bank_institution_name' => null,
-            'plaid_connected_at'    => null,
-            'stripe_bank_source_id' => null,
+        $org->update([
+            'shipper_plaid_access_token'    => null,
+            'shipper_plaid_item_id'         => null,
+            'shipper_plaid_account_id'      => null,
+            'bank_last4'                    => null,
+            'bank_name'                     => null,
+            'shipper_bank_institution_name' => null,
+            'shipper_plaid_connected_at'    => null,
+            'shipper_stripe_bank_source_id' => null,
         ]);
 
         return response()->json(['disconnected' => true]);

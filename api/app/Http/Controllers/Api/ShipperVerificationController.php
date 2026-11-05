@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ShipperDocument;
-use App\Models\ShipperProfile;
+use App\Models\Organization;
+use App\Models\PersonIdentity;
+use App\Services\PersonChecks;
 use App\Models\User;
 use App\Services\SmsOtpService;
 use Illuminate\Http\JsonResponse;
@@ -68,20 +70,17 @@ class ShipperVerificationController extends Controller
         ]);
 
         $user = $request->user();
-        $profile = ShipperProfile::firstOrCreate(
-            ['user_id' => $user->id],
-            ['org_id' => $user->current_org_id]
-        );
+        $me = PersonChecks::identity($user);
 
-        $rawPhone = $validated['phone'] ?? $profile->phone;
+        $rawPhone = $validated['phone'] ?? $me->phone;
         if (!trim((string) $rawPhone)) {
             return response()->json(['message' => 'Add a phone number on your Profile tab first.'], 422);
         }
 
         try {
-            $e164 = $this->sms->normalizeE164((string) $rawPhone, $profile->phone_country_code);
+            $e164 = $this->sms->normalizeE164((string) $rawPhone, $me->phone_country_code);
             $result = $this->sms->send($e164, $user->id);
-            $profile->update([
+            $me->update([
                 'phone'      => $rawPhone,
                 'phone_e164' => $e164,
             ]);
@@ -101,12 +100,12 @@ class ShipperVerificationController extends Controller
         ]);
 
         $user = $request->user();
-        $profile = $user->shipperProfile;
-        if (!$profile?->phone_e164 && !$profile?->phone) {
+        $me = PersonIdentity::where('user_id', $user->id)->first();
+        if (!$me?->phone_e164 && !$me?->phone) {
             return response()->json(['message' => 'Request a verification code first.'], 422);
         }
 
-        $phone = $profile->phone_e164 ?: $profile->phone;
+        $phone = $me->phone_e164 ?: $me->phone;
 
         try {
             $ok = $this->sms->confirm($phone, $user->id, $validated['code']);
@@ -118,8 +117,11 @@ class ShipperVerificationController extends Controller
             return response()->json(['message' => 'Invalid or expired code.'], 422);
         }
 
-        $profile->update(['phone_verified_at' => now()]);
-        $this->refreshStatus($profile, $user);
+        // The company's contact phone is verified (counts toward business verification)
+        if ($org = $this->shipper($user)) {
+            $org->update(['shipper_phone_verified_at' => now()]);
+            $this->refreshStatus($org);
+        }
 
         return response()->json([
             'message' => 'Phone number verified.',
@@ -134,13 +136,13 @@ class ShipperVerificationController extends Controller
     public function listDocuments(Request $request): JsonResponse
     {
         abort_unless($request->user()->isShipper(), 403);
-        $profile = $request->user()->shipperProfile;
-        if (!$profile) {
+        $org = $this->shipper($request->user());
+        if (!$org) {
             return response()->json(['data' => []]);
         }
 
         return response()->json([
-            'data' => $profile->documents()->orderByDesc('created_at')->get()->map(fn ($d) => $this->shapeDoc($d)),
+            'data' => $org->shipperDocuments()->orderByDesc('created_at')->get()->map(fn ($d) => $this->shapeDoc($d)),
         ]);
     }
 
@@ -156,21 +158,20 @@ class ShipperVerificationController extends Controller
         ]);
 
         $user = $request->user();
-        $profile = ShipperProfile::firstOrCreate(
-            ['user_id' => $user->id],
-            ['org_id' => $user->current_org_id]
-        );
+        $org = $this->shipper($user);
+        abort_unless($org, 422, 'You are not part of a shipper company.');
+        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can upload company documents.');
 
         $file = $request->file('document');
         $disk = $this->documentDisk();
         $path = $file->storeAs(
-            "shipper-docs/{$profile->id}",
+            "shipper-docs/org-{$org->id}",
             time().'_'.$file->getClientOriginalName(),
             $disk
         );
 
         $doc = ShipperDocument::create([
-            'shipper_profile_id' => $profile->id,
+            'shipper_id'         => $org->id,
             'type'               => $validated['type'],
             'name'               => $validated['name'] ?? $file->getClientOriginalName(),
             'url'                => $path,
@@ -178,11 +179,11 @@ class ShipperVerificationController extends Controller
             'size'               => $file->getSize(),
         ]);
 
-        // Compliance documents are also the current COI / HazMat registration / HIPAA BAA on the profile
+        // Compliance documents are also the company's current COI / HazMat registration / HIPAA BAA
         if (in_array($validated['type'], ['coi', 'hazmat_reg', 'hipaa_baa'], true)) {
-            $profile->update(array_filter([
-                "{$validated['type']}_url"    => $path,
-                "{$validated['type']}_expiry" => $validated['expiry'] ?? null,
+            $org->update(array_filter([
+                "shipper_{$validated['type']}_url"    => $path,
+                "shipper_{$validated['type']}_expiry" => $validated['expiry'] ?? null,
             ], fn ($v) => $v !== null));
         }
 
@@ -194,30 +195,30 @@ class ShipperVerificationController extends Controller
         abort_unless($request->user()->isShipper(), 403);
 
         $user = $request->user();
-        $profile = $user->shipperProfile;
+        $org = $this->shipper($user);
 
-        if (!$profile) {
+        if (!$org) {
             return response()->json(['message' => 'Save your business profile first.'], 422);
         }
-        if (!$profile->company_name || !$profile->ein) {
+        abort_unless($user->isOrgAdmin(), 403, 'Only the owner or staff can submit the business for verification.');
+        if (!$org->name || !$org->tax_id) {
             return response()->json(['message' => 'Save legal business name and tax ID (EIN) first.'], 422);
         }
         if (!$user->hasVerifiedEmail()) {
             return response()->json(['message' => 'Verify your email before submitting business verification.'], 422);
         }
-        if ($profile->ein_verified_at) {
+        if ($org->shipper_ein_verified_at) {
             return response()->json(['message' => 'Business is already verified.']);
         }
 
-        $hasW9 = $profile->documents()->where('type', 'w9')->exists();
+        $hasW9 = $org->shipperDocuments()->where('type', 'w9')->exists();
         if (!$hasW9) {
             return response()->json(['message' => 'Upload a W-9 (or equivalent tax form) before submitting.'], 422);
         }
 
-        $profile->update([
-            'verification_status'       => 'submitted',
-            'verification_submitted_at' => now(),
-            'verification_notes'        => null,
+        $org->update([
+            'shipper_verification_status' => 'submitted',
+            'verification_submitted_at'   => now(),
         ]);
 
         return response()->json([
@@ -234,28 +235,30 @@ class ShipperVerificationController extends Controller
     {
         abort_unless($request->user()->role === 'admin', 403);
 
-        $rows = ShipperProfile::query()
-            ->where('verification_status', 'submitted')
-            ->whereNull('ein_verified_at')
-            ->with(['user', 'documents'])
+        $rows = Organization::query()
+            ->where('type', 'shipper')
+            ->where('shipper_verification_status', 'submitted')
+            ->whereNull('shipper_ein_verified_at')
+            ->with(['owner', 'shipperDocuments'])
             ->orderBy('verification_submitted_at')
             ->get()
-            ->map(function (ShipperProfile $p) {
+            ->map(function (Organization $o) {
+                $owner = $o->owner;
                 return [
-                    'id'                        => $p->id,
-                    'user_id'                   => $p->user_id,
-                    'name'                      => $p->user?->name,
-                    'email'                     => $p->user?->email,
-                    'email_verified'            => (bool) $p->user?->email_verified_at,
-                    'phone'                     => $p->phone,
-                    'phone_verified'            => (bool) $p->phone_verified_at,
-                    'company'                   => $p->company_name,
-                    'ein'                       => $p->ein,
-                    'business_type'             => $p->business_type,
-                    'verification_status'       => $p->verification_status,
-                    'verification_submitted_at' => $p->verification_submitted_at?->toISOString(),
-                    'documents'                 => $p->documents->map(fn ($d) => $this->shapeDoc($d))->values(),
-                    'member_since'              => $p->user?->created_at?->format('M Y'),
+                    'id'                        => $o->id,   // the shipper company
+                    'user_id'                   => $owner?->id,
+                    'name'                      => $owner?->name,
+                    'email'                     => $owner?->email,
+                    'email_verified'            => (bool) $owner?->email_verified_at,
+                    'phone'                     => $o->phone ?: PersonIdentity::where('user_id', $o->owner_id)->value('phone'),
+                    'phone_verified'            => (bool) $o->shipper_phone_verified_at,
+                    'company'                   => $o->name,
+                    'ein'                       => $o->tax_id,
+                    'business_type'             => $o->business_type,
+                    'verification_status'       => $o->shipper_verification_status,
+                    'verification_submitted_at' => $o->verification_submitted_at?->toISOString(),
+                    'documents'                 => $o->shipperDocuments->map(fn ($d) => $this->shapeDoc($d))->values(),
+                    'member_since'              => $o->created_at?->format('M Y'),
                 ];
             });
 
@@ -271,25 +274,25 @@ class ShipperVerificationController extends Controller
             'notes'  => ['nullable', 'string', 'max:500'],
         ]);
 
-        $profile = ShipperProfile::with('user')->findOrFail($id);
+        $org = Organization::where('type', 'shipper')->findOrFail($id);
 
         if ($validated['action'] === 'approve') {
-            if (!$profile->company_name || !$profile->ein) {
+            if (!$org->name || !$org->tax_id) {
                 return response()->json(['message' => 'Shipper is missing company name or EIN.'], 422);
             }
-            $profile->update([
-                'ein_verified_at'     => now(),
-                'verification_status' => 'verified',
-                'verification_notes'  => $validated['notes'] ?? null,
+            $org->update([
+                'shipper_ein_verified_at'     => now(),
+                'shipper_verification_status' => 'verified',
+                'verification_notes'          => $validated['notes'] ?? null,
             ]);
             return response()->json(['message' => 'Shipper business verified.', 'status' => 'verified']);
         }
 
-        $profile->update([
-            'ein_verified_at'           => null,
-            'verification_status'       => 'incomplete',
-            'verification_submitted_at' => null,
-            'verification_notes'        => $validated['notes'] ?? 'Rejected — please re-submit with corrected documents.',
+        $org->update([
+            'shipper_ein_verified_at'     => null,
+            'shipper_verification_status' => 'incomplete',
+            'verification_submitted_at'   => null,
+            'verification_notes'          => $validated['notes'] ?? 'Rejected — please re-submit with corrected documents.',
         ]);
 
         return response()->json(['message' => 'Shipper verification rejected.', 'status' => 'incomplete']);
@@ -297,18 +300,22 @@ class ShipperVerificationController extends Controller
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private function refreshStatus(ShipperProfile $profile, User $user): void
+    private function shipper(User $user): ?Organization
     {
-        if (!$profile->company_name || !$profile->ein) {
+        return PersonChecks::companyOf($user, 'shipper');
+    }
+
+    private function refreshStatus(Organization $org): void
+    {
+        $owner = User::find($org->owner_id);
+        if (!$org->name || !$org->tax_id || !$owner?->email_verified_at) {
             $status = 'incomplete';
-        } elseif (!$user->email_verified_at) {
-            $status = 'incomplete';
-        } elseif (!$profile->ein_verified_at) {
-            $status = $profile->verification_status === 'submitted' ? 'submitted' : 'incomplete';
+        } elseif (!$org->shipper_ein_verified_at) {
+            $status = $org->shipper_verification_status === 'submitted' ? 'submitted' : 'incomplete';
         } else {
             $status = 'verified';
         }
-        $profile->update(['verification_status' => $status]);
+        $org->update(['shipper_verification_status' => $status]);
     }
 
     private function documentDisk(): string

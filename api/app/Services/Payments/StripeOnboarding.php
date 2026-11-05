@@ -3,7 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\BusinessPerson;
-use App\Models\CarrierProfile;
+use App\Models\PersonIdentity;
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\SmsOtpService;
@@ -20,8 +20,8 @@ use Stripe\StripeClient;
  * review and accept. KYC is locked once an onboarding link is created, so an account that was never
  * finished is deleted and sent again with the latest details.
  *
- * A carrier's account id stays on carrier_profiles.stripe_account_id (where LoadPayments looks);
- * a factor's on organizations.stripe_connect_id.
+ * The connected account belongs to the company: organizations.stripe_connect_id, with its state in
+ * stripe_connect_status, for carriers and factors alike.
  */
 class StripeOnboarding
 {
@@ -249,8 +249,6 @@ class StripeOnboarding
     public function sync(\Stripe\Account $a): void
     {
         $org = Organization::where('stripe_connect_id', $a->id)->first();
-        $profile = $org ? null : CarrierProfile::where('stripe_account_id', $a->id)->first();
-        if ($profile) $org = LoadPayments::orgOf($profile->user_id, 'carrier');
 
         $r = $a->requirements;
         $status = match (true) {
@@ -260,8 +258,7 @@ class StripeOnboarding
             default                                                   => 'reviewing',
         };
 
-        $profile?->update(['stripe_account_status' => $status]);
-        $org?->update(['stripe_requirements' => [
+        $org?->update(['stripe_connect_status' => $status, 'stripe_requirements' => [
             'status'            => $status,
             'currently_due'     => array_values(array_unique(array_merge($r?->past_due ?? [], $r?->currently_due ?? []))),
             'eventually_due'    => $r?->eventually_due ?? [],
@@ -332,7 +329,7 @@ class StripeOnboarding
 
     // ── People and accounts ──────────────────────────────────────────────────
 
-    /** The person who opens the account: a carrier's owner (their own profile) or a factor's named representative */
+    /** The person who opens the account: a carrier's owner (their identity record) or a factor's named representative */
     public function representative(Organization $org): array
     {
         if ($org->type === 'factor') {
@@ -346,15 +343,17 @@ class StripeOnboarding
         }
 
         $user = User::find($org->owner_id);
-        $profile = $user?->carrierProfile;
+        $me = $user ? PersonIdentity::where('user_id', $user->id)->first() : null;
         $parts = preg_split('/\s+/', trim((string) $user?->name)) ?: [];
         $parts = array_values(array_filter($parts, fn ($w) => !in_array(rtrim($w, '.'), ['Jr', 'Sr', 'II', 'III', 'IV'], true)));
 
         return [
-            'first_name' => $parts[0] ?? null, 'last_name' => count($parts) > 1 ? end($parts) : null, 'email' => $user?->email,
-            'phone' => $profile?->phone_e164 ?: $this->e164($profile?->phone), 'dob' => $profile?->date_of_birth,
-            'street' => $profile?->street, 'city' => $profile?->city, 'state' => $profile?->state, 'zip' => $profile?->zip,
-            'ssn_last_4' => $profile?->ssn_last_4,
+            'first_name' => $me?->legal_first_name ?: ($parts[0] ?? null),
+            'last_name'  => $me?->legal_last_name ?: (count($parts) > 1 ? end($parts) : null),
+            'email'      => $user?->email,
+            'phone' => $me?->phone_e164 ?: $this->e164($me?->phone), 'dob' => $me?->date_of_birth,
+            'street' => $me?->street, 'city' => $me?->city, 'state' => $me?->state, 'zip' => $me?->zip,
+            'ssn_last_4' => $me?->ssn_last4,
         ];
     }
 
@@ -365,18 +364,16 @@ class StripeOnboarding
 
     public function accountId(Organization $org): ?string
     {
-        if ($org->type === 'factor') return $org->stripe_connect_id ?: null;
-        return CarrierProfile::where('user_id', $org->owner_id)->value('stripe_account_id') ?: null;
+        return $org->stripe_connect_id ?: null;
     }
 
     private function setAccount(Organization $org, ?string $id, string $status): void
     {
-        if ($org->type === 'factor') {
-            $org->update(['stripe_connect_id' => $id, 'stripe_requirements' => $id ? $org->stripe_requirements : null]);
-            return;
-        }
-        CarrierProfile::where('user_id', $org->owner_id)->update(['stripe_account_id' => $id, 'stripe_account_status' => $status]);
-        if (!$id) $org->update(['stripe_requirements' => null]);
+        $org->update([
+            'stripe_connect_id'     => $id,
+            'stripe_connect_status' => $id ? $status : null,
+            'stripe_requirements'   => $id ? $org->stripe_requirements : null,
+        ]);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

@@ -26,14 +26,34 @@ class Organization extends Model
         // Payout account details sent to Stripe (StripeOnboarding)
         'business_structure', 'legal_name', 'representative_title', 'representative_ownership', 'statement_descriptor',
         'product_description', 'bank_token', 'bank_name', 'bank_last4', 'bank_routing', 'bank_holder_name', 'bank_holder_type',
-        'stripe_requirements', 'stripe_submitted_at',
+        'stripe_requirements', 'stripe_submitted_at', 'stripe_connect_status',
+        // Business details (every company)
+        'dba', 'business_type', 'industry', 'state_of_incorporation', 'year_established', 'employee_count', 'sam_gov_number',
+        'phone_country_code', 'phone_e164', 'whatsapp', 'whatsapp_country_code',
+        'ops_same_as_biz', 'ops_street', 'ops_city', 'ops_state', 'ops_zip', 'ops_country',
+        'rating', 'total_ratings', 'verification_submitted_at',
+        // Shippers only (empty for other companies)
+        'shipper_verification_status', 'shipper_email_verified_at', 'shipper_phone_verified_at', 'shipper_ein_verified_at',
+        'shipper_default_pickup_contact_name', 'shipper_default_pickup_contact_phone', 'shipper_internal_ref_format',
+        'shipper_preferred_categories', 'shipper_notif_recipients', 'shipper_notif_email', 'shipper_notif_sms',
+        'shipper_coi_url', 'shipper_coi_expiry', 'shipper_hipaa_baa_url', 'shipper_hipaa_baa_expiry',
+        'shipper_hazmat_reg_url', 'shipper_hazmat_reg_expiry',
+        'shipper_plaid_access_token', 'shipper_plaid_item_id', 'shipper_plaid_account_id', 'shipper_plaid_connected_at',
+        'shipper_bank_institution_name', 'shipper_stripe_bank_source_id',
+        // Carriers only (empty for other companies)
+        'carrier_type', 'carrier_type_selected_at', 'carrier_dot_number', 'carrier_mc_number', 'carrier_dot_verified', 'carrier_mc_verified',
+        'carrier_operating_country', 'carrier_operating_authority_number', 'carrier_operating_authority_type', 'carrier_insurance_verified',
+        'carrier_auto_policy_number', 'carrier_auto_insurer_name', 'carrier_auto_coverage_amount', 'carrier_auto_effective_date', 'carrier_auto_expiry_date',
+        'carrier_cargo_policy_number', 'carrier_cargo_insurer_name', 'carrier_cargo_coverage_amount', 'carrier_cargo_expiry_date',
+        'carrier_total_deliveries', 'carrier_onboarding_fee_paid', 'carrier_onboarding_fee_payment_intent_id',
+        'carrier_submitted_for_verification_at', 'carrier_last_verification_at', 'carrier_next_reverification_at',
     ];
 
     /** Columns safe to show another company (eager load as 'shipper:' . Organization::PUBLIC) */
-    public const PUBLIC = 'id,name,type,email,phone,city,state,logo_url';
+    public const PUBLIC = 'id,name,type,email,phone,city,state,logo_url,rating,total_ratings,carrier_dot_number,carrier_mc_number,carrier_dot_verified,carrier_insurance_verified,carrier_total_deliveries';
 
-    // Single-use Stripe bank token, only ever sent to Stripe
-    protected $hidden = ['bank_token'];
+    // Single-use Stripe bank token, only ever sent to Stripe; the Plaid token never leaves the server
+    protected $hidden = ['bank_token', 'shipper_plaid_access_token'];
 
     protected function casts(): array
     {
@@ -46,6 +66,36 @@ class Organization extends Model
             'representative_ownership' => 'float',
             'stripe_requirements'     => 'array',
             'stripe_submitted_at'     => 'datetime',
+            'ops_same_as_biz'         => 'boolean',
+            'rating'                  => 'decimal:2',
+            'total_ratings'           => 'integer',
+            'verification_submitted_at' => 'datetime',
+            'shipper_email_verified_at' => 'datetime',
+            'shipper_phone_verified_at' => 'datetime',
+            'shipper_ein_verified_at'   => 'datetime',
+            'shipper_preferred_categories' => 'array',
+            'shipper_notif_recipients'  => 'array',
+            'shipper_notif_email'       => 'array',
+            'shipper_notif_sms'         => 'array',
+            'shipper_coi_expiry'        => 'date',
+            'shipper_hipaa_baa_expiry'  => 'date',
+            'shipper_hazmat_reg_expiry' => 'date',
+            'shipper_plaid_access_token' => 'encrypted',
+            'shipper_plaid_connected_at' => 'datetime',
+            'carrier_type_selected_at'  => 'datetime',
+            'carrier_dot_verified'      => 'boolean',
+            'carrier_mc_verified'       => 'boolean',
+            'carrier_insurance_verified' => 'boolean',
+            'carrier_auto_coverage_amount'  => 'decimal:2',
+            'carrier_auto_effective_date'   => 'date',
+            'carrier_auto_expiry_date'      => 'date',
+            'carrier_cargo_coverage_amount' => 'decimal:2',
+            'carrier_cargo_expiry_date'     => 'date',
+            'carrier_total_deliveries'  => 'integer',
+            'carrier_onboarding_fee_paid' => 'boolean',
+            'carrier_submitted_for_verification_at' => 'datetime',
+            'carrier_last_verification_at'   => 'datetime',
+            'carrier_next_reverification_at' => 'datetime',
         ];
     }
 
@@ -79,14 +129,30 @@ class Organization extends Model
         return $this->hasMany(OrgInvitation::class, 'org_id');
     }
 
-    public function carrierProfile(): HasOne
+    public function vehicles(): HasMany
     {
-        return $this->hasOne(CarrierProfile::class, 'org_id');
+        return $this->hasMany(CarrierVehicle::class, 'carrier_id');
     }
 
-    public function shipperProfile(): HasOne
+    public function carrierDocuments(): HasMany
     {
-        return $this->hasOne(ShipperProfile::class, 'org_id');
+        return $this->hasMany(CarrierDocument::class, 'carrier_id');
+    }
+
+    public function carrierVerifications(): HasMany
+    {
+        return $this->hasMany(CarrierVerification::class, 'carrier_id');
+    }
+
+    public function shipperDocuments(): HasMany
+    {
+        return $this->hasMany(ShipperDocument::class, 'shipper_id');
+    }
+
+    public function certifications(): BelongsToMany
+    {
+        return $this->belongsToMany(Certification::class, 'org_certifications', 'org_id', 'certification_id')
+                    ->withTimestamps();
     }
 
     public function serviceTypes(): BelongsToMany
@@ -108,17 +174,19 @@ class Organization extends Model
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * The legal business name on the owner's profile is the company's name. Keep the company in step when the owner edits it.
-     */
-    public static function syncNameFromProfile($profile): void
+    /** The legal business name is the company's name: setting one sets both. */
+    public function setLegalName(?string $name): void
     {
-        if (!$profile->wasChanged('company_name') && !$profile->wasRecentlyCreated) return;
-        $name = trim((string) $profile->company_name);
-        if ($name === '' || !$profile->org_id) return;
-        $org = static::find($profile->org_id);
-        if (!$org || $org->owner_id !== $profile->user_id || $org->name === $name) return;
-        $org->update(['name' => $name, 'legal_name' => $org->legal_name ?: $name]);
+        $name = trim((string) $name);
+        if ($name === '') return;
+        $this->fill(['name' => $name, 'legal_name' => $name]);
+    }
+
+    /** Digits only: DOT and MC numbers are stored without "DOT-" or "MC-" prefixes */
+    public static function digits(?string $value): ?string
+    {
+        if ($value === null) return null;
+        return preg_replace('/\D/', '', $value) ?: null;
     }
 
     public function isCarrier(): bool        { return $this->type === 'carrier'; }
