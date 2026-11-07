@@ -13,12 +13,11 @@ import type { ShipmentStatus } from '@/types/shipment';
 
 interface ShipmentDetail {
   shipment: Row;
-  organization: Row | null;
-  service_type: Row | null;
   shipper: Row | null;
   carrier: Row | null;
   receiver: Row | null;
   contract: Row | null;
+  /** Offers from carriers */
   bids: Row[];
   transactions: Row[];
   gps: { count: number; latest: Row | null; pings: Row[] };
@@ -29,19 +28,19 @@ const SECTIONS: { title: string; fields: [string, string][] }[] = [
   {
     title: 'Overview',
     fields: [
-      ['id', 'Shipment ID'], ['status', 'Status'], ['job_type', 'Job type'], ['tracking_token', 'Tracking token'],
+      ['id', 'Load ID'], ['status', 'Status'], ['job_status', 'Job status'], ['job_type', 'Job type'],
+      ['reference_number', 'Reference'], ['tracking_token', 'Tracking code'], ['stops_count', 'Stops'],
       ['created_at', 'Created'], ['updated_at', 'Last updated'],
     ],
   },
   {
     title: 'Cargo',
     fields: [
-      ['item_description', 'Description'], ['item_category', 'Category'], ['weight_lbs', 'Weight (lbs)'],
-      ['handling_requirements', 'Handling'], ['required_cert_keys', 'Required certifications'], ['special_notes', 'Special notes'],
+      ['item_description', 'Description'], ['weight_lbs', 'Weight (lbs)'], ['special_notes', 'Special instructions'],
     ],
   },
   {
-    title: 'Pickup',
+    title: 'First pickup',
     fields: [
       ['pickup_address', 'Address'], ['pickup_city', 'City'], ['pickup_state', 'State'],
       ['pickup_date', 'Date'], ['pickup_time_window', 'Time window'],
@@ -50,7 +49,7 @@ const SECTIONS: { title: string; fields: [string, string][] }[] = [
     ],
   },
   {
-    title: 'Delivery',
+    title: 'Last drop-off',
     fields: [
       ['delivery_address', 'Address'], ['delivery_city', 'City'], ['delivery_state', 'State'],
       ['delivery_date', 'Date'], ['delivery_time_window', 'Time window'],
@@ -66,8 +65,7 @@ const SECTIONS: { title: string; fields: [string, string][] }[] = [
   {
     title: 'Payment',
     fields: [
-      ['agreed_cost', 'Agreed cost'], ['currency', 'Currency'], ['payment_status', 'Payment status'],
-      ['platform_fee_cents', 'Platform fee'], ['payment_intent_id', 'Stripe payment'], ['transfer_id', 'Stripe transfer'],
+      ['agreed_cost', 'Agreed amount'], ['payment_status', 'Payment status'],
     ],
   },
 ];
@@ -89,14 +87,15 @@ export default function AdminShipmentDetailPage() {
 
   const back = (
     <Link href="/admin/shipments" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-      <ArrowLeft size={14} /> All shipments
+      <ArrowLeft size={14} /> All loads
     </Link>
   );
 
   if (isLoading) return <div className="space-y-4">{back}<div className="skeleton h-96 rounded-xl" /></div>;
-  if (isError || !data) return <div className="space-y-4">{back}<EmptyState icon={Package} title="Shipment not found" /></div>;
+  if (isError || !data) return <div className="space-y-4">{back}<EmptyState icon={Package} title="Load not found" /></div>;
 
   const s = data.shipment;
+  const stops = (s.stops as Row[] | undefined) ?? [];
   const route = `${s.pickup_city ?? '—'}, ${s.pickup_state ?? ''} → ${s.delivery_city ?? '—'}, ${s.delivery_state ?? ''}`;
 
   return (
@@ -105,7 +104,7 @@ export default function AdminShipmentDetailPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="page-title">Shipment #{String(s.id)}</h1>
+          <h1 className="page-title">Load #{String(s.id)}</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">{String(s.item_description ?? '')} · {route}</p>
         </div>
         <StatusPill status={s.status as ShipmentStatus} />
@@ -117,21 +116,6 @@ export default function AdminShipmentDetailPage() {
             <Fields data={s} fields={sec.fields} />
           </Card>
         ))}
-
-        <Card title="Service & organization">
-          <Fields
-            data={{
-              service: data.service_type?.name, service_category: data.service_type?.category,
-              org: data.organization?.name, org_type: data.organization?.type,
-              stripe_mode: data.organization?.stripe_mode, commission_rate: data.organization?.commission_rate,
-            }}
-            fields={[
-              ['service', 'Service type'], ['service_category', 'Service category'],
-              ['org', 'Organization'], ['org_type', 'Org type'],
-              ['stripe_mode', 'Stripe mode'], ['commission_rate', 'Commission rate'],
-            ]}
-          />
-        </Card>
 
         <Card title="Contract">
           {data.contract ? (
@@ -160,13 +144,24 @@ export default function AdminShipmentDetailPage() {
         ))}
       </div>
 
-      <Card title={`Bids (${data.bids.length})`}>
+      <Card title={`Stops (${stops.length})`}>
+        <Table
+          rows={stops}
+          empty="No stops."
+          columns={[
+            ['sequence', '#'], ['stop_type', 'Type'], ['name', 'Name'], ['address', 'Address'],
+            ['city', 'City'], ['state', 'State'], ['scheduled_date', 'Date'], ['time_window', 'Window'],
+            ['status', 'Status'], ['completed_at', 'Completed'],
+          ]}
+        />
+      </Card>
+
+      <Card title={`Offers (${data.bids.length})`}>
         <Table
           rows={data.bids}
-          empty="No bids."
+          empty="No offers."
           columns={[
-            ['carrier', 'Carrier'], ['amount', 'Amount'], ['status', 'Status'],
-            ['estimated_pickup_date', 'Est. pickup'], ['estimated_delivery_date', 'Est. delivery'],
+            ['carrier', 'Carrier'], ['placed_by', 'Placed by'], ['amount', 'Amount'], ['status', 'Status'],
             ['note', 'Note'], ['created_at', 'Placed'],
           ]}
         />

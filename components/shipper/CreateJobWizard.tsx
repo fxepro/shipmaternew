@@ -799,18 +799,14 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
 
   // Default locations — pre-fetched on page load so they're ready when Build step opens
   const { data: defaultPickupRes,   isFetching: pickupFetching  } = useQuery({
-    queryKey: ['locations', 'default', 'pickup'],
-    queryFn:  () => locationApi.list({ type: 'pickup',   is_default: true }),
-    staleTime: Infinity,
-  });
-  const { data: defaultDeliveryRes } = useQuery({
-    queryKey: ['locations', 'default', 'delivery'],
-    queryFn:  () => locationApi.list({ type: 'delivery', is_default: true }),
+    queryKey: ['locations', 'default'],
+    queryFn:  () => locationApi.list({ is_default: true }),
     staleTime: Infinity,
   });
 
+  // Your default location starts the first pickup. Locations have no pickup/delivery type, so dropoffs start empty.
   const defaultPickup:  LocationOption | null = defaultPickupRes?.data?.data?.[0]  ?? null;
-  const defaultDelivery: LocationOption | null = defaultDeliveryRes?.data?.data?.[0] ?? null;
+  const defaultDelivery: LocationOption | null = null;
 
   const contracts: ContractRow[] = (contractsRes?.data?.data ?? []).map(toContractRow);
 

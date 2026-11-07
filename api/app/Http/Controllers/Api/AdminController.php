@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ShipmentResource;
 use App\Models\FreightJob;
 use App\Models\Organization;
-use App\Models\Shipment;
 use App\Models\User;
 use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
@@ -29,11 +28,11 @@ class AdminController extends Controller
     {
         if ($err = $this->requireAdmin($request)) return $err;
 
-        $total    = Shipment::count();
+        $total    = FreightJob::where('status', '!=', 'draft')->count();
         $carriers = $this->countUsersOfType('carrier');
         $shippers = $this->countUsersOfType('shipper');
-        $revenue  = Shipment::whereNotNull('platform_fee_cents')
-            ->sum('platform_fee_cents') / 100;
+        // Shipmater's fee on loads that have been paid
+        $revenue  = DB::table('load_payments')->where('status', 'paid')->sum('fee_cents') / 100;
 
         return response()->json([
             'data' => [
@@ -59,16 +58,16 @@ class AdminController extends Controller
     {
         if ($err = $this->requireAdmin($request)) return $err;
 
-        $query = Shipment::with(['shipper', 'carrier', 'latestPing'])
+        $query = FreightJob::with(['stops', 'shipper', 'carrier', 'latestPing'])
             ->latest();
 
         if ($request->filled('status') && $request->input('status') !== 'all') {
-            $query->where('status', $request->input('status'));
+            $query->displayStatus($request->input('status'));
         }
 
         if ($request->filled('q')) {
             $q = $request->input('q');
-            $query->where('item_description', 'ilike', "%{$q}%");
+            $query->where(fn ($w) => $w->where('title', 'ilike', "%{$q}%")->orWhere('reference_number', 'ilike', "%{$q}%"));
         }
 
         $limit     = (int) $request->input('limit', 50);
@@ -79,39 +78,37 @@ class AdminController extends Controller
         ]);
     }
 
-    // GET /api/v1/admin/shipments/{shipment}
-    // Full record for the admin detail page: every shipment column plus related records.
-    public function shipment(Request $request, Shipment $shipment): JsonResponse
+    // GET /api/v1/admin/shipments/{job}
+    // Full record for the admin detail page: the load (freight job) with its stops, plus related records.
+    public function shipment(Request $request, FreightJob $job): JsonResponse
     {
         if ($err = $this->requireAdmin($request)) return $err;
 
-        $shipment->load([
-            'shipper', 'carrier', 'receiver',
-            'contract', 'serviceType', 'bids.carrier', 'bids.user', 'people.user',
-        ]);
-
-        $pings = $shipment->gpsPings()->orderByDesc('pinged_at')->get();
+        $shipment = $job->load(['stops', 'shipper', 'carrier', 'contract', 'offers.carrier', 'offers.user', 'people.user', 'latestPing']);
+        $pings    = $shipment->gpsPings()->get();
+        $receiver = $shipment->people->first(fn ($p) => $p->org_id === null)?->user;
 
         return response()->json([
             'data' => [
-                'shipment'     => $shipment->attributesToArray(),
-                'service_type' => $shipment->serviceType?->only(['id', 'key', 'name', 'category']),
+                'shipment'     => (new \App\Http\Resources\ShipmentResource($shipment))->toArray($request),
+
                 'shipper'      => $this->companySummary($shipment->shipper),
                 'carrier'      => $this->companySummary($shipment->carrier),
-                'receiver'     => $this->partySummary($shipment->receiver),
+                'receiver'     => $this->partySummary($receiver),
                 'people'       => $shipment->people->map(fn ($p) => [
                     'org_id'  => $p->org_id,
                     'user_id' => $p->user_id,
                     'name'    => $p->user?->name,
                     'email'   => $p->user?->email,
-                    'role'    => \App\Models\OrgMember::where('org_id', $p->org_id)->where('user_id', $p->user_id)->value('role'),
-                    'side'    => (int) $p->org_id === (int) $shipment->shipper_id ? 'shipper' : 'carrier',
+                    'role'    => $p->org_id ? \App\Models\OrgMember::where('org_id', $p->org_id)->where('user_id', $p->user_id)->value('role') : 'receiver',
+                    'side'    => $p->org_id === null ? 'receiver' : ((int) $p->org_id === (int) $shipment->shipper_id ? 'shipper' : 'carrier'),
                 ])->values(),
                 'contract'     => $shipment->contract?->only([
                     'id', 'title', 'status', 'rate_type', 'rate', 'fuel_surcharge', 'detention_rate',
                     'payment_terms', 'equipment_type', 'valid_from', 'valid_to',
                 ]),
-                'bids' => $shipment->bids->sortByDesc('created_at')->values()->map(fn ($b) => [
+                // Offers from carriers (shown as bids)
+                'bids' => $shipment->offers->sortByDesc('created_at')->values()->map(fn ($b) => [
                     'id'                      => $b->id,
                     'carrier'                 => PersonChecks::companyName($b->carrier),
                     'carrier_id'              => $b->carrier_id,
@@ -119,12 +116,12 @@ class AdminController extends Controller
                     'placed_by'               => $b->user?->name,
                     'amount'                  => (float) $b->amount,
                     'status'                  => $b->status,
-                    'estimated_pickup_date'   => $b->estimated_pickup_date,
-                    'estimated_delivery_date' => $b->estimated_delivery_date,
+                    'estimated_pickup_date'   => null,
+                    'estimated_delivery_date' => null,
                     'note'                    => $b->note,
                     'created_at'              => $b->created_at?->toISOString(),
                 ]),
-                'transactions' => DB::table('transactions')->where('shipment_id', $shipment->id)
+                'transactions' => DB::table('transactions')->where('freight_job_id', $shipment->id)
                     ->orderByDesc('created_at')
                     ->get(['id', 'invoice_no', 'description', 'category', 'amount', 'status', 'due_date', 'paid_at', 'created_at']),
                 'gps' => [
@@ -275,23 +272,22 @@ class AdminController extends Controller
         }
 
         // The person's loads are their load_people rows; the side is whichever company they were there for
-        $onLoad = fn (string $side) => Shipment::whereIn('id', \App\Models\LoadPerson::where('load_type', 'shipment')
-            ->where('user_id', $user->id)->whereColumn('load_people.org_id', "shipments.{$side}_id")->select('load_id'));
+        $onLoad = fn (string $side) => FreightJob::whereIn('id', \App\Models\LoadPerson::where('load_type', 'freight_job')
+            ->where('user_id', $user->id)->whereColumn('load_people.org_id', "freight_jobs.{$side}_id")->select('load_id'));
         $asShipper = $onLoad('shipper');
         $asCarrier = $onLoad('carrier');
 
-        $recent = Shipment::where(fn ($q) => $q->whereIn('id', \App\Models\LoadPerson::where('load_type', 'shipment')->where('user_id', $user->id)->select('load_id'))
-                ->orWhere('receiver_id', $user->id))
+        $recent = FreightJob::forPerson($user->id)->with('stops')
             ->latest()
             ->limit(10)
-            ->get(['id', 'item_description', 'status', 'pickup_city', 'pickup_state', 'delivery_city', 'delivery_state', 'agreed_cost', 'created_at'])
-            ->map(fn (Shipment $s) => [
-                'id'          => $s->id,
-                'item'        => $s->item_description,
-                'status'      => $s->status,
-                'route'       => "{$s->pickup_city}, {$s->pickup_state} → {$s->delivery_city}, {$s->delivery_state}",
-                'agreed_cost' => $s->agreed_cost ? (float) $s->agreed_cost : null,
-                'created_at'  => $s->created_at?->toISOString(),
+            ->get()
+            ->map(fn (FreightJob $j) => [
+                'id'          => $j->id,
+                'item'        => $j->title ?: "Load #{$j->id}",
+                'status'      => $j->displayStatus(),
+                'route'       => $j->routeLabel(),
+                'agreed_cost' => $j->amount(),
+                'created_at'  => $j->created_at?->toISOString(),
             ]);
 
         return response()->json([
@@ -326,10 +322,10 @@ class AdminController extends Controller
                 'activity'     => [
                     'shipments_as_shipper' => (clone $asShipper)->count(),
                     'shipments_as_carrier' => (clone $asCarrier)->count(),
-                    'delivered'            => Shipment::forPerson($user->id)->where('status', 'delivered')->count(),
-                    'total_spent'          => (float) (clone $asShipper)->where('status', 'delivered')->sum('agreed_cost'),
-                    'total_earned'         => (float) (clone $asCarrier)->where('status', 'delivered')->sum('agreed_cost'),
-                    'bids'                 => DB::table('bids')->where('user_id', $user->id)->count(),
+                    'delivered'            => FreightJob::forPerson($user->id)->where('status', 'completed')->count(),
+                    'total_spent'          => (float) (clone $asShipper)->where('status', 'completed')->sum('payment_amount_cents') / 100,
+                    'total_earned'         => (float) (clone $asCarrier)->where('status', 'completed')->sum('payment_amount_cents') / 100,
+                    'bids'                 => DB::table('freight_job_offers')->where('user_id', $user->id)->count(),
                 ],
                 'recent_shipments' => $recent,
             ],
@@ -487,21 +483,21 @@ class AdminController extends Controller
     {
         if ($err = $this->requireAdmin($request)) return $err;
 
-        $shipments = Shipment::with(['shipper', 'carrier'])
+        $shipments = FreightJob::with(['shipper', 'carrier'])
             ->where('status', 'disputed')
             ->latest()
             ->limit(100)
             ->get()
-            ->map(fn (Shipment $s) => [
+            ->map(fn (FreightJob $s) => [
                 'id'          => $s->id,
                 'shipment_id' => $s->id,
-                'item_name'   => $s->item_description,
+                'item_name'   => $s->title,
                 'reason'      => 'Disputed by ' . (PersonChecks::companyName($s->shipper) ?? 'shipper'),
                 'status'      => 'open',
                 'created_at'  => $s->updated_at?->toISOString(),
                 'shipper'     => PersonChecks::companyName($s->shipper),
                 'carrier'     => PersonChecks::companyName($s->carrier),
-                'value'       => $s->agreed_cost,
+                'value'       => $s->amount(),
             ]);
 
         return response()->json(['data' => $shipments]);

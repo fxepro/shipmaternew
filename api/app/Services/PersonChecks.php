@@ -21,6 +21,7 @@ class PersonChecks
         'carrier' => ['owner', 'staff', 'dispatcher', 'driver', 'viewer'],
         'shipper' => ['owner', 'staff', 'viewer'],
         'factor'  => ['owner', 'staff', 'viewer'],
+        'receiver' => ['owner', 'staff', 'viewer'],
     ];
 
     public const ROLE_LABELS = [
@@ -68,6 +69,11 @@ class PersonChecks
     /** The person's company and role there: the current company first, then any carrier/shipper membership. */
     public static function membership(User $user): array
     {
+        // An admin viewing a company reads it as a viewer
+        if ($user->viewingAs) {
+            return ['org' => $user->viewingAs, 'type' => $user->viewingAs->type, 'role' => 'viewer'];
+        }
+
         $members = OrgMember::where('user_id', $user->id)->with('org')->get()
             ->filter(fn ($m) => in_array($m->org?->type, ['carrier', 'shipper', 'factor'], true));
 

@@ -19,7 +19,7 @@ interface LiveMapProps {
   /**
    * When provided, subscribe to the PUBLIC channel `tracking.{trackingToken}`
    * (no auth needed — used by the public /track/[token] page).
-   * When omitted, subscribe to the PRIVATE channel `shipment.{shipmentId}`
+   * When omitted, subscribe to the PRIVATE channel `load.{shipmentId}` (the freight job id)
    * (requires Sanctum auth — used by authenticated dashboards).
    */
   trackingToken?: string;
@@ -155,7 +155,7 @@ export function LiveMap({
         // private channel for authenticated dashboards.
         const channel = trackingToken
           ? echoInstance.channel(`tracking.${trackingToken}`)
-          : echoInstance.private(`shipment.${shipmentId}`);
+          : echoInstance.private(`load.${shipmentId}`);
 
         channelRef.current = channel;
 

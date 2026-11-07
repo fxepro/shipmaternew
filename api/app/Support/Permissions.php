@@ -23,6 +23,7 @@ class Permissions
         'carrier' => ['owner', 'staff', 'dispatcher', 'driver', 'viewer'],
         'shipper' => ['owner', 'staff', 'viewer'],
         'factor'  => ['owner', 'staff', 'viewer'],
+        'receiver' => ['owner', 'staff', 'viewer'],
     ];
 
     private const DO   = ['full', 'none'];
@@ -85,6 +86,14 @@ class Permissions
             'loads.decide'       => ['Factoring', 'Factored loads: approve, reject, mark funded', self::DO, ['full', 'full', 'none']],
             'loads.view'         => ['Factoring', 'Loads, NOAs and payments', self::AREA, ['full', 'full', 'view']],
             'self.checks'        => ['Other', 'Own identity and checks', self::SELF, ['self', 'self', 'self']],
+        ],
+        'receiver' => [
+            'company.profile'    => ['Company', 'Company details', self::AREA, ['full', 'full', 'view']],
+            'team.manage'        => ['Company', 'Team: invite, change role, remove', self::DO, ['full', 'full', 'none']],
+            'locations.manage'   => ['Company', 'Locations: add, edit, remove', self::AREA, ['full', 'full', 'view']],
+            'contacts.manage'    => ['Company', 'Contacts and their load updates', self::AREA, ['full', 'full', 'view']],
+            'loads.view'         => ['Deliveries', 'Loads coming to our locations, tracking', self::AREA, ['full', 'full', 'view']],
+            'self.checks'        => ['Other', 'Own identity', self::SELF, ['self', 'self', 'self']],
         ],
     ];
 

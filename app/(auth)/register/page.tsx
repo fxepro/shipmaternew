@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Package, Truck, Landmark } from 'lucide-react';
-import { authApi, orgApi } from '@/lib/api';
+import { Package, Truck, Landmark, PackageCheck, Check } from 'lucide-react';
+import { authApi, orgApi, directoryApi } from '@/lib/api';
 import { establishSession, getRolePath } from '@/lib/auth';
 import { getTenantConfigClient, type TenantConfig } from '@/lib/tenant';
 
@@ -33,13 +33,14 @@ const schema = z.object({
   email:                 z.string().email('Enter a valid email'),
   password:              z.string().min(8, 'At least 8 characters'),
   password_confirmation: z.string(),
-  role:                  z.enum(['shipper', 'carrier', 'factor']),
+  role:                  z.enum(['shipper', 'carrier', 'receiver', 'factor']),
   company_name:          z.string().optional(),
   joining:               z.boolean().optional(),
+  claiming:              z.boolean().optional(),
 }).refine((d) => d.password === d.password_confirmation, {
   message: "Passwords don't match",
   path: ['password_confirmation'],
-}).refine((d) => d.joining || (d.company_name ?? '').trim().length >= 2, {
+}).refine((d) => d.joining || d.claiming || (d.company_name ?? '').trim().length >= 2, {
   // The person signing up owns the company; its legal business name is the company's name
   message: 'Legal business name is required',
   path: ['company_name'],
@@ -59,6 +60,12 @@ const ROLES = [
     label:       'Carrier',
     icon:        Truck,
     description: 'Browse matching loads, bid or get hired direct, get paid fast.',
+  },
+  {
+    value:       'receiver' as const,
+    label:       'Receive freight',
+    icon:        PackageCheck,
+    description: 'Warehouses and stores: see what is coming, and get told when it is on the way and delivered.',
   },
   {
     value:       'factor' as const,
@@ -84,10 +91,12 @@ interface InviteInfo {
   email: string;
   role: string;
   company_name: string | null;
-  company_type: 'carrier' | 'shipper' | 'factor' | null;
+  company_type: 'carrier' | 'shipper' | 'factor' | 'receiver' | null;
   expired: boolean;
   accepted: boolean;
 }
+
+interface Claimable { id: number; name: string; type: string; city: string | null; state: string | null }
 
 const INVITE_ROLE_LABELS: Record<string, string> = { staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer' };
 
@@ -118,6 +127,24 @@ function RegisterForm() {
   });
 
   const selectedRole = watch('role');
+  const companyName = watch('company_name') ?? '';
+
+  // A shipper may already have listed this company (e.g. as a receiver): offer to claim it instead of creating a second one
+  const [claimOrg, setClaimOrg] = useState<Claimable | null>(null);
+  const [matches, setMatches] = useState<Claimable[]>([]);
+  useEffect(() => {
+    const q = companyName.trim();
+    if (inviteToken || claimOrg || selectedRole === 'factor' || q.length < 3) { setMatches([]); return; }
+    const t = setTimeout(() => {
+      directoryApi.claimable(q).then(r => setMatches(r.data.data as Claimable[])).catch(() => setMatches([]));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [companyName, inviteToken, claimOrg, selectedRole]);
+  const pickClaim = (o: Claimable | null) => {
+    setClaimOrg(o);
+    setValue('claiming', !!o);
+    if (o) setValue('company_name', o.name);
+  };
 
   // Joining a company by invitation: each person gets their own login under that company
   useEffect(() => {
@@ -138,12 +165,18 @@ function RegisterForm() {
   async function onSubmit(data: FormData) {
     setError('');
     try {
-      const { joining: _joining, ...fields } = data;
-      const res = await authApi.register(inviteUsable ? { ...fields, invite_token: inviteToken } : fields);
-      const { token } = res.data as { token: string };
+      const { joining: _joining, claiming: _claiming, ...fields } = data;
+      const res = await authApi.register(
+        inviteUsable ? { ...fields, invite_token: inviteToken }
+          : claimOrg ? { ...fields, claim_org_id: claimOrg.id }
+          : fields,
+      );
+      const { token, data: created } = res.data as { token: string; data: { email_verified?: boolean } };
       establishSession(token);
+      // Step 2 of sign-up: verify the email (an accepted invitation already proves it)
+      if (!created?.email_verified) { router.replace('/verify-email'); return; }
       // Invited people start with their own verification checklist
-      router.replace(inviteUsable && data.role !== 'factor' ? `${getRolePath(data.role)}/verification` : getRolePath(data.role));
+      router.replace(inviteUsable && (data.role === 'carrier' || data.role === 'shipper') ? `${getRolePath(data.role)}/verification` : getRolePath(data.role));
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Registration failed. Please try again.');
@@ -205,14 +238,14 @@ function RegisterForm() {
             <p style={{ fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 10 }}>
               I am a…
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 10 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 10 }}>
               {ROLES.map(({ value, label, icon: Icon, description }) => {
                 const active = selectedRole === value;
                 return (
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setValue('role', value)}
+                    onClick={() => { setValue('role', value); if (value === 'factor') pickClaim(null); }}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -280,10 +313,31 @@ function RegisterForm() {
                 style={inputStyle}
                 className="outline-none focus:border-[#0096C7]"
                 placeholder="Acme Logistics LLC"
+                readOnly={!!claimOrg}
                 {...register('company_name')}
               />
               {errors.company_name && <p style={{ fontFamily: BODY, fontSize: 12, color: B.red, marginTop: 4 }}>{errors.company_name.message}</p>}
-              <p style={{ fontFamily: BODY, fontSize: 12, color: B.gray50, marginTop: 4 }}>You&apos;ll own this company and can invite your team after signing up.</p>
+              {claimOrg ? (
+                <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 6, background: B.tealBg, color: B.darkSec, fontSize: 12, lineHeight: 1.5 }}>
+                  <Check size={12} style={{ display: 'inline', marginRight: 4 }} />
+                  You&apos;re claiming <strong>{claimOrg.name}</strong>{claimOrg.city ? ` (${claimOrg.city}${claimOrg.state ? ', ' + claimOrg.state : ''})` : ''}.
+                  It&apos;s yours straight away if your email is one of its listed contacts; otherwise Shipmater confirms it first.{' '}
+                  <button type="button" onClick={() => pickClaim(null)} style={{ color: B.tealDark, fontWeight: 600, background: 'none', border: 0, cursor: 'pointer', padding: 0 }}>Not mine</button>
+                </div>
+              ) : matches.length > 0 ? (
+                <div style={{ marginTop: 6, border: `1px solid ${B.gray10}`, borderRadius: 6, padding: '8px 10px' }}>
+                  <p style={{ fontSize: 12, color: B.gray70, marginBottom: 4 }}>Already listed on {brandName}. Is one of these your company?</p>
+                  {matches.map(o => (
+                    <button key={o.id} type="button" onClick={() => pickClaim(o)}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 13, padding: '4px 0', background: 'none', border: 0, cursor: 'pointer', color: B.gray100 }}>
+                      <strong>{o.name}</strong>
+                      <span style={{ color: B.gray50 }}>{o.city ? ` · ${o.city}${o.state ? ', ' + o.state : ''}` : ''} · Claim it</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontFamily: BODY, fontSize: 12, color: B.gray50, marginTop: 4 }}>You&apos;ll own this company and can invite your team after signing up.</p>
+              )}
             </div>
           </div>
 
@@ -360,7 +414,7 @@ function RegisterForm() {
             }}
             className="hover:opacity-90 transition-opacity"
           >
-            {isSubmitting ? 'Creating account…' : inviteUsable ? 'Create my login' : `Create ${selectedRole} account`}
+            {isSubmitting ? 'Creating account…' : inviteUsable ? 'Create my login' : (claimOrg ? `Create account and claim ${claimOrg.name}` : selectedRole === 'receiver' ? 'Create receiving account' : `Create ${selectedRole} account`)}
           </button>
         </form>
       </div>

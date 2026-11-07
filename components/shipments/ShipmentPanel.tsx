@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { shipmentApi } from '@/lib/api';
 import { StatusPill } from './StatusPill';
 import { StaticRouteMap } from '@/components/maps/StaticRouteMap';
+import { parseDay } from '@/lib/utils';
 import type { Shipment } from '@/types/shipment';
 
 interface ShipmentPanelProps {
@@ -58,7 +59,7 @@ export function ShipmentPanel({ shipmentId, onClose }: ShipmentPanelProps) {
   const mapDelivery = s?.delivery_lat && s?.delivery_lng ? { lat: s.delivery_lat, lng: s.delivery_lng } : null;
 
   const formatDate = (d?: string | null) =>
-    d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    d ? parseDay(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   const formatCost = (n?: number | null) =>
     n != null ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null;
   const formatDist = (miles?: number | null, mins?: number | null) => {
@@ -134,14 +135,40 @@ export function ShipmentPanel({ shipmentId, onClose }: ShipmentPanelProps) {
                 </div>
               )}
 
-              {/* Route */}
-              <Section icon={MapPin} title="Route">
-                <Row label="Pickup address"    value={s.pickup_address} />
-                <Row label="Pickup date"       value={formatDate(s.pickup_date)} />
-                <Row label="Pickup window"     value={s.pickup_time_window} />
-                <Row label="Delivery address"  value={s.delivery_address} />
-                <Row label="Delivery date"     value={formatDate(s.delivery_date)} />
-                <Row label="Delivery window"   value={s.delivery_time_window} />
+              {/* Route: every stop in order */}
+              <Section icon={MapPin} title={`Route · ${s.stops?.length ?? 2} stops`}>
+                {(s.stops ?? []).length > 0 ? (
+                  <ol className="space-y-0">
+                    {[...(s.stops ?? [])].sort((a, b) => a.sequence - b.sequence).map((st, i) => (
+                      <li key={st.id} className="flex items-start gap-3 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+                        <span
+                          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                          style={{ background: st.stop_type === 'pickup' ? 'var(--primary)' : 'var(--text-muted)' }}
+                        >
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                            {st.stop_type === 'pickup' ? 'Pickup' : 'Drop-off'}{st.name ? ` · ${st.name}` : ''}
+                          </p>
+                          <p className="text-sm" style={{ color: 'var(--text-faint)' }}>{st.address}</p>
+                        </div>
+                        <div className="shrink-0 text-right text-sm" style={{ color: 'var(--text-faint)' }}>
+                          {formatDate(st.scheduled_date) ?? '—'}
+                          {st.time_window && <div className="text-xs">{st.time_window}</div>}
+                          {st.status === 'completed' && <div className="text-xs font-medium" style={{ color: 'var(--success, #15803d)' }}>Done</div>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <>
+                    <Row label="Pickup address"    value={s.pickup_address} />
+                    <Row label="Pickup date"       value={formatDate(s.pickup_date)} />
+                    <Row label="Delivery address"  value={s.delivery_address} />
+                    <Row label="Delivery date"     value={formatDate(s.delivery_date)} />
+                  </>
+                )}
                 <Row label="Distance"          value={formatDist(s.distance_miles, s.estimated_duration_mins)} />
               </Section>
 

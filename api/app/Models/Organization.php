@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Organization extends Model
 {
     protected $fillable = [
-        'name', 'slug', 'type', 'plan', 'status', 'owner_id',
+        'name', 'slug', 'type', 'plan', 'status', 'owner_id', 'listed_by_org_id', 'listed_by_user_id', 'claimed_at',
         'phone', 'email', 'website',
         'street', 'city', 'state', 'zip', 'country', 'currency',
         'tax_id', 'tax_id_type',
@@ -62,6 +62,7 @@ class Organization extends Model
             'commission_rate'   => 'float',
             'is_platform_tenant'=> 'boolean',
             'verification_updated_at' => 'datetime',
+            'claimed_at'              => 'datetime',
             'background_checked_at'   => 'datetime',
             'representative_ownership' => 'float',
             'stripe_requirements'     => 'array',
@@ -164,7 +165,7 @@ class Organization extends Model
     /** Loads where this company is the shipper or the carrier */
     public function shipments()
     {
-        return Shipment::forOrg($this->id);
+        return FreightJob::forOrg($this->id);
     }
 
     public function platformTenant(): HasOne
@@ -189,6 +190,66 @@ class Organization extends Model
         return preg_replace('/\D/', '', $value) ?: null;
     }
 
+    // ── Directory: locations, contacts, saved partners, listing and claiming ───
+
+    public const TYPES = ['shipper', 'carrier', 'factor', 'receiver', 'broker'];
+    /** Types a company can list on someone else's behalf */
+    public const LISTABLE = ['receiver', 'broker'];
+
+    public function locations(): HasMany
+    {
+        return $this->hasMany(Location::class, 'org_id');
+    }
+
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(OrgContact::class, 'org_id');
+    }
+
+    /** Organizations this one keeps (a shipper's receivers) */
+    public function partnerLinks(): HasMany
+    {
+        return $this->hasMany(OrgPartner::class, 'org_id');
+    }
+
+    public function claims(): HasMany
+    {
+        return $this->hasMany(OrgClaim::class, 'org_id');
+    }
+
+    public function listedBy(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class, 'listed_by_org_id');
+    }
+
+    /** Listed by another company and not claimed yet: nobody from it has an account */
+    public function isListed(): bool { return $this->status === 'listed' && !$this->owner_id; }
+
+    /**
+     * Who may change its details, locations and contacts: its own people once claimed (by role), and while it is
+     * only listed, the company that listed it and every company that saved it. Admins always.
+     */
+    public function editableBy(User $user): bool
+    {
+        if ($user->isPlatformAdmin()) return true;
+        $mine = $user->current_org_id;
+        if (!$mine || $user->viewingAs) return false;
+        if ((int) $mine === (int) $this->id) return true;
+        if (!$this->isListed()) return false;
+        return (int) $this->listed_by_org_id === (int) $mine
+            || OrgPartner::where('org_id', $mine)->where('partner_org_id', $this->id)->exists();
+    }
+
+    /** Who may see its contacts: the same people, plus anyone who saved it */
+    public function contactsVisibleTo(User $user): bool
+    {
+        if ($this->editableBy($user) || $user->isPlatformAdmin()) return true;
+        $mine = $user->viewingAs?->id ?? $user->current_org_id;
+        return $mine && ((int) $mine === (int) $this->id
+            || OrgPartner::where('org_id', $mine)->where('partner_org_id', $this->id)->exists());
+    }
+
+    public function isReceiver(): bool       { return $this->type === 'receiver'; }
     public function isCarrier(): bool        { return $this->type === 'carrier'; }
     public function isShipper(): bool        { return $this->type === 'shipper'; }
     public function isActive():  bool        { return $this->status === 'active'; }

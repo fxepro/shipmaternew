@@ -12,6 +12,7 @@ import { StopEvidence } from '@/components/jobs/StopEvidence';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { freightJobApi } from '@/lib/api';
+import { parseDay } from '@/lib/utils';
 import { RouteMap } from '@/components/RouteMap';
 import type { RouteMapStop } from '@/components/RouteMap';
 import { OfferPanel } from '@/components/jobs/OfferPanel';
@@ -50,7 +51,7 @@ function fmtAmt(n: number | string | null | undefined) {
 }
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return parseDay(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function carrierDisplay(job: any): { name: string; company: string; line: string } {
@@ -268,6 +269,11 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
   const isOpenMarket = !job.carrier_id && job.status === 'posted';
   const canMakeOffer = role === 'carrier' && isOpenMarket && !myOffer;
 
+  // Stop updates and evidence: only the carrier on the load (a carrier sees just its own loads or open ones,
+  // so a load with a carrier is theirs), only while it's live, and only people allowed to update stops
+  const canRunStops = role === 'carrier' && !!job.carrier_id
+    && ['posted', 'in_progress'].includes(job.status) && can.do('trips.stops');
+
   // Shipper: show offers section for open jobs
   const offers: any[] = role === 'shipper' && !job.carrier_id
     ? (job.offers ?? []).filter((o: any) => ['pending', 'accepted', 'rejected'].includes(o.status))
@@ -427,7 +433,7 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
 
               {stops.map((stop: any, i: number) => {
                 const stopStatus = stop.status ?? 'pending';
-                const nextAction = role === 'carrier' && job.status !== 'draft' ? NEXT_ACTION[stopStatus] : null;
+                const nextAction = canRunStops ? NEXT_ACTION[stopStatus] : null;
                 const isPending  = pendingStop === stop.id;
                 const isPickup   = stop.stop_type === 'pickup';
 
@@ -535,6 +541,7 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
                         pod_pdf_url:     stop.pod_pdf_url ?? null,
                       }}
                       role={role}
+                      canUpload={canRunStops}
                       apiBase={process.env.NEXT_PUBLIC_API_URL ?? ''}
                       onStopChanged={onStopUpdated}
                     />

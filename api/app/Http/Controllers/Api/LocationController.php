@@ -3,22 +3,24 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\JobStop;
 use App\Models\Location;
+use App\Services\OrgDirectory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Your own company's locations. A location has no pickup or delivery type: any of them can ship and receive.
+ * Other companies' locations are in the directory (DirectoryController).
+ */
 class LocationController extends Controller
 {
+    public function __construct(private OrgDirectory $dir) {}
+
     public function index(Request $request): JsonResponse
     {
-        // Locations belong to the company
-        $query = Location::where('org_id', $request->user()->current_org_id);
-
-        if ($request->filled('type')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('type', $request->type)->orWhere('type', 'both');
-            });
-        }
+        $org = $request->user()->viewingAs?->id ?? $request->user()->current_org_id;
+        $query = Location::where('org_id', $org);
 
         if ($request->filled('search')) {
             $s = $request->search;
@@ -33,35 +35,16 @@ class LocationController extends Controller
             $query->where('is_default', true);
         }
 
-        $locations = $query->orderByDesc('usage_count')->orderBy('name')->get();
+        $locations = $query->withCount('contacts')->orderByDesc('usage_count')->orderBy('name')->get();
 
         return response()->json(['data' => $locations]);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'type'            => 'required|in:pickup,delivery,both',
-            'name'            => 'required|string|max:200',
-            'contact_name'    => 'nullable|string|max:100',
-            'contact_phone'   => 'nullable|string|max:20',
-            'contact_email'   => 'nullable|email|max:150',
-            'address'         => 'required|string|max:255',
-            'city'            => 'required|string|max:100',
-            'state'           => 'required|string|max:10',
-            'zip'             => 'required|string|max:20',
-            'lat'             => 'nullable|numeric',
-            'lng'             => 'nullable|numeric',
-            'operating_hours' => 'nullable|array',
-            'notes'           => 'nullable|string',
-            'is_default'      => 'boolean',
-        ]);
-
+        $data = $request->validate(OrgDirectory::required(OrgDirectory::LOCATION_RULES, ['name', 'address', 'city', 'zip']));
         abort_unless($request->user()->current_org_id, 422, 'Join or create a company first.');
-        $location = Location::create([
-            ...$data,
-            'org_id' => $request->user()->current_org_id,
-        ]);
+        $location = $this->dir->addLocation($request->user()->currentOrg, $request->user(), $data);
 
         return response()->json(['data' => $location], 201);
     }
@@ -69,32 +52,17 @@ class LocationController extends Controller
     public function update(Request $request, Location $location): JsonResponse
     {
         $this->authorise($request, $location);
+        $location->update($request->validate(OrgDirectory::required(OrgDirectory::LOCATION_RULES, [])));
 
-        $data = $request->validate([
-            'type'            => 'sometimes|in:pickup,delivery,both',
-            'name'            => 'sometimes|string|max:200',
-            'contact_name'    => 'nullable|string|max:100',
-            'contact_phone'   => 'nullable|string|max:20',
-            'contact_email'   => 'nullable|email|max:150',
-            'address'         => 'sometimes|string|max:255',
-            'city'            => 'sometimes|string|max:100',
-            'state'           => 'sometimes|string|max:10',
-            'zip'             => 'sometimes|string|max:20',
-            'lat'             => 'nullable|numeric',
-            'lng'             => 'nullable|numeric',
-            'operating_hours' => 'nullable|array',
-            'notes'           => 'nullable|string',
-            'is_default'      => 'boolean',
-        ]);
-
-        $location->update($data);
-
-        return response()->json(['data' => $location]);
+        return response()->json(['data' => $location->fresh()]);
     }
 
     public function destroy(Request $request, Location $location): JsonResponse
     {
         $this->authorise($request, $location);
+        if (JobStop::where('location_id', $location->id)->exists()) {
+            return response()->json(['message' => 'This location is on loads, so it can\'t be removed. Make it private instead.', 'code' => 'location_in_use'], 422);
+        }
         $location->delete();
         return response()->json(['message' => 'deleted']);
     }

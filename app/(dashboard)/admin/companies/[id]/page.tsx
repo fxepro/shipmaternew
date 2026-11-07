@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Building2, LayoutDashboard, Briefcase, Package, ShieldCheck, Truck, CreditCard, Zap, Bell, Users, ClipboardList,
-  CheckCircle2, Circle, ExternalLink, AlertTriangle,
+  CheckCircle2, Circle, ExternalLink, AlertTriangle, MapPin,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -16,9 +16,11 @@ import { Table, display, type Row } from '@/components/admin/DetailParts';
 import { CompanyStatusBadge, BackgroundBadge, BACKGROUND_RESULTS, BACKGROUND_PASSED } from '@/components/admin/CompanyBadges';
 import { PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
 import { formatCurrency } from '@/lib/utils';
+import { OrgProfile } from '@/components/orgs/OrgProfile';
+import { ClaimDecision } from '@/components/admin/ClaimDecision';
 
 interface CompanyDetail {
-  company: Row & { name: string; type: 'carrier' | 'shipper' | 'factor' };
+  company: Row & { name: string; type: 'carrier' | 'shipper' | 'factor' | 'receiver' | 'broker' };
   company_profile: Row | null;
   verification: {
     status: string; notes: string | null; updated_at: string | null; updated_by: string | null;
@@ -36,7 +38,7 @@ interface CompanyDetail {
   } | null;
 }
 
-type Tab = 'overview' | 'business' | 'services' | 'compliance' | 'vehicles' | 'payment' | 'subscription' | 'notifications' | 'team' | 'loads';
+type Tab = 'overview' | 'business' | 'services' | 'compliance' | 'vehicles' | 'payment' | 'subscription' | 'notifications' | 'team' | 'loads' | 'directory';
 type Section = { title: string; fields: [string, string][] };
 type TabDef = { id: Tab; label: string; icon: React.ElementType };
 
@@ -44,6 +46,7 @@ type TabDef = { id: Tab; label: string; icon: React.ElementType };
 const SHIPPER_TABS: TabDef[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard }, { id: 'business', label: 'Business', icon: Briefcase },
   { id: 'services', label: 'Services', icon: Package }, { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
+  { id: 'directory', label: 'Locations & contacts', icon: MapPin },
   { id: 'payment', label: 'Payment', icon: CreditCard }, { id: 'subscription', label: 'Subscription', icon: Zap },
   { id: 'notifications', label: 'Notifications', icon: Bell }, { id: 'team', label: 'Team', icon: Users },
   { id: 'loads', label: 'Loads', icon: ClipboardList },
@@ -51,9 +54,16 @@ const SHIPPER_TABS: TabDef[] = [
 const CARRIER_TABS: TabDef[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard }, { id: 'business', label: 'Business', icon: Briefcase },
   { id: 'services', label: 'Services', icon: Package }, { id: 'compliance', label: 'Insurance & authority', icon: ShieldCheck },
-  { id: 'vehicles', label: 'Vehicles', icon: Truck }, { id: 'payment', label: 'Payouts', icon: CreditCard },
+  { id: 'vehicles', label: 'Vehicles', icon: Truck }, { id: 'directory', label: 'Locations & contacts', icon: MapPin },
+  { id: 'payment', label: 'Payouts', icon: CreditCard },
   { id: 'team', label: 'Team', icon: Users }, { id: 'loads', label: 'Loads', icon: ClipboardList },
 ];
+// Receivers and brokers: no review, no profile; their page is locations, contacts, team and loads
+const LISTING_TABS: TabDef[] = [
+  { id: 'directory', label: 'Locations & contacts', icon: MapPin }, { id: 'team', label: 'Team', icon: Users },
+  { id: 'loads', label: 'Loads', icon: ClipboardList },
+];
+const TYPE_NAME: Record<string, string> = { carrier: 'Carrier', shipper: 'Shipper', factor: 'Factoring company', receiver: 'Receiver', broker: 'Broker' };
 
 const CARRIER_BUSINESS: Section[] = [
   { title: 'Company', fields: [['company_name', 'Legal business name'], ['carrier_type', 'Carrier type'], ['rating', 'Rating'], ['total_deliveries', 'Deliveries']] },
@@ -200,19 +210,21 @@ export default function AdminCompanyDetailPage() {
   const profile = (data.company_profile ?? {}) as Row;
   const isCarrier = c.type === 'carrier';
   const isFactor  = c.type === 'factor';
+  const isListing = c.type === 'receiver' || c.type === 'broker';
+  const dir = (data as unknown as { directory?: { listed: boolean; listed_by: string | null; pending_claims: { id: number; as_type: string; user: { id: number; name: string; email: string } | null; created_at: string }[] } }).directory;
   const bgPassed = BACKGROUND_PASSED.includes(v.background_status);
   const act = data.activity;
   const ownerApproved = data.members.some((m) => m.role === 'owner' && (m.person_status === 'approved' || m.person_status === 'not_required'));
   const owner = c.owner as Row | null;
-  const tabs = isFactor ? [] : isCarrier ? CARRIER_TABS : SHIPPER_TABS;
-  const current = tabs.some((x) => x.id === tab) ? tab : 'overview';
+  const tabs = isFactor ? [] : isListing ? LISTING_TABS : isCarrier ? CARRIER_TABS : SHIPPER_TABS;
+  const current = tabs.some((x) => x.id === tab) ? tab : (tabs[0]?.id ?? 'overview');
   const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]';
   const noProfile = <p className="text-sm italic text-[var(--color-text-faint)]">The owner hasn&apos;t filled in a profile yet.</p>;
   const initials = c.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const activeSub = t?.subscription.history.find((s) => s.status === 'active');
 
   // What still stands between this company and working on Shipmater
-  const readiness: [string, boolean][] = isFactor ? [] : [
+  const readiness: [string, boolean][] = (isFactor || isListing) ? [] : [
     ['Business details', !!(profile.company_name && (isCarrier ? profile.dot_number || profile.mc_number : profile.ein))],
     ['Background check clear', bgPassed],
     ...(isCarrier
@@ -236,11 +248,12 @@ export default function AdminCompanyDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="page-title">{c.name}</h1>
-              {!isFactor && <CompanyStatusBadge status={v.status} />}
+              {!isFactor && !isListing && <CompanyStatusBadge status={v.status} />}
+              {dir?.listed && <span className="badge badge-muted">Listed by {dir.listed_by ?? 'another company'} · not on Shipmater yet</span>}
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--color-text-muted)]">
               <span className="rounded-full bg-[var(--color-cream)] px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-slate)]">
-                {isCarrier ? 'Carrier' : isFactor ? 'Factoring company' : 'Shipper'}
+                {TYPE_NAME[String(c.type)] ?? String(c.type)}
               </span>
               {owner && <span>Owner <Link href={`/admin/people/${owner.id}`} className="font-medium text-[var(--color-text)] hover:underline">{String(owner.name)}</Link></span>}
               <span>{data.members.length} member{data.members.length === 1 ? '' : 's'}</span>
@@ -264,6 +277,15 @@ export default function AdminCompanyDetailPage() {
       {isFactor && (
         <Panel title="Company details" subtitle="Factoring companies don't need Shipmater approval. They confirm NOAs and loads themselves.">
           <Details data={c as Row} fields={[['org_name', 'Legal name'], ['tax_id', 'EIN'], ['phone', 'Phone'], ['email', 'Email'], ['website', 'Website'], ['address', 'Address']]} />
+        </Panel>
+      )}
+
+      {/* Someone asked to take over this listed company */}
+      {dir?.pending_claims && dir.pending_claims.length > 0 && (
+        <Panel title="Waiting for approval" subtitle="These people signed up and asked to manage this company.">
+          <div className="space-y-2">
+            {dir.pending_claims.map((cl) => <ClaimDecision key={cl.id} claim={cl} orgName={c.name} onDone={() => qc.invalidateQueries({ queryKey: ['admin-company', id] })} />)}
+          </div>
         </Panel>
       )}
 
@@ -295,7 +317,7 @@ export default function AdminCompanyDetailPage() {
           <Stat label="Active" value={act.active ?? 0} />
           <Stat label="Delivered" value={act.delivered ?? 0} />
           <Stat label={isCarrier ? 'Earned' : 'Spent'} value={formatCurrency(Number(act.value ?? 0))} />
-          {isCarrier ? <Stat label="Bids" value={act.bids ?? 0} /> : <Stat label="Contracts" value={t?.contracts.length ?? 0} />}
+          {isCarrier ? <Stat label="Offers" value={act.bids ?? 0} /> : <Stat label="Contracts" value={t?.contracts.length ?? 0} />}
         </div>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -447,6 +469,9 @@ export default function AdminCompanyDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Locations and contacts (admins may edit them) */}
+      {current === 'directory' && <OrgProfile orgId={Number(c.id)} hideHeader />}
 
       {/* Team */}
       {(current === 'team' || isFactor) && (<>

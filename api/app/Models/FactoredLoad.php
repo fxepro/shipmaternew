@@ -31,7 +31,7 @@ class FactoredLoad extends Model
     /** The shipment or freight job */
     public function loadRecord(): ?Model
     {
-        return $this->load_type === 'freight_job' ? FreightJob::find($this->load_id) : Shipment::find($this->load_id);
+        return $this->load_type === 'freight_job' ? FreightJob::find($this->load_id) : null;
     }
 
     /** The factor is owed this load's payment (accepted or already funded) */

@@ -6,7 +6,7 @@ use App\Models\Contract;
 use App\Models\GpsPing;
 use App\Models\PaymentMethod;
 use App\Models\PreferredCarrier;
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -117,12 +117,12 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // ── Helper ────────────────────────────────────────────────────────
-        // Adds a single GPS ping to a shipment if it has none yet
+        // Adds a single GPS ping to a load if it has none yet
 
-        $ping = function (Shipment $s, float $lat, float $lng, float $speed, string $eta) {
-            if (GpsPing::where('shipment_id', $s->id)->doesntExist()) {
+        $ping = function (FreightJob $s, float $lat, float $lng, float $speed, string $eta) {
+            if (GpsPing::where('freight_job_id', $s->id)->doesntExist()) {
                 GpsPing::create([
-                    'shipment_id' => $s->id,
+                    'freight_job_id' => $s->id,
                     'lat'         => $lat,
                     'lng'         => $lng,
                     'speed'       => $speed,
@@ -136,7 +136,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0001 — Long-haul: Denver → Dallas  (existing, in_transit)
         // ══════════════════════════════════════════════════════════════════
 
-        $s1 = Shipment::firstOrCreate(
+        $s1 = DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0001'],
             [
                 'shipper_id'              => $shipperOrg,
@@ -174,7 +174,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0002 — Long-haul: Denver → Los Angeles  (in_transit)
         // ══════════════════════════════════════════════════════════════════
 
-        $s2 = Shipment::firstOrCreate(
+        $s2 = DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0002'],
             [
                 'shipper_id'              => $shipperOrg,
@@ -212,7 +212,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0003 — Long-haul: Chicago → Houston  (in_transit)
         // ══════════════════════════════════════════════════════════════════
 
-        $s3 = Shipment::firstOrCreate(
+        $s3 = DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0003'],
             [
                 'shipper_id'              => $shipperOrg,
@@ -249,7 +249,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0004 — Local Dallas: Deep Ellum → Medical District  (in_transit)
         // ══════════════════════════════════════════════════════════════════
 
-        $s4 = Shipment::firstOrCreate(
+        $s4 = DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0004'],
             [
                 'shipper_id'              => $shipperOrg,
@@ -286,7 +286,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0005 — Local NYC: Penn Station → JFK Airport  (in_transit)
         // ══════════════════════════════════════════════════════════════════
 
-        $s5 = Shipment::firstOrCreate(
+        $s5 = DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0005'],
             [
                 'shipper_id'              => $shipperOrg,
@@ -323,7 +323,7 @@ class DatabaseSeeder extends Seeder
         //   Multiple stops through industrial Dallas — good route-planner fuel
         // ══════════════════════════════════════════════════════════════════
 
-        $s6 = Shipment::firstOrCreate(
+        $s6 = DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0006'],
             [
                 'shipper_id'              => $shipperOrg,
@@ -360,7 +360,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0007 — Local LA zigzag: Studio City → Santa Monica  (assigned)
         // ══════════════════════════════════════════════════════════════════
 
-        Shipment::firstOrCreate(
+        DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0007'],
             [
                 'shipper_id'         => $shipperOrg,
@@ -394,7 +394,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0008 — Mid-haul: Seattle → Portland  (assigned)
         // ══════════════════════════════════════════════════════════════════
 
-        Shipment::firstOrCreate(
+        DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0008'],
             [
                 'shipper_id'         => $shipperOrg,
@@ -428,7 +428,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0009 — Long-haul: Miami → Atlanta  (pending, no carrier yet)
         // ══════════════════════════════════════════════════════════════════
 
-        Shipment::firstOrCreate(
+        DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0009'],
             [
                 'shipper_id'         => $shipperOrg,
@@ -463,7 +463,7 @@ class DatabaseSeeder extends Seeder
         //   (pending — carrier shopping)
         // ══════════════════════════════════════════════════════════════════
 
-        Shipment::firstOrCreate(
+        DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0010'],
             [
                 'shipper_id'         => $shipperOrg,
@@ -497,7 +497,7 @@ class DatabaseSeeder extends Seeder
         // DEMO0011 — Long-haul: Boston → New York  (delivered ✓)
         // ══════════════════════════════════════════════════════════════════
 
-        Shipment::firstOrCreate(
+        DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0011'],
             [
                 'shipper_id'         => $shipperOrg,
@@ -535,7 +535,7 @@ class DatabaseSeeder extends Seeder
         //   Cuts through the city — ideal route-planner test
         // ══════════════════════════════════════════════════════════════════
 
-        Shipment::firstOrCreate(
+        DemoLoad::firstOrCreate(
             ['tracking_token' => 'DEMO0012'],
             [
                 'shipper_id'         => $shipperOrg,
@@ -739,16 +739,44 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
+        // ══════════════════════════════════════════════════════════════════
+        // DEMO0013 — Multi-stop: two pickups in Denver, drop-offs in Boulder and Fort Collins (open, no carrier yet)
+        // ══════════════════════════════════════════════════════════════════
+
+        DemoLoad::firstOrCreate(
+            ['tracking_token' => 'DEMO0013'],
+            [
+                'shipper_id'       => $shipperOrg,
+                'status'           => 'pending',
+                'item_description' => 'Grocery restock — two DCs to two stores',
+                'weight_lbs'       => 18000,
+                'handling_requirements' => ['Temperature Controlled'],
+                'agreed_cost'      => 1150.00,
+                'distance_miles'   => 96.4,
+                'estimated_duration_mins' => 165,
+                'stops' => [
+                    ['pickup',  'Denver DC North', '4800 Race St, Denver, CO 80216',      'Denver',       'CO', '80216', 39.78310, -104.96260, now()->addDays(4)->toDateString()],
+                    ['pickup',  'Denver DC East',  '18500 E 40th Ave, Aurora, CO 80011',  'Aurora',       'CO', '80011', 39.77230, -104.78430, now()->addDays(4)->toDateString()],
+                    ['dropoff', 'Store #118',      '1650 30th St, Boulder, CO 80301',     'Boulder',      'CO', '80301', 40.01920, -105.25480, now()->addDays(4)->toDateString()],
+                    ['dropoff', 'Store #41',       '1842 N College Ave, Fort Collins, CO 80524', 'Fort Collins', 'CO', '80524', 40.60640, -105.07650, now()->addDays(5)->toDateString()],
+                ],
+            ]
+        );
+
         // ── People on the demo loads ──────────────────────────────────────
         $personOf = [$shipperOrg => $shipper->id, $c1Org => $carrier1->id, $c2Org => $carrier2->id, $c3Org => $carrier3->id];
-        foreach (Shipment::where('tracking_token', 'like', 'DEMO%')->get() as $s) {
+        foreach (FreightJob::where('tracking_token', 'like', 'DEMO%')->get() as $s) {
             $s->addPerson($s->shipper_id, $personOf[$s->shipper_id] ?? null);
             if ($s->carrier_id) $s->addPerson($s->carrier_id, $personOf[$s->carrier_id] ?? null);
         }
 
         $this->call(LocationSeeder::class);
+        $this->call(DirectoryDemoSeeder::class);
         $this->call(FactoringDemoSeeder::class);
         $this->call(PaymentsDemoSeeder::class);
         $this->call(RoleDemoSeeder::class);
+
+        // Demo logins have verified emails (sign-up requires it)
+        User::where('email', 'like', '%@demo.com')->whereNull('email_verified_at')->update(['email_verified_at' => now()]);
     }
 }

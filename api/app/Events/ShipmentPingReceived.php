@@ -20,11 +20,11 @@ class ShipmentPingReceived implements ShouldBroadcastNow
     {
         $channels = [
             // Private — for authenticated carrier dashboard / shipper dashboard
-            new PrivateChannel("shipment.{$this->ping->shipment_id}"),
+            new PrivateChannel("load.{$this->ping->freight_job_id}"),
         ];
 
         // Public — for the unauthenticated public tracking page (/track/{token})
-        $token = $this->ping->shipment?->tracking_token;
+        $token = $this->ping->freightJob?->tracking_token;
         if ($token) {
             $channels[] = new Channel("tracking.{$token}");
         }
@@ -43,7 +43,7 @@ class ShipmentPingReceived implements ShouldBroadcastNow
     {
         return [
             'id'            => $this->ping->id,
-            'shipment_id'   => $this->ping->shipment_id,
+            'freight_job_id' => $this->ping->freight_job_id,
             'lat'           => (float) $this->ping->lat,
             'lng'           => (float) $this->ping->lng,
             'speed'         => $this->ping->speed ? (float) $this->ping->speed : null,

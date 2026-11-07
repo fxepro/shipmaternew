@@ -144,12 +144,19 @@ class FreightJobController extends Controller
             'stops.*.items.*.sku'                    => 'nullable|string|max:100',
         ]);
 
-        $contract = $data['contract_id'] ? Contract::findOrFail($data['contract_id']) : null;
+        $contract = !empty($data['contract_id']) ? Contract::findOrFail($data['contract_id']) : null;
         if ($contract) {
             abort_unless($request->user()->isShipperOf($contract), 403);
         }
 
         abort_unless($request->user()->current_org_id, 422, 'Join or create a shipper company first.');
+
+        // A stop may use your own locations or any public one, never another company's private address
+        $locIds = collect($data['stops'])->pluck('location_id')->filter()->unique();
+        if ($locIds->isNotEmpty()) {
+            $usable = Location::whereIn('id', $locIds)->usableBy($request->user()->current_org_id)->count();
+            abort_if($usable !== $locIds->count(), 422, 'One of the stop locations is private to another company.');
+        }
 
         return DB::transaction(function () use ($data, $contract, $request) {
             $job = FreightJob::create([
@@ -328,7 +335,10 @@ class FreightJobController extends Controller
             'posted_at' => now(),
         ]);
         // Contracted jobs already have their carrier: schedule the payment now
-        if ($job->carrier_id) app(\App\Services\Payments\LoadPayments::class)->schedule('freight_job', $job);
+        if ($job->carrier_id) {
+            app(\App\Services\Payments\LoadPayments::class)->schedule('freight_job', $job);
+            app(\App\Services\ContactNotifier::class)->booked($job->fresh('carrier'));
+        }
 
         return response()->json(['data' => $job]);
     }
@@ -357,11 +367,12 @@ class FreightJobController extends Controller
             $timestamps[$data['status']]  => now(),
             'carrier_notes'               => $data['carrier_notes'] ?? $stop->carrier_notes,
         ]);
+        app(\App\Services\ContactNotifier::class)->stopStatus($stop->fresh(['location', 'freightJob.carrier']), $data['status']);
 
         if ($data['status'] === 'completed') {
             $allDone = $job->stops()->where('status', '!=', 'completed')->doesntExist();
             if ($allDone) {
-                $job->update(['status' => 'completed']);
+                $job->update(['status' => 'completed', 'completed_at' => now()]);
                 // Delivered: charge the shipper's hold (or charge now if there is none)
                 $payments = app(\App\Services\Payments\LoadPayments::class);
                 $payment  = \App\Models\LoadPayment::where('load_type', 'freight_job')->where('load_id', $job->id)->first()

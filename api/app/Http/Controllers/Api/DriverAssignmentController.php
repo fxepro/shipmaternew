@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\FreightJob;
 use App\Models\OrgMember;
-use App\Models\Shipment;
 use App\Models\User;
 use App\Services\PersonChecks;
 use Illuminate\Database\Eloquent\Model;
@@ -85,10 +84,10 @@ class DriverAssignmentController extends Controller
         return response()->json(['message' => $personId ? 'Driver assigned.' : 'Driver removed.']);
     }
 
-    /** A marketplace shipment or a contracted freight job, by route */
+    /** The load (freight job) */
     private function load(Request $request, int $id): Model
     {
-        return $request->is('api/v1/freight-jobs/*') ? FreightJob::findOrFail($id) : Shipment::findOrFail($id);
+        return FreightJob::findOrFail($id);
     }
 
     /** The load's carrier must be the caller's company */

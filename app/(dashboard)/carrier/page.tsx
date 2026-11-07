@@ -3,10 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Briefcase, CheckCircle, Clock, Loader, ShieldCheck, XCircle, CreditCard, ArrowRight } from 'lucide-react';
-import { jobApi, carrierApi, api } from '@/lib/api';
+import { freightJobApi, shipmentApi, carrierApi, api } from '@/lib/api';
 import { StatCard } from '@/components/shared/StatCard';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { StatusPill } from '@/components/shipments/StatusPill';
 import { formatCurrency } from '@/lib/utils';
 import { useCan } from '@/components/layout/PermissionsContext';
 
@@ -174,10 +173,17 @@ export default function CarrierDashboard() {
   const verificationStatus = profileRes?.verification_status ?? 'incomplete';
   const isApproved = verificationStatus === 'approved';
 
+  // Open-market loads for the list, and this carrier's loads on the road for the count
   const { data: jobsRes, isLoading: jobsLoading } = useQuery({
-    queryKey: ['carrier-jobs'],
-    queryFn: () => jobApi.list({ limit: 5 }),
+    queryKey: ['carrier-freight-jobs', 'open_market'],
+    queryFn: () => freightJobApi.carrierList({ type: 'open_market' }),
     enabled: isApproved && can.see('loads.board'),
+    retry: false,
+  });
+  const { data: activeRes } = useQuery({
+    queryKey: ['carrier-shipments', 'in_transit'],
+    queryFn: () => shipmentApi.list({ status: 'in_transit' }),
+    enabled: isApproved && can.see('loads.view'),
     retry: false,
   });
   const { data: earningsRes } = useQuery({
@@ -191,7 +197,7 @@ export default function CarrierDashboard() {
   const earnings = earningsRes?.data?.data;
 
   const stats = [
-    { label: 'Active Jobs',         value: jobs.filter((j: { status: string }) => j.status === 'in_transit').length },
+    { label: 'Active Jobs',         value: activeRes?.data?.meta?.total ?? (activeRes?.data?.data ?? []).length },
     { label: 'Earnings This Month', value: earnings?.month_total ?? 0, currency: true, accentColor: 'var(--color-sage)' },
     { label: 'Total Delivered',     value: earnings?.total_deliveries ?? 0, accentColor: 'var(--color-success)' },
     { label: 'Rating',              value: earnings?.rating ? `${earnings.rating.toFixed(1)} ★` : '—', accentColor: 'var(--color-teal)' },
@@ -237,32 +243,34 @@ export default function CarrierDashboard() {
               <EmptyState icon={Briefcase} title="No open jobs" description="Check back soon for new freight jobs." />
             ) : (
               <div className="divide-y divide-[var(--color-cream-dark)]">
-                {jobs.slice(0, 5).map((job: {
-                  id: number; item_description: string; pickup_city: string; pickup_state: string;
-                  delivery_city: string; delivery_state: string; weight_lbs: number; status: string;
-                  budget_min?: number; budget_max?: number;
-                }) => (
+                {jobs.slice(0, 5).map((job: any) => {
+                  const stops = job.stops ?? [];
+                  const from  = stops.find((s: any) => s.stop_type === 'pickup');
+                  const to    = [...stops].reverse().find((s: any) => s.stop_type === 'dropoff');
+                  return (
                   <div key={job.id} className="flex items-center justify-between px-5 py-3.5">
                     <div>
-                      <p className="text-sm font-medium text-[var(--color-text)]">{job.item_description}</p>
+                      <p className="text-sm font-medium text-[var(--color-text)]">{job.title || `Load #${job.id}`}</p>
                       <p className="text-sm text-[var(--color-text-muted)]">
-                        {job.pickup_city}, {job.pickup_state} → {job.delivery_city}, {job.delivery_state} · {job.weight_lbs} lbs
+                        {from ? `${from.city}, ${from.state}` : '—'} → {to ? `${to.city}, ${to.state}` : '—'}
+                        {stops.length > 2 && ` · ${stops.length} stops`}
+                        {job.total_weight_lbs ? ` · ${Number(job.total_weight_lbs).toLocaleString()} lbs` : ''}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <p className="text-sm font-medium text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                        {job.budget_max ? formatCurrency(job.budget_max) : '—'}
+                        {job.payment_amount_cents ? formatCurrency(job.payment_amount_cents / 100) : '—'}
                       </p>
-                      <StatusPill status={job.status as never} />
                       <Link
-                        href="/carrier/jobs"
+                        href={`/carrier/my-jobs/${job.id}`}
                         className="rounded-lg bg-[var(--color-teal)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-teal-light)] transition-colors"
                       >
-                        Bid
+                        Offer
                       </Link>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

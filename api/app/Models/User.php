@@ -29,6 +29,29 @@ class User extends Authenticatable implements MustVerifyEmail
 
     protected $hidden = ['password', 'remember_token'];
 
+    // ── Admin viewing a company (Admin Console, Carrier View and Shipper View) ──
+
+    /** The company a platform admin is reading as, for this request only (App\Http\Middleware\ViewAsCompany) */
+    public ?Organization $viewingAs = null;
+
+    /** Read this request as the company: it becomes the current company in memory, with view access to everything */
+    public function viewAs(Organization $org): void
+    {
+        $this->viewingAs = $org;
+        $this->current_org_id = $org->id;
+        $this->setRelation('currentOrg', $org);
+    }
+
+    protected static function booted(): void
+    {
+        // Never save the company an admin is viewing as their own
+        static::saving(function (User $user) {
+            if ($user->viewingAs) {
+                $user->current_org_id = $user->getOriginal('current_org_id');
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [
@@ -74,11 +97,6 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(PersonCredential::class);
     }
 
-    public function inboundShipments(): HasMany
-    {
-        return $this->hasMany(Shipment::class, 'receiver_id');
-    }
-
     public function paymentMethods(): HasMany
     {
         return $this->hasMany(PaymentMethod::class);
@@ -87,7 +105,7 @@ class User extends Authenticatable implements MustVerifyEmail
     /** Loads this person is on (load_people) */
     public function shipments()
     {
-        return Shipment::forPerson($this->id);
+        return FreightJob::forPerson($this->id);
     }
 
     // ── Role helpers ───────────────────────────────────────────────────────
@@ -117,6 +135,7 @@ class User extends Authenticatable implements MustVerifyEmail
     /** Org role for the current org */
     public function orgRole(): ?string
     {
+        if ($this->viewingAs) return 'viewer';
         return OrgMember::where('org_id', $this->current_org_id)
                         ->where('user_id', $this->id)
                         ->value('role');
@@ -142,6 +161,7 @@ class User extends Authenticatable implements MustVerifyEmail
     /** This person's level for an action in their current company: full, view, assigned, self or none */
     public function permLevel(string $action): string
     {
+        if ($this->viewingAs) return 'view';
         return \App\Support\Permissions::level($this->currentOrg?->type, $this->orgRole(), $action);
     }
 

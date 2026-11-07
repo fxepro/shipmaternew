@@ -19,7 +19,8 @@ class RequireCarrierApproval
     {
         $user = $request->user();
 
-        if ($user && $user->isCarrier()) {
+        // An admin viewing a carrier sees its pages whatever its approval
+        if ($user && $user->isCarrier() && !$user->viewingAs) {
             $m   = PersonChecks::membership($user);
             $org = $m['org'];
 

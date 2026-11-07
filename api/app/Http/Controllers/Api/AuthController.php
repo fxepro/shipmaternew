@@ -26,9 +26,11 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role'     => ['required', Rule::in(['shipper', 'carrier', 'receiver', 'factor'])],
             // The legal business name is the company's name; required unless joining a company by invitation
-            'company_name' => [Rule::requiredIf(fn () => !$request->filled('invite_token') && in_array($request->input('role'), ['shipper', 'carrier', 'factor'], true)),
+            'company_name' => [Rule::requiredIf(fn () => !$request->filled('invite_token') && !$request->filled('claim_org_id')),
                 'nullable', 'string', 'max:200'],
             'invite_token' => ['sometimes', 'nullable', 'string', 'size:64'],
+            // Claiming a company another business listed (e.g. a shipper listed this receiver)
+            'claim_org_id' => ['sometimes', 'nullable', 'integer', Rule::exists('organizations', 'id')->where('status', 'listed')->whereNull('owner_id')],
         ], [
             'company_name.required' => 'Enter your legal business name.',
         ]);
@@ -61,15 +63,22 @@ class AuthController extends Controller
                 'role' => $invitation->role, 'status' => 'active', 'joined_at' => now(),
             ]);
             $invitation->update(['accepted_at' => now()]);
+            // The invitation went to this address, so accepting it proves the email
+            $user->forceFill(['email_verified_at' => now()])->save();
             $user->update(['current_org_id' => $invitation->org_id]);
             $user->load('currentOrg');
         }
+        // Claiming a listed company: it becomes theirs once approved (at once when their verified email is a listed contact)
+        elseif (!empty($data['claim_org_id'])) {
+            app(\App\Services\OrgDirectory::class)->requestClaim($user, \App\Models\Organization::find($data['claim_org_id']), $data['role']);
+            $user->refresh();
+        }
         // Otherwise they're starting a company: create their solo org
-        elseif (in_array($data['role'], ['carrier', 'shipper', 'factor'])) {
+        elseif (in_array($data['role'], ['carrier', 'shipper', 'factor', 'receiver'])) {
             // The person signing up owns the new company; everyone else joins by invitation
             $org = $this->createSoloOrg($user, $data['role'], $companyName);
-            // Factors don't need Shipmater approval (docs/noa-factoring.md)
-            if ($data['role'] === 'factor') {
+            // Factors and receivers don't need Shipmater approval (docs/noa-factoring.md)
+            if (in_array($data['role'], ['factor', 'receiver'], true)) {
                 $org->update(['verification_status' => 'not_required']);
             }
             $user->update(['current_org_id' => $org->id]);
@@ -89,7 +98,7 @@ class AuthController extends Controller
 
         \App\Services\PersonChecks::refresh($user);
 
-        try {
+        if (!$user->hasVerifiedEmail()) try {
             $user->sendEmailVerificationNotification();
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('Registration verification email failed', [
@@ -105,6 +114,30 @@ class AuthController extends Controller
             'token' => $token,
             'data'  => new UserResource($user),
         ], 201);
+    }
+
+    // POST /api/v1/auth/email/resend — sign-up step: send the verification link again
+    public function resendVerification(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Your email is already verified.', 'verified' => true]);
+        }
+
+        // Outside local development, a log mailer means nothing is actually sent
+        $mailer = config('mail.default');
+        if (in_array($mailer, ['log', 'array'], true) && !app()->environment('local')) {
+            return response()->json(['message' => 'Email can\'t be sent right now. Please contact support.'], 503);
+        }
+
+        try {
+            $user->sendEmailVerificationNotification();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Verification email failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            return response()->json(['message' => 'We couldn\'t send the email. Try again in a minute.'], 502);
+        }
+
+        return response()->json(['message' => "We sent a new link to {$user->email}."]);
     }
 
     // POST /api/v1/auth/login
@@ -183,6 +216,8 @@ class AuthController extends Controller
         if (! $user->hasVerifiedEmail()) {
             $user->markEmailAsVerified();
             event(new Verified($user));
+            // A claim on a listed company is approved now if this address is one of its contacts
+            app(\App\Services\OrgDirectory::class)->autoApprove($user);
 
             // The owner's verified email counts toward their shipper company's business verification
             foreach (Organization::where('type', 'shipper')->where('owner_id', $user->id)->get() as $org) {

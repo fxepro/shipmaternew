@@ -35,6 +35,12 @@ export const PAGE_PERMISSION: Record<string, [string, 'see' | 'do']> = {
   '/shipper/contracts':              ['contracts.edit', 'see'],
   '/shipper/locations?type=pickup':  ['locations.manage', 'see'],
   '/shipper/locations':              ['locations.manage', 'see'],
+  '/shipper/receivers':              ['locations.manage', 'see'],
+  // Receiver
+  '/receiver/shipments':             ['loads.view', 'see'],
+  '/receiver/tracking':              ['loads.view', 'see'],
+  '/receiver/company':               ['locations.manage', 'see'],
+  '/receiver/team':                  ['team.manage', 'do'],
   '/shipper/payments':               ['money.payments', 'see'],
   '/shipper/factoring':              ['money.payments', 'see'],
   // Carrier
@@ -49,7 +55,7 @@ export const PAGE_PERMISSION: Record<string, [string, 'see' | 'do']> = {
 };
 
 /** Buttons hidden by the matrix, by company type: [label, action, 'see' | 'do'] (keep in step with the pages that use useCan) */
-export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'factor', [string, string, 'see' | 'do'][]> = {
+export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'factor' | 'receiver', [string, string, 'see' | 'do'][]> = {
   carrier: [
     ['Browse Jobs (dashboard)',                  'loads.board',  'see'],
     ['Place Bid (load board)',                   'loads.bid',    'do'],
@@ -65,6 +71,11 @@ export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'factor', [string
   ],
   factor: [
     ['Team: Invite, change role, remove',        'team.manage',  'do'],
+  ],
+  receiver: [
+    ['Team: Invite, change role, remove',        'team.manage',  'do'],
+    ['Locations: Add, edit, remove',             'locations.manage', 'do'],
+    ['Contacts: Add, edit, notification settings', 'contacts.manage', 'do'],
   ],
 };
 

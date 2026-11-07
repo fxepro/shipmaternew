@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use App\Models\Organization;
 use App\Models\OrgMember;
 use App\Models\PersonIdentity;
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -66,7 +66,7 @@ class RoleDemoSeeder extends Seeder
                 );
                 PersonIdentity::firstOrCreate(['user_id' => $user->id], ['legal_first_name' => $first, 'legal_last_name' => $last]);
 
-                if ($role === 'driver' && ($load = Shipment::where('tracking_token', 'DEMO0001')->where('carrier_id', $org->id)->first())) {
+                if ($role === 'driver' && ($load = FreightJob::where('tracking_token', 'DEMO0001')->where('carrier_id', $org->id)->first())) {
                     if (!$load->people()->where('user_id', $user->id)->exists()) $load->addPerson($org->id, $user->id, $owner->id);
                 }
 

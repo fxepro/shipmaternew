@@ -1,18 +1,20 @@
 <?php
 
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
-// Private channel: shipment.{id}
-// Authorized for: the shipper, the assigned carrier, the receiver, and platform admins
-Broadcast::channel('shipment.{shipmentId}', function (User $user, int $shipmentId) {
-    $shipment = Shipment::find($shipmentId);
-    if (!$shipment) return false;
+// Private channel: load.{id} (a freight job)
+// Authorized for: anyone in the shipper or carrier company, a person on the load, a company with a stop on it
+// (such as the receiver), and platform admins
+Broadcast::channel('load.{jobId}', function (User $user, int $jobId) {
+    $job = FreightJob::find($jobId);
+    if (!$job) return false;
 
-    // shipper_id / carrier_id are companies; anyone in either company may listen
     return $user->isPlatformAdmin()
-        || $user->isShipperOf($shipment)
-        || $user->isCarrierOf($shipment)
-        || (int) $shipment->receiver_id === (int) $user->id;
+        || $user->isShipperOf($job)
+        || $user->isCarrierOf($job)
+        || $job->people()->where('user_id', $user->id)->exists()
+        || ($user->current_org_id && $job->stops()->whereIn('location_id',
+                \App\Models\Location::where('org_id', $user->current_org_id)->select('id'))->exists());
 });

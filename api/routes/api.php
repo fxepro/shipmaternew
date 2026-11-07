@@ -1,11 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\BidController;
 use App\Http\Controllers\Api\CarrierController;
 use App\Http\Controllers\Api\AdminPeopleController;
 use App\Http\Controllers\Api\PlaidController;
-use App\Http\Controllers\Api\ShipperPaymentController;
 use App\Http\Controllers\Api\CarrierVerificationController;
 use App\Http\Controllers\Api\ClearinghouseController;
 use App\Http\Controllers\Api\StripeConnectController;
@@ -13,7 +11,7 @@ use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\FreightJobController;
 use App\Http\Controllers\Api\FreightJobOfferController;
 use App\Http\Controllers\Api\LocationController;
-use App\Http\Controllers\Api\JobController;
+use App\Http\Controllers\Api\DirectoryController;
 use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\PreferredCarrierController;
 use App\Http\Controllers\Api\ShipmentController;
@@ -89,41 +87,33 @@ Route::get('/invitations/{token}', [OrgController::class, 'showInvitation'])->mi
 Route::post('/auth/login',    [AuthController::class, 'login']);
 Route::post('/auth/email/verify', [AuthController::class, 'verifyEmail'])
     ->middleware('throttle:10,1');
+// Sign-up: find a listed company to claim (names and cities only)
+Route::get('/directory/claimable', [DirectoryController::class, 'claimable'])->middleware('throttle:20,1');
 
 // ── Authenticated ──────────────────────────────────────────────────────
-Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
+// view.as: Admin Console, Carrier View and Shipper View read a company's pages as that company (read-only)
+Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'])->group(function () {
+    // Sign-up step: send the verification email again (allowed before the email is verified)
+    Route::post('/auth/email/resend', [AuthController::class, 'resendVerification'])->middleware('throttle:3,1');
+
 
     // Current user
     Route::get('/user',          [AuthController::class, 'user']);
     Route::post('/auth/logout',  [AuthController::class, 'logout']);
 
-    // Shipments
+    // Shipments: summaries of loads (freight jobs). Loads are created in the Create Job wizard (/shipper/freight-jobs)
     Route::get('/shipments',                         [ShipmentController::class, 'index'])->middleware('perm:carrier:loads.view=view,shipper:loads.view=view');
-    Route::post('/shipments',                        [ShipmentController::class, 'store'])->middleware('shipper.subscribed')->middleware('perm:shipper:loads.post');
-    Route::get('/shipments/{shipment}',              [ShipmentController::class, 'show'])->middleware('perm:carrier:loads.view=view,shipper:loads.view=view');
-    Route::put('/shipments/{shipment}/accept-offer', [ShipmentController::class, 'acceptOffer'])->middleware('perm:carrier:loads.accept');
-    Route::put('/shipments/{shipment}/decline-offer',[ShipmentController::class, 'declineOffer'])->middleware('perm:carrier:loads.accept');
-
-    // Bids
-    Route::get('/shipments/{shipment}/bids',  [BidController::class, 'index'])->middleware('perm:carrier:loads.board=view,shipper:loads.view=view');
-    Route::post('/shipments/{shipment}/bids', [BidController::class, 'store'])->middleware('perm:carrier:loads.bid');
+    Route::get('/shipments/{job}',                   [ShipmentController::class, 'show'])->middleware('perm:carrier:loads.view=view,shipper:loads.view=view');
     // ── Carrier operational routes — requires approved status ─────────────
     Route::middleware('carrier.approved')->group(function () {
-        Route::get('/jobs',               [JobController::class, 'index'])->middleware('perm:carrier:loads.board=view');
-        Route::get('/carrier/offers',     [BidController::class, 'carrierOffers'])->middleware('perm:carrier:loads.board=view');
         Route::get('/carrier/earnings',   [CarrierController::class, 'earnings'])->middleware('perm:carrier:money.payments=view');
         Route::post('/carrier/payout',    [CarrierController::class, 'requestPayout'])->middleware('perm:carrier:money.payments');
-        Route::post('/shipments/{shipment}/deliver', [ShipmentController::class, 'deliver'])->middleware('perm:carrier:trips.run');
-        Route::put('/shipments/{shipment}/start',    [ShipmentController::class, 'start'])->middleware('perm:carrier:trips.run');
-        Route::post('/shipments/{shipment}/ping',    [ShipmentController::class, 'ping'])->middleware('perm:carrier:trips.run');
+        Route::post('/jobs/{job}/ping',              [ShipmentController::class, 'ping'])->middleware('perm:carrier:trips.run');
 
         // Driver assignment: only approved drivers with current credentials
         Route::get('/carrier/drivers',               [DriverAssignmentController::class, 'drivers'])->middleware('perm:carrier:loads.assign');
-        Route::get('/shipments/{id}/driver',         [DriverAssignmentController::class, 'show'])->middleware('perm:carrier:loads.view=view');
-        Route::put('/shipments/{id}/driver',         [DriverAssignmentController::class, 'assign'])->middleware('perm:carrier:loads.assign');
         Route::get('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'show'])->middleware('perm:carrier:loads.view=view');
         Route::put('/freight-jobs/{id}/driver',      [DriverAssignmentController::class, 'assign'])->middleware('perm:carrier:loads.assign');
-        Route::put('/bids/{bid}/withdraw',           [BidController::class, 'withdraw'])->middleware('perm:carrier:loads.bid');
     });
 
     // Carrier: profile, documents, vehicles (always accessible)
@@ -178,8 +168,8 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
     Route::put('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'update'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
     Route::get('/org/members',                     [OrgController::class, 'members']);
-    Route::put('/org/members/{id}',                [OrgController::class, 'updateMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
-    Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
+    Route::put('/org/members/{id}',                [OrgController::class, 'updateMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
+    Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     // A person's own checks: identity record and credentials (docs/people-types-and-checks.md)
     Route::get('/me/checks',                         [MyChecksController::class, 'show']);
     Route::put('/me/identity',                       [MyChecksController::class, 'updateIdentity']);
@@ -188,10 +178,10 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::post('/me/credentials/{credential}',      [MyChecksController::class, 'updateCredential']);
     Route::delete('/me/credentials/{credential}',    [MyChecksController::class, 'destroyCredential']);
 
-    Route::get('/org/invitations',                 [OrgController::class, 'invitations'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
-    Route::post('/org/invitations',                [OrgController::class, 'invite'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
+    Route::get('/org/invitations',                 [OrgController::class, 'invitations'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
+    Route::post('/org/invitations',                [OrgController::class, 'invite'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::post('/org/invitations/accept',         [OrgController::class, 'acceptInvitation']);
-    Route::delete('/org/invitations/{id}',         [OrgController::class, 'cancelInvitation'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage');
+    Route::delete('/org/invitations/{id}',         [OrgController::class, 'cancelInvitation'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::put('/org/switch',                      [OrgController::class, 'switchOrg']);
     Route::get('/user/organizations',              [OrgController::class, 'userOrgs']);
 
@@ -276,7 +266,7 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     // Admin: platform metrics + management
     Route::get('/admin/metrics',   [AdminController::class, 'metrics']);
     Route::get('/admin/shipments', [AdminController::class, 'shipments']);
-    Route::get('/admin/shipments/{shipment}', [AdminController::class, 'shipment']);
+    Route::get('/admin/shipments/{job}', [AdminController::class, 'shipment']);
     Route::get('/admin/users',     [AdminController::class, 'users']);
     Route::get('/admin/users/{user}',        [AdminController::class, 'user']);
     Route::put('/admin/users/{user}/status', [AdminController::class, 'updateUserStatus']);
@@ -309,6 +299,8 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/admin/companies/{org}',            [AdminCompanyController::class, 'show']);
     Route::post('/admin/companies/{org}/review',    [AdminCompanyController::class, 'review']);
     Route::post('/admin/companies/{org}/background',[AdminCompanyController::class, 'recordBackground']);
+    Route::get('/admin/claims',                     [DirectoryController::class, 'adminClaims']);
+    Route::post('/admin/claims/{claim}/decide',     [DirectoryController::class, 'decideClaim']);
     Route::get('/admin/shippers/pending-review',    [ShipperVerificationController::class, 'pendingReview']);
     Route::post('/admin/shippers/{id}/review',      [ShipperVerificationController::class, 'reviewShipper']);
 
@@ -344,11 +336,30 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::delete('/contracts/{contract}',           [ContractController::class, 'destroy'])->middleware('perm:shipper:contracts.edit');
     Route::get('/contracts/{contract}/agreement',    [ContractController::class, 'agreement'])->middleware('perm:carrier:contracts.view=view,shipper:contracts.edit=view');
 
-    // ── Locations address book ────────────────────────────────────────────────
-    Route::get('/locations',              [LocationController::class, 'index'])->middleware('perm:shipper:locations.manage=view');
-    Route::post('/locations',             [LocationController::class, 'store'])->middleware('perm:shipper:locations.manage');
-    Route::put('/locations/{location}',   [LocationController::class, 'update'])->middleware('perm:shipper:locations.manage');
-    Route::delete('/locations/{location}',[LocationController::class, 'destroy'])->middleware('perm:shipper:locations.manage');
+    // ── Your company's locations ──────────────────────────────────────────────
+    Route::get('/locations',              [LocationController::class, 'index'])->middleware('perm:shipper:locations.manage=view,receiver:locations.manage=view');
+    Route::post('/locations',             [LocationController::class, 'store'])->middleware('perm:shipper:locations.manage,receiver:locations.manage');
+    Route::put('/locations/{location}',   [LocationController::class, 'update'])->middleware('perm:shipper:locations.manage,receiver:locations.manage');
+    Route::delete('/locations/{location}',[LocationController::class, 'destroy'])->middleware('perm:shipper:locations.manage,receiver:locations.manage');
+    // Locations to put on a load: your own, your receivers', and public matches
+    Route::get('/locations/usable',       [DirectoryController::class, 'usableLocations'])->middleware('perm:shipper:loads.post=view');
+
+    // ── Organizations directory: every company in shipping, their locations and contacts ──
+    Route::get('/directory/orgs',                     [DirectoryController::class, 'search']);
+    Route::post('/directory/orgs',                    [DirectoryController::class, 'store'])->middleware('perm:shipper:locations.manage');
+    Route::get('/directory/orgs/{org}',               [DirectoryController::class, 'show']);
+    Route::put('/directory/orgs/{org}',               [DirectoryController::class, 'update'])->middleware('perm:shipper:locations.manage,receiver:company.profile');
+    Route::post('/directory/orgs/{org}/locations',    [DirectoryController::class, 'storeLocation'])->middleware('perm:shipper:locations.manage,receiver:locations.manage');
+    Route::put('/directory/locations/{location}',     [DirectoryController::class, 'updateLocation'])->middleware('perm:shipper:locations.manage,receiver:locations.manage');
+    Route::delete('/directory/locations/{location}',  [DirectoryController::class, 'destroyLocation'])->middleware('perm:shipper:locations.manage,receiver:locations.manage');
+    Route::post('/directory/orgs/{org}/contacts',     [DirectoryController::class, 'storeContact'])->middleware('perm:shipper:locations.manage,receiver:contacts.manage');
+    Route::put('/directory/contacts/{contact}',       [DirectoryController::class, 'updateContact'])->middleware('perm:shipper:locations.manage,receiver:contacts.manage');
+    Route::delete('/directory/contacts/{contact}',    [DirectoryController::class, 'destroyContact'])->middleware('perm:shipper:locations.manage,receiver:contacts.manage');
+    Route::post('/directory/orgs/{org}/claim',        [DirectoryController::class, 'claim']);
+    // A company's own list of receivers and brokers
+    Route::get('/partners',                           [DirectoryController::class, 'partners'])->middleware('perm:shipper:locations.manage=view');
+    Route::post('/partners',                          [DirectoryController::class, 'addPartner'])->middleware('perm:shipper:locations.manage');
+    Route::delete('/partners/{org}',                  [DirectoryController::class, 'removePartner'])->middleware('perm:shipper:locations.manage');
 
     // ── Freight jobs (contracted work) ────────────────────────────────────────
     Route::get('/shipper/freight-jobs',                              [FreightJobController::class, 'shipperIndex'])->middleware('perm:shipper:loads.view=view');
@@ -387,14 +398,6 @@ Route::middleware(['auth:sanctum', 'account.status'])->group(function () {
     Route::get('/shipper/freight-jobs/{job}/offers',                 [FreightJobOfferController::class, 'index'])->middleware('perm:shipper:loads.view=view');
     Route::post('/shipper/freight-jobs/{job}/offers/{offer}/accept', [FreightJobOfferController::class, 'accept'])->middleware('perm:shipper:loads.decide');
     Route::post('/shipper/freight-jobs/{job}/offers/{offer}/decline',[FreightJobOfferController::class, 'decline'])->middleware('perm:shipper:loads.decide');
-
-    // ── Freight payments (shipper) ─────────────────────────────────────────
-    // Step 1: create PaymentIntent before accepting a bid
-    Route::post('/bids/{bid}/payment-intent', [ShipperPaymentController::class, 'createIntent'])->middleware('perm:shipper:loads.decide');
-    // Step 2: accept bid (after Stripe confirms authorization)
-    Route::put('/bids/{bid}/accept',          [ShipperPaymentController::class, 'accept'])->middleware('perm:shipper:loads.decide');
-    // Direct payment for contracted / pre-agreed shipments
-    Route::post('/shipper/pay/{shipment}',    [ShipperPaymentController::class, 'payShipment'])->middleware('perm:shipper:money.pay');
 
     // ── Plaid / ACH bank connection (shipper) ──────────────────────────────
     Route::get('/shipper/plaid/link-token',    [PlaidController::class, 'linkToken'])->middleware('perm:shipper:money.methods');

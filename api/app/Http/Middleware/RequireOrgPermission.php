@@ -3,7 +3,6 @@
 namespace App\Http\Middleware;
 
 use App\Models\FreightJob;
-use App\Models\Shipment;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,6 +24,8 @@ class RequireOrgPermission
         $user = $request->user();
         $type = $user?->currentOrg?->type;
         if (!$user || !$type) return $next($request);
+        // An admin viewing a company may read every page (ViewAsCompany has already refused writes)
+        if ($user->viewingAs) return $next($request);
 
         foreach ($rules as $rule) {
             [$ruleType, $rest] = array_pad(explode(':', $rule, 2), 2, '');
@@ -55,18 +56,17 @@ class RequireOrgPermission
     }
 
     /** The load this route is about, if any */
-    private function load(Request $request): Shipment|FreightJob|null
+    private function load(Request $request): ?FreightJob
     {
         $route = $request->route();
-        foreach (['shipment' => Shipment::class, 'job' => FreightJob::class] as $param => $class) {
+        foreach (['job' => FreightJob::class] as $param => $class) {
             $v = $route?->parameter($param);
             if ($v instanceof $class) return $v;
             if ($v !== null && is_numeric($v)) return $class::find($v);
         }
-        // Driver routes use {id}: shipments/{id}/driver and freight-jobs/{id}/driver
+        // Driver routes use {id}: freight-jobs/{id}/driver
         if (($id = $route?->parameter('id')) !== null) {
             $uri = $route->uri();
-            if (str_contains($uri, 'shipments/{id}'))    return Shipment::find($id);
             if (str_contains($uri, 'freight-jobs/{id}')) return FreightJob::find($id);
         }
         return null;

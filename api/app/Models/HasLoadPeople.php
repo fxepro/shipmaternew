@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Shared by shipments and freight jobs. shipper_id and carrier_id are companies;
+ * Used by freight jobs (loads). shipper_id and carrier_id are companies;
  * the people on the load are rows in load_people.
  */
 trait HasLoadPeople

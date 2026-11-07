@@ -9,7 +9,6 @@ use App\Models\LedgerEntry;
 use App\Models\LoadPayment;
 use App\Models\Organization;
 use App\Models\PaymentMethod;
-use App\Models\Shipment;
 use App\Models\User;
 use App\Services\PersonChecks;
 use App\Services\Payments\LoadPayments;
@@ -188,14 +187,13 @@ class PaymentsController extends Controller
     private function loadsFor($rows): array
     {
         return [
-            'shipment'    => Shipment::whereIn('id', $rows->where('load_type', 'shipment')->pluck('load_id'))->get()->keyBy('id'),
             'freight_job' => FreightJob::whereIn('id', $rows->where('load_type', 'freight_job')->pluck('load_id'))->get()->keyBy('id'),
         ];
     }
 
     private function loadTitle(string $type, int $id): array
     {
-        $r = $type === 'freight_job' ? FreightJob::find($id) : Shipment::find($id);
+        $r = FreightJob::find($id);
         return $this->describe($type, $id, $r);
     }
 
@@ -205,8 +203,8 @@ class PaymentsController extends Controller
         return [
             'type'   => $type,
             'id'     => $id,
-            'title'  => $type === 'freight_job' ? ($r->title ?: "Job #{$id}") : ($r->item_description ?: "Shipment #{$id}"),
-            'route'  => $type === 'shipment' ? trim("{$r->pickup_city}, {$r->pickup_state} → {$r->delivery_city}, {$r->delivery_state}", ' ,→') : ($r->reference_number ?: null),
+            'title'  => $r->title ?: "Load #{$id}",
+            'route'  => $r->routeLabel() ?: ($r->reference_number ?: null),
             'status' => $r->status,
         ];
     }
@@ -216,8 +214,8 @@ class PaymentsController extends Controller
         $record = $loads[$p->load_type][$p->load_id] ?? null;
         $load   = $this->describe($p->load_type, $p->load_id, $record);
         $load['href'] = match ($view) {
-            'shipper' => $p->load_type === 'freight_job' ? "/shipper/jobs/{$p->load_id}" : "/shipper/shipments/{$p->load_id}",
-            'carrier' => $p->load_type === 'freight_job' ? "/carrier/my-jobs/{$p->load_id}" : null,
+            'shipper' => "/shipper/jobs/{$p->load_id}",
+            'carrier' => "/carrier/my-jobs/{$p->load_id}",
             default   => null,
         };
 

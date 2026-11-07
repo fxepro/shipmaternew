@@ -174,7 +174,7 @@ export default function AdminUserDetailPage() {
           ['Shipments (shipper)', act.shipments_as_shipper],
           ['Shipments (carrier)', act.shipments_as_carrier],
           ['Delivered', act.delivered],
-          ['Bids', act.bids],
+          ['Offers', act.bids],
           ['Total spent', formatCurrency(act.total_spent ?? 0)],
           ['Total earned', formatCurrency(act.total_earned ?? 0)],
         ].map(([label, value]) => (

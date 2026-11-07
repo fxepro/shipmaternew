@@ -5,12 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/** A position reported by the carrier while a load is moving */
 class GpsPing extends Model
 {
     public $timestamps = false;
 
     protected $fillable = [
-        'shipment_id',
+        'freight_job_id',
         'lat',
         'lng',
         'speed',
@@ -28,8 +29,8 @@ class GpsPing extends Model
         ];
     }
 
-    public function shipment(): BelongsTo
+    public function freightJob(): BelongsTo
     {
-        return $this->belongsTo(Shipment::class);
+        return $this->belongsTo(FreightJob::class);
     }
 }

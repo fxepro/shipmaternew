@@ -131,8 +131,8 @@ class AdminSubscriptionController extends Controller
             'stripe_linked'       => (bool) $s?->stripe_subscription_id,
             'sync_error'          => $syncError,
             // What the tier review will look at: load value this company moved since it subscribed
-            'moved_since_start'   => $s?->started_at ? round((float) \App\Models\Shipment::forOrg($org->id)
-                ->where('created_at', '>=', $s->started_at)->sum('agreed_cost'), 2) : null,
+            'moved_since_start'   => $s?->started_at ? round((float) \App\Models\FreightJob::forOrg($org->id)->where('status', '!=', 'draft')
+                ->where('created_at', '>=', $s->started_at)->sum('payment_amount_cents') / 100, 2) : null,
             'payments' => $payments->map(fn ($p) => [
                 'id' => $p->id, 'amount' => round($p->amount_cents / 100, 2), 'reference' => $p->reference ? substr($p->reference, 0, 6) . '…' . substr($p->reference, -4) : null,
                 'description' => $p->description, 'paid_at' => $p->occurred_at?->toISOString(),

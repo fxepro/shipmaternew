@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Models\PersonIdentity;
 use App\Models\PreferredCarrier;
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,9 +28,9 @@ class PreferredCarrierController extends Controller
                 $parts  = explode(' ', $carrier->name);
                 $avatar = strtoupper(substr($parts[0], 0, 1) . (isset($parts[1]) ? substr($parts[1], 0, 1) : ''));
 
-                $together = Shipment::where('shipper_id', $shipperId)
+                $together = FreightJob::where('shipper_id', $shipperId)
                     ->where('carrier_id', $carrier->id)
-                    ->whereIn('status', ['assigned', 'in_transit', 'delivered'])
+                    ->whereIn('status', ['posted', 'in_progress', 'completed'])
                     ->count();
 
                 $joined = $carrier->created_at

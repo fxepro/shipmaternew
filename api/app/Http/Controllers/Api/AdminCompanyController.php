@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use App\Models\User;
 use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
@@ -28,25 +28,36 @@ class AdminCompanyController extends Controller
         abort_unless($request->user()->isPlatformAdmin(), 403);
 
         $data = $request->validate([
-            'type'   => ['nullable', 'in:all,carrier,shipper,factor'],
+            'type'   => ['nullable', 'in:all,carrier,shipper,factor,receiver,broker'],
             'status' => ['nullable', 'string'],
             'q'      => ['nullable', 'string', 'max:100'],
+            'limit'  => ['nullable', 'integer', 'min:1', 'max:500'],
         ]);
 
-        $types = ($data['type'] ?? 'all') === 'all' ? ['carrier', 'shipper', 'factor'] : [$data['type']];
+        $types = ($data['type'] ?? 'all') === 'all' ? Organization::TYPES : [$data['type']];
         $query = Organization::whereIn('type', $types)
-            ->withCount('orgMembers')
-            ->with('owner')
+            ->withCount(['orgMembers', 'locations', 'contacts'])
+            ->with(['owner', 'listedBy:id,name'])
             ->latest();
 
-        if (!empty($data['status']) && $data['status'] !== 'all') {
+        // listed / claimed are about the account; everything else is the verification status
+        if (($data['status'] ?? null) === 'listed') {
+            $query->where('status', 'listed');
+        } elseif (($data['status'] ?? null) === 'claimed') {
+            $query->where('status', '!=', 'listed');
+        } elseif (!empty($data['status']) && $data['status'] !== 'all') {
             $query->where('verification_status', $data['status']);
         }
         if (!empty($data['q'])) {
-            $query->where('name', 'ilike', "%{$data['q']}%");
+            // Name, MC, DOT or EIN
+            $q = $data['q'];
+            $query->where(fn ($w) => $w->where('name', 'ilike', "%{$q}%")
+                ->orWhere('carrier_mc_number', 'ilike', "%{$q}%")
+                ->orWhere('carrier_dot_number', 'ilike', "%{$q}%")
+                ->orWhere('tax_id', 'ilike', "%{$q}%"));
         }
 
-        $orgs = $query->limit(500)->get();
+        $orgs = $query->limit($data['limit'] ?? 500)->get();
 
         return response()->json([
             'data' => $orgs->map(function (Organization $o) {
@@ -63,6 +74,12 @@ class AdminCompanyController extends Controller
                     'verification_status'     => $o->verification_status,
                     'background_check_status' => $o->background_check_status,
                     'status'                  => $o->status,
+                    'listed'                  => $o->isListed(),
+                    'listed_by'               => $o->listedBy?->name,
+                    'city'                    => $o->city,
+                    'state'                   => $o->state,
+                    'locations'               => $o->locations_count,
+                    'contacts'                => $o->contacts_count,
                     'created_at'              => $o->created_at?->toISOString(),
                 ];
             }),
@@ -77,10 +94,14 @@ class AdminCompanyController extends Controller
         $org->load(['owner', 'orgMembers.user.personVerification']);
         $isCarrier = $org->type === 'carrier';
         $isFactor  = $org->type === 'factor';
+        // Receivers and brokers have no profile or documents to review: their page is locations and contacts
+        $isListing = in_array($org->type, ['receiver', 'broker'], true);
 
-        // Loads hold the company directly
+        // Loads hold the company directly; a receiver's loads are the ones with a stop at its locations
         $partyColumn = $isCarrier ? 'carrier_id' : 'shipper_id';
-        $shipments   = Shipment::where($partyColumn, $org->id);
+        $shipments   = $isListing
+            ? FreightJob::whereIn('id', \App\Models\JobStop::whereIn('location_id', $org->locations()->select('id'))->select('freight_job_id'))->where('status', '!=', 'draft')
+            : FreightJob::where($partyColumn, $org->id)->where('status', '!=', 'draft');
 
         return response()->json([
             'data' => [
@@ -101,7 +122,9 @@ class AdminCompanyController extends Controller
                     'stripe_mode'     => $org->stripe_mode,
                     'commission_rate' => $org->commission_rate,
                 ],
-                'company_profile' => $isFactor ? null : $this->companyFields($org, $isCarrier),
+                'company_profile' => ($isFactor || $isListing) ? null : $this->companyFields($org, $isCarrier),
+                // Locations, contacts, listing and claims (every type)
+                'directory' => app(\App\Services\OrgDirectory::class)->detail($org, $request->user()),
                 'verification' => [
                     'status'               => $org->verification_status,
                     'notes'                => $org->verification_notes,
@@ -112,7 +135,7 @@ class AdminCompanyController extends Controller
                     'background_notes'     => $org->background_check_notes,
                     'background_checked_at'=> $org->background_checked_at?->toISOString(),
                 ],
-                'documents' => $isFactor ? [] : ($isCarrier
+                'documents' => ($isFactor || $isListing) ? [] : ($isCarrier
                     ? DB::table('carrier_documents')->where('carrier_id', $org->id)->orderByDesc('created_at')
                         ->get(['id', 'type', 'name', 'url', 'expiry_date', 'verified_at', 'created_at'])
                     : DB::table('shipper_documents')->where('shipper_id', $org->id)->orderByDesc('created_at')
@@ -137,21 +160,20 @@ class AdminCompanyController extends Controller
                 })->values(),
                 'activity' => [
                     'shipments' => (clone $shipments)->count(),
-                    'active'    => (clone $shipments)->whereIn('status', ['assigned', 'in_transit'])->count(),
-                    'delivered' => (clone $shipments)->where('status', 'delivered')->count(),
-                    'value'     => (float) (clone $shipments)->where('status', 'delivered')->sum('agreed_cost'),
-                    'bids'      => $isCarrier ? DB::table('bids')->where('carrier_id', $org->id)->count() : null,
+                    'active'    => (clone $shipments)->whereIn('status', ['posted', 'in_progress'])->whereNotNull('carrier_id')->count(),
+                    'delivered' => (clone $shipments)->where('status', 'completed')->count(),
+                    'value'     => (float) (clone $shipments)->where('status', 'completed')->sum('payment_amount_cents') / 100,
+                    'bids'      => $isCarrier ? DB::table('freight_job_offers')->where('carrier_id', $org->id)->count() : null,
                 ],
                 'tabs' => $isFactor ? null : $this->tabs($org, $isCarrier),
-                'recent_shipments' => (clone $shipments)->latest()->limit(10)
-                    ->get(['id', 'item_description', 'status', 'pickup_city', 'pickup_state', 'delivery_city', 'delivery_state', 'agreed_cost', 'created_at'])
-                    ->map(fn (Shipment $s) => [
-                        'id'          => $s->id,
-                        'item'        => $s->item_description,
-                        'status'      => $s->status,
-                        'route'       => "{$s->pickup_city}, {$s->pickup_state} → {$s->delivery_city}, {$s->delivery_state}",
-                        'agreed_cost' => $s->agreed_cost ? (float) $s->agreed_cost : null,
-                        'created_at'  => $s->created_at?->toISOString(),
+                'recent_shipments' => (clone $shipments)->with('stops')->latest()->limit(10)->get()
+                    ->map(fn (FreightJob $j) => [
+                        'id'          => $j->id,
+                        'item'        => $j->title ?: "Load #{$j->id}",
+                        'status'      => $j->displayStatus(),
+                        'route'       => $j->routeLabel(),
+                        'agreed_cost' => $j->amount(),
+                        'created_at'  => $j->created_at?->toISOString(),
                     ]),
             ],
         ]);
@@ -338,7 +360,7 @@ class AdminCompanyController extends Controller
                 'id' => $p->id, 'with' => $other[$isCarrier ? $p->shipper_id : $p->carrier_id] ?? null, 'status' => $p->status, 'created_at' => $p->created_at,
             ]),
             'locations' => $isCarrier ? [] : DB::table('locations')->where('org_id', $org->id)->orderBy('name')
-                ->get(['id', 'name', 'type', 'city', 'state', 'contact_name', 'is_default', 'usage_count']),
+                ->get(['id', 'name', 'visibility', 'city', 'state', 'contact_name', 'is_default', 'usage_count']),
         ];
     }
 }

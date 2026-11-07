@@ -18,6 +18,9 @@ export interface LocationOption {
   contact_name:  string | null;
   contact_phone: string | null;
   notes:         string | null;
+  /** Whose location it is: yours, a receiver in your list, or another public one in the directory */
+  org_name?:     string | null;
+  source?:       'mine' | 'partner' | 'directory';
 }
 
 function toOption(r: any): LocationOption {
@@ -33,6 +36,8 @@ function toOption(r: any): LocationOption {
     contact_name:  r.contact_name ?? null,
     contact_phone: r.contact_phone ?? null,
     notes:         r.notes ?? null,
+    org_name:      r.org_name ?? null,
+    source:        r.source,
   };
 }
 
@@ -42,8 +47,11 @@ export function formatLocationLine(loc: LocationOption) {
 
 type LocationType = 'pickup' | 'delivery';
 
+const SOURCE_LABEL = { mine: 'Your location', partner: 'In your list', directory: 'Directory' } as const;
+
 /**
- * Address-book typeahead.
+ * Location typeahead over every location a load can use: your own, your receivers' and brokers', and other companies'
+ * public ones. A location can be a pickup or a dropoff; `type` only changes the icon and placeholder.
  * - chip mode (default): selected location shows as a chip (Create Job)
  * - freeText mode: keeps a normal input; DB hits appear as suggestions (Route Planner)
  */
@@ -83,8 +91,8 @@ export function LocationSearch({
   const query = mode === 'freeText' ? (value ?? '') : search;
 
   const { data: res } = useQuery({
-    queryKey: ['locations', type, query],
-    queryFn:  () => locationApi.list({ type, search: query.trim() || undefined }),
+    queryKey: ['locations', 'usable', query.trim()],
+    queryFn:  () => locationApi.usable(query.trim() || undefined),
     enabled:  open,
   });
 
@@ -135,8 +143,13 @@ export function LocationSearch({
                 {type === 'pickup' ? <Warehouse size={12} className="text-[var(--color-teal)]" /> : <Users size={12} className="text-[var(--color-teal)]" />}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[var(--color-text)] truncate">{loc.name}</p>
-                <p className="text-xs text-[var(--color-text-faint)]">{loc.address}, {loc.city}, {loc.state}</p>
+                <p className="text-sm font-semibold text-[var(--color-text)] truncate">
+                  {loc.org_name && loc.source !== 'mine' ? `${loc.org_name} · ` : ''}{loc.name}
+                </p>
+                <p className="text-xs text-[var(--color-text-faint)]">
+                  {loc.address}, {loc.city}, {loc.state}
+                  {loc.source && <span className="ml-1.5 text-[var(--color-text-muted)]">· {SOURCE_LABEL[loc.source]}</span>}
+                </p>
               </div>
             </button>
           ))}
@@ -161,7 +174,7 @@ export function LocationSearch({
         onFocus={handleFocus}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
         onKeyDown={onKeyDown}
-        placeholder={placeholder ?? (type === 'pickup' ? 'Search warehouses…' : 'Search delivery address…')}
+        placeholder={placeholder ?? (type === 'pickup' ? 'Search your locations or the directory…' : 'Search receivers, stores, warehouses…')}
         className={
           mode === 'freeText'
             ? [

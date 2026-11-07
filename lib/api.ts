@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { viewAsHeader } from './viewAs';
 
 /**
  * Production browser: same-origin /api/* (proxied by app/api/[...path]).
@@ -61,6 +62,9 @@ api.interceptors.request.use((config) => {
     if (token && token !== 'undefined' && token !== 'null') {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
+    // Admin Console, Carrier View and Shipper View: read as the chosen company (read-only; admins only)
+    const viewAs = viewAsHeader();
+    if (viewAs) config.headers['X-View-As-Org'] = viewAs;
   }
   return config;
 });
@@ -95,6 +99,7 @@ export const authApi = {
   register: (data: Record<string, unknown>) => api.post('/api/v1/auth/register', data),
   me:       () => api.get('/api/v1/user'),
   verifyEmail: (token: string) => api.post('/api/v1/auth/email/verify', { token }),
+  resendVerification: () => api.post('/api/v1/auth/email/resend'),
 };
 
 // ── Fees and shipper subscription (docs/fees-and-billing.md) ─────────
@@ -147,27 +152,13 @@ export const marketingApi = {
   submitLead: (data: Record<string, unknown>) => api.post('/api/v1/platform-leads', data),
 };
 
-// ── Shipments ─────────────────────────────────────────────────────────
+// ── Shipments: read-only summaries of loads (freight jobs) ─────────────
+// Loads are created, offered on and run through freightJobApi; these are the list and panel views.
 export const shipmentApi = {
   list:          (params?: Record<string, unknown>) => api.get('/api/v1/shipments', { params }),
   get:           (id: number) => api.get(`/api/v1/shipments/${id}`),
-  create:        (data: Record<string, unknown>) => api.post('/api/v1/shipments', data),
-  getBids:       (id: number) => api.get(`/api/v1/shipments/${id}/bids`),
-  ping:          (id: number, data: { lat: number; lng: number; speed?: number | null }) => api.post(`/api/v1/shipments/${id}/ping`, data),
-  acceptOffer:   (id: number) => api.put(`/api/v1/shipments/${id}/accept-offer`),
-  declineOffer:  (id: number) => api.put(`/api/v1/shipments/${id}/decline-offer`),
-  start:         (id: number) => api.put(`/api/v1/shipments/${id}/start`),
-  deliver:       (id: number, data?: { delivery_photo_url?: string; delivery_notes?: string }) =>
-                   api.post(`/api/v1/shipments/${id}/deliver`, data ?? {}),
-};
-
-// ── Bids ──────────────────────────────────────────────────────────────
-export const bidApi = {
-  place:         (shipmentId: number, data: Record<string, unknown>) => api.post(`/api/v1/shipments/${shipmentId}/bids`, data),
-  /** Accept a bid. Nothing is charged now: the card on file is held the day before pickup, charged at delivery */
-  accept:        (bidId: number) => api.put(`/api/v1/bids/${bidId}/accept`),
-  withdraw:      (bidId: number) => api.put(`/api/v1/bids/${bidId}/withdraw`),
-  carrierOffers: (params?: Record<string, unknown>) => api.get('/api/v1/carrier/offers', { params }),
+  /** GPS ping from the driver's device; the first one starts the trip */
+  ping:          (id: number, data: { lat: number; lng: number; speed?: number | null }) => api.post(`/api/v1/jobs/${id}/ping`, data),
 };
 
 // ── Plaid / ACH bank connection (shipper) ─────────────────────────────
@@ -177,13 +168,6 @@ export const plaidApi = {
                  api.post('/api/v1/shipper/plaid/exchange', data),
   status:      () => api.get('/api/v1/shipper/plaid/status'),
   disconnect:  () => api.delete('/api/v1/shipper/plaid/disconnect'),
-};
-
-// ── Jobs (carrier) ────────────────────────────────────────────────────
-export const jobApi = {
-  list:      (params?: Record<string, unknown>) => api.get('/api/v1/jobs', { params }),
-  available: (type: 'open' | 'contracted' = 'open', myServices = false) =>
-               api.get('/api/v1/jobs', { params: { type, ...(myServices && { my_services: 1 }) } }),
 };
 
 // ── Carrier ───────────────────────────────────────────────────────────
@@ -256,6 +240,39 @@ export const locationApi = {
   create:  (data: Record<string, unknown>)    => api.post('/api/v1/locations', data),
   update:  (id: number, data: Record<string, unknown>) => api.put(`/api/v1/locations/${id}`, data),
   destroy: (id: number)                       => api.delete(`/api/v1/locations/${id}`),
+  /** For building a load: your own locations, your receivers', and public matches for q */
+  usable:  (q?: string)                       => api.get('/api/v1/locations/usable', { params: q ? { q } : {} }),
+};
+
+// ── Organizations directory: every company in shipping, their locations and contacts ──
+export const directoryApi = {
+  search:         (params: { q?: string; type?: string; limit?: number }) => api.get('/api/v1/directory/orgs', { params }),
+  get:            (id: number)                                   => api.get(`/api/v1/directory/orgs/${id}`),
+  /** List a receiver or broker that isn't on Shipmater yet, with locations and contacts */
+  create:         (data: Record<string, unknown>)                => api.post('/api/v1/directory/orgs', data),
+  update:         (id: number, data: Record<string, unknown>)    => api.put(`/api/v1/directory/orgs/${id}`, data),
+  addLocation:    (orgId: number, data: Record<string, unknown>) => api.post(`/api/v1/directory/orgs/${orgId}/locations`, data),
+  updateLocation: (id: number, data: Record<string, unknown>)    => api.put(`/api/v1/directory/locations/${id}`, data),
+  removeLocation: (id: number)                                   => api.delete(`/api/v1/directory/locations/${id}`),
+  addContact:     (orgId: number, data: Record<string, unknown>) => api.post(`/api/v1/directory/orgs/${orgId}/contacts`, data),
+  updateContact:  (id: number, data: Record<string, unknown>)    => api.put(`/api/v1/directory/contacts/${id}`, data),
+  removeContact:  (id: number)                                   => api.delete(`/api/v1/directory/contacts/${id}`),
+  /** Public, for sign-up: listed companies by name */
+  claimable:      (q: string)                                    => api.get('/api/v1/directory/claimable', { params: { q } }),
+  claim:          (orgId: number, asType?: string)               => api.post(`/api/v1/directory/orgs/${orgId}/claim`, { as_type: asType }),
+};
+
+// ── A company's own list of receivers and brokers ─────────────────────
+export const partnerApi = {
+  list:   (relation?: 'receiver' | 'broker') => api.get('/api/v1/partners', { params: relation ? { relation } : {} }),
+  add:    (partnerOrgId: number, relation: 'receiver' | 'broker' = 'receiver') => api.post('/api/v1/partners', { partner_org_id: partnerOrgId, relation }),
+  remove: (orgId: number) => api.delete(`/api/v1/partners/${orgId}`),
+};
+
+// ── Admin: claims on listed companies ─────────────────────────────────
+export const adminClaimApi = {
+  list:   (status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending') => api.get('/api/v1/admin/claims', { params: { status } }),
+  decide: (id: number, action: 'approve' | 'reject', note?: string) => api.post(`/api/v1/admin/claims/${id}/decide`, { action, note }),
 };
 
 // ── Freight jobs (contracted) ─────────────────────────────────────────

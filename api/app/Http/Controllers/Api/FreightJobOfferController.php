@@ -137,6 +137,7 @@ class FreightJobOfferController extends Controller
         $job->addPerson($request->user()->current_org_id, $request->user()->id);
         $job->addPerson($offer->carrier_id, $offer->user_id);
         app(\App\Services\Payments\LoadPayments::class)->schedule('freight_job', $job);
+        app(\App\Services\ContactNotifier::class)->booked($job->fresh('carrier'));
 
         $offer->load('carrier');
 

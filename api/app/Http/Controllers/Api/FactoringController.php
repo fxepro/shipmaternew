@@ -8,7 +8,6 @@ use App\Models\FreightJob;
 use App\Models\Noa;
 use App\Models\Organization;
 use App\Models\OrgMember;
-use App\Models\Shipment;
 use App\Models\User;
 use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
@@ -135,14 +134,11 @@ class FactoringController extends Controller
         $taken = FactoredLoad::where('carrier_id', $org->id)->whereIn('status', self::OPEN_LOAD)->get(['load_type', 'load_id'])
             ->map(fn ($f) => "{$f->load_type}:{$f->load_id}")->all();
 
-        $shipments = Shipment::where('carrier_id', $org->id)->whereNotIn('status', ['cancelled', 'delivered'])
-            ->where(fn ($w) => $w->whereNull('payment_status')->orWhereIn('payment_status', ['unpaid', 'authorized']))
-            ->latest()->limit(200)->get()->map(fn ($s) => $this->presentRecord('shipment', $s));
         $jobs = FreightJob::where('carrier_id', $org->id)->whereNotIn('status', ['cancelled', 'completed', 'draft'])
             ->where(fn ($w) => $w->whereNull('payment_status')->orWhereNotIn('payment_status', ['paid', 'captured']))
             ->latest()->limit(200)->get()->map(fn ($j) => $this->presentRecord('freight_job', $j));
 
-        return response()->json(['data' => $shipments->concat($jobs)->reject(fn ($l) => in_array("{$l['type']}:{$l['id']}", $taken, true))->values()]);
+        return response()->json(['data' => $jobs->reject(fn ($l) => in_array("{$l['type']}:{$l['id']}", $taken, true))->values()]);
     }
 
     // POST /api/v1/factoring/loads   { load_type, load_id }
@@ -150,7 +146,7 @@ class FactoringController extends Controller
     {
         [$user, $org] = $this->carrier($request, true);
         $data = $request->validate([
-            'load_type' => ['required', 'in:shipment,freight_job'],
+            'load_type' => ['required', 'in:freight_job'],
             'load_id'   => ['required', 'integer'],
         ]);
 
@@ -163,7 +159,7 @@ class FactoringController extends Controller
             return response()->json(['error' => 'You need an NOA confirmed by your factor, in effect today, before factoring a load.', 'code' => 'no_active_noa'], 422);
         }
 
-        $record = $data['load_type'] === 'freight_job' ? FreightJob::find($data['load_id']) : Shipment::find($data['load_id']);
+        $record = FreightJob::find($data['load_id']);
         abort_unless($record && (int) $record->carrier_id === (int) $org->id, 404, 'Load not found.');
         abort_if(in_array($record->payment_status, ['captured', 'transferred', 'paid', 'processing'], true), 422, 'This load has already been paid.');
         abort_if(FactoredLoad::where('load_type', $data['load_type'])->where('load_id', $record->id)->whereIn('status', self::OPEN_LOAD)->exists(), 422, 'This load is already factored.');
@@ -312,15 +308,12 @@ class FactoringController extends Controller
 
     private function whereShipperLoads($w, Organization $org): void
     {
-        $w->where(fn ($s) => $s->where('load_type', 'shipment')->whereIn('load_id', Shipment::where('shipper_id', $org->id)->select('id')))
-          ->orWhere(fn ($s) => $s->where('load_type', 'freight_job')->whereIn('load_id', FreightJob::where('shipper_id', $org->id)->select('id')));
+        $w->where('load_type', 'freight_job')->whereIn('load_id', FreightJob::where('shipper_id', $org->id)->select('id'));
     }
 
     private function amount(string $type, $record): ?float
     {
-        return $type === 'freight_job'
-            ? ($record->payment_amount_cents ? $record->payment_amount_cents / 100 : null)
-            : ($record->agreed_cost !== null ? (float) $record->agreed_cost : null);
+        return $record->payment_amount_cents ? $record->payment_amount_cents / 100 : null;
     }
 
     private function presentRecord(string $type, $r): array
@@ -329,13 +322,13 @@ class FactoringController extends Controller
         return [
             'type'           => $type,
             'id'             => $r->id,
-            'title'          => $type === 'freight_job' ? ($r->title ?: "Job #{$r->id}") : ($r->item_description ?: "Shipment #{$r->id}"),
-            'route'          => $type === 'shipment' ? trim("{$r->pickup_city}, {$r->pickup_state} → {$r->delivery_city}, {$r->delivery_state}", ' ,→') : ($r->reference_number ?: null),
+            'title'          => $r->title ?: "Load #{$r->id}",
+            'route'          => $r->routeLabel() ?: ($r->reference_number ?: null),
             'amount'         => $this->amount($type, $r),
             'status'         => $r->status,
             'payment_status' => $r->payment_status,
             'shipper'        => $shipperOrg ? PersonChecks::companyName($shipperOrg) : null,
-            'href_carrier'   => $type === 'freight_job' ? "/carrier/my-jobs/{$r->id}" : null,
+            'href_carrier'   => "/carrier/my-jobs/{$r->id}",
         ];
     }
 

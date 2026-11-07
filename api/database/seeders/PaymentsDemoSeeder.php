@@ -8,7 +8,7 @@ use App\Models\LedgerEntry;
 use App\Models\LoadPayment;
 use App\Models\Organization;
 use App\Models\PaymentMethod;
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use App\Models\User;
 use App\Services\Payments\LoadPayments;
 use Illuminate\Database\Seeder;
@@ -41,7 +41,7 @@ class PaymentsDemoSeeder extends Seeder
             ]);
         }
 
-        $shipments = Shipment::where('carrier_id', $carrier->id)->get()->keyBy('item_description');
+        $shipments = FreightJob::where('carrier_id', $carrier->id)->with('stops')->get()->keyBy('title');
         $factored  = FactoredLoad::where('carrier_id', $carrier->id)->get()->keyBy('load_id');
         $standard  = \App\Services\Fees::standardRate();
 
@@ -60,14 +60,14 @@ class PaymentsDemoSeeder extends Seeder
             if (!$s) continue;
             $fl     = $factored->get($s->id);
             $factor = $fl && in_array($fl->status, ['accepted', 'funded'], true) ? Organization::find($fl->factor_id) : null;
-            $amount = (int) round((float) $s->agreed_cost * 100);
+            $amount = (int) $s->payment_amount_cents;
             $fee    = $factor ? 0 : (int) round($amount * $standard);
 
             $p = LoadPayment::create(array_merge([
-                'load_type' => 'shipment', 'load_id' => $s->id, 'shipper_id' => $shipper->id, 'carrier_id' => $carrier->id,
+                'load_type' => 'freight_job', 'load_id' => $s->id, 'shipper_id' => $shipper->id, 'carrier_id' => $carrier->id,
                 'payee_id' => $factor?->id ?? $carrier->id, 'payee_type' => $factor ? 'factor' : 'carrier', 'factored_load_id' => $factor ? $fl->id : null,
                 'amount_cents' => $amount, 'fee_cents' => $fee, 'fee_rate' => $standard, 'flow' => 'direct', 'method' => 'card',
-                'pickup_date' => $s->pickup_date, 'status' => $status, 'payment_method_id' => $card?->id,
+                'pickup_date' => $s->stops->firstWhere('stop_type', 'pickup')?->scheduled_date, 'status' => $status, 'payment_method_id' => $card?->id,
                 'stripe_account' => $factor ? $factor->stripe_connect_id : $carrierAccount,
                 'payment_intent_id' => in_array($status, ['paid', 'held'], true) ? 'pi_demo_' . $s->id : null,
             ], $extra));
@@ -76,7 +76,7 @@ class PaymentsDemoSeeder extends Seeder
                 $s->update(['payment_status' => 'paid']);
                 LedgerEntry::record($fee > 0 ? 'load_fee' : 'load_volume', $fee, [
                     'gross_cents' => $amount, 'org_id' => $carrier->id, 'source_type' => 'load_payment', 'source_id' => $p->id,
-                    'reference' => $p->payment_intent_id, 'description' => "Shipment #{$s->id}" . ($factor ? ' (factored)' : ''), 'occurred_at' => $p->paid_at,
+                    'reference' => $p->payment_intent_id, 'description' => "Load #{$s->id}" . ($factor ? ' (factored)' : ''), 'occurred_at' => $p->paid_at,
                 ]);
             }
         }

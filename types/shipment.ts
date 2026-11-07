@@ -1,9 +1,8 @@
-import type { Bid } from './bid';
+/** A load (freight job) as the shipments endpoints return it: see api ShipmentResource */
 
 export type ShipmentStatus =
+  | 'draft'
   | 'pending'
-  | 'bidding'
-  | 'offered'
   | 'assigned'
   | 'in_transit'
   | 'delivered'
@@ -20,9 +19,34 @@ export interface GpsPingData {
   pinged_at: string;
 }
 
+export type StopType = 'pickup' | 'dropoff';
+
+export interface ShipmentStop {
+  id: number;
+  location_id?: number | null;
+  sequence: number;
+  stop_type: StopType;
+  name?: string | null;
+  address: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  lat?: number | null;
+  lng?: number | null;
+  scheduled_date?: string | null;
+  time_window?: string | null;
+  status: 'pending' | 'en_route' | 'arrived' | 'completed';
+  completed_at?: string | null;
+}
+
 export interface Shipment {
   id: number;
+  reference_number?: string | null;
+  shipper_id?: number;
+  carrier_id?: number | null;
+  /** The status people see; job_status is the stored freight job status */
   status: ShipmentStatus;
+  job_status?: 'draft' | 'posted' | 'in_progress' | 'completed' | 'cancelled' | 'disputed';
   job_type: JobType;
   contract_id?: number | null;
   tracking_token: string;
@@ -58,13 +82,18 @@ export interface Shipment {
   delivered_at?: string;
   delivery_photo_url?: string;
 
+  // Every stop in route order; pickup_* is the first pickup, delivery_* the last drop-off
+  stops?: ShipmentStop[];
+  stops_count?: number;
+
   // Route
   distance_miles?: number;
   estimated_duration_mins?: number;
   route_polyline?: string;
 
   // Cost
-  agreed_cost?: number;
+  agreed_cost?: number | null;
+  payment_status?: string;
 
   // Parties
   shipper?: { id: number; name: string; email: string };
@@ -80,13 +109,13 @@ export interface Shipment {
       total_deliveries?: number;
     } | null;
   };
-  receiver?: { id: number; name: string; email: string };
+  receiver?: { id: number; name: string; email: string } | null;
+  people?: { org_id: number | null; user_id: number; name?: string; role?: string }[];
 
   // GPS
-  latest_ping?: GpsPingData;
+  latest_ping?: GpsPingData | null;
 
-  // Bids (loaded when with_bids=1)
-  bids?: Bid[];
+  offers_count?: number | null;
 
   created_at: string;
   updated_at: string;

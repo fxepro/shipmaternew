@@ -55,8 +55,8 @@ export const NAV: Record<UserRole, NavSection[]> = {
       items: [
         { label: 'Carriers',            href: '/shipper/carriers',              icon: Truck     },
         { label: 'Contracts',           href: '/shipper/contracts',             icon: FileText  },
-        { label: 'Pickup Addresses',    href: '/shipper/locations?type=pickup', icon: Warehouse },
-        { label: 'Delivery Addresses',  href: '/shipper/locations',             icon: Users     },
+        { label: 'Receivers',           href: '/shipper/receivers',             icon: Building2 },
+        { label: 'Locations',           href: '/shipper/locations',             icon: Warehouse },
       ],
     },
     {
@@ -148,6 +148,13 @@ export const NAV: Record<UserRole, NavSection[]> = {
         { label: 'Live Tracking', href: '/receiver/tracking',  icon: MapPin  },
       ],
     },
+    {
+      section: 'Company',
+      items: [
+        { label: 'Locations & Contacts', href: '/receiver/company', icon: Warehouse },
+        { label: 'Team',                 href: '/receiver/team',    icon: Users     },
+      ],
+    },
   ],
   admin: [
     {
@@ -165,7 +172,8 @@ export const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Onboarding & Compliance',
       items: [
-        { label: 'Companies',        href: '/admin/companies', icon: Building2     },
+        { label: 'Organizations',    href: '/admin/companies', icon: Building2     },
+        { label: 'Claims',           href: '/admin/claims',    icon: FileSignature },
         { label: 'People',           href: '/admin/people',    icon: Users         },
         { label: 'NOAs / Factoring', href: '/admin/noas',      icon: FileSignature },
       ],
@@ -180,8 +188,8 @@ export const NAV: Record<UserRole, NavSection[]> = {
       ],
     },
     {
-      section: 'Organizations',
-      items: [{ label: 'Organizations', href: '/admin/orgs', icon: Building2 }],
+      section: 'Payment routing',
+      items: [{ label: 'Stripe & Tenants', href: '/admin/orgs', icon: Building2 }],
     },
     {
       section: 'Settings',
@@ -198,42 +206,23 @@ export const NAV: Record<UserRole, NavSection[]> = {
         { label: 'Resources', href: '/admin/resources', icon: Shield   },
       ],
     },
-    {
-      section: 'Shipper View',
-      collapsible: true,
-      items: [
-        { label: 'Shipper View',     href: '/shipper',                     icon: LayoutDashboard },
-        { label: 'My Shipments',     href: '/shipper/shipments',           icon: Package         },
-        { label: 'Create Job',       href: '/shipper/jobs/contracted/new', icon: PlusCircle      },
-        { label: 'My Jobs',          href: '/shipper/jobs',                icon: ClipboardList   },
-        { label: 'Offers',           href: '/shipper/jobs/offers',         icon: Radio           },
-        { label: 'Contracted',       href: '/shipper/jobs/contracted',     icon: Briefcase       },
-        { label: 'Carriers',         href: '/shipper/carriers',            icon: Truck           },
-        { label: 'Contracts',        href: '/shipper/contracts',           icon: FileText        },
-        { label: 'Locations',        href: '/shipper/locations',           icon: Warehouse       },
-        { label: 'Route Planner',    href: '/shipper/route-planner',       icon: Route           },
-        { label: 'Live Tracking',    href: '/shipper/tracking',            icon: MapPin          },
-        { label: 'Payments',         href: '/shipper/payments',            icon: DollarSign      },
-        { label: 'Reports',          href: '/shipper/reports',             icon: BarChart2       },
-        { label: 'Profile',          href: '/shipper/profile',             icon: User            },
-        { label: 'Resources',        href: '/shipper/resources',           icon: BookOpen        },
-      ],
-    },
-    {
-      section: 'Carrier View',
-      collapsible: true,
-      items: [
-        { label: 'Carrier View', href: '/carrier',           icon: LayoutDashboard },
-        { label: 'Available',   href: '/carrier/jobs',      icon: Briefcase       },
-        { label: 'My Jobs',     href: '/carrier/my-jobs',   icon: ClipboardList   },
-        { label: 'Offers',      href: '/carrier/offers',    icon: Radio           },
-        { label: 'Earnings',    href: '/carrier/earnings',  icon: DollarSign      },
-        { label: 'Profile',     href: '/carrier/profile',   icon: User            },
-        { label: 'Resources',   href: '/carrier/resources', icon: BookOpen        },
-      ],
-    },
   ],
 };
+
+/**
+ * Admin surrogate views: every page of the shipper and carrier sidebars, built from those
+ * sidebars so a page added there shows here too. The dashboard link takes the view's name.
+ */
+function surrogateView(type: 'shipper' | 'carrier', title: string): NavSection {
+  return {
+    section: title,
+    collapsible: true,
+    items: NAV[type]
+      .flatMap((s) => s.items)
+      .map((item) => (item.href === `/${type}` ? { ...item, label: title } : item)),
+  };
+}
+NAV.admin.push(surrogateView('shipper', 'Shipper View'), surrogateView('carrier', 'Carrier View'));
 
 interface SidebarProps {
   role: UserRole;

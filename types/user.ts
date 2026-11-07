@@ -1,8 +1,8 @@
 export type UserRole   = 'shipper' | 'carrier' | 'receiver' | 'admin' | 'factor';
-export type OrgType    = 'carrier' | 'shipper' | 'factor';
+export type OrgType    = 'carrier' | 'shipper' | 'factor' | 'receiver' | 'broker';
 export type OrgRole    = 'owner' | 'staff' | 'dispatcher' | 'driver' | 'viewer';
 export type OrgPlan    = 'free' | 'pro' | 'enterprise';
-export type OrgStatus  = 'active' | 'suspended' | 'onboarding';
+export type OrgStatus  = 'active' | 'suspended' | 'onboarding' | 'listed';
 export type StripeMode = 'platform' | 'connect';
 
 export interface Org {
@@ -62,6 +62,12 @@ export interface User {
   org?: Org;
   org_role?: OrgRole;
   /** Level for each action in the role matrix (lib/permissions.ts); empty without a company */
+  /** Sign-up isn't finished until the email is verified */
+  email_verified?: boolean;
+  /** Admin Console, Carrier or Shipper View: the company an admin is reading as (read-only) */
+  viewing_as?: { id: number; name: string; type: string } | null;
+  /** Signed up to take over a listed company; waiting for approval */
+  pending_claim?: { id: number; as_type: string; org: { id: number; name: string; city?: string | null; state?: string | null } | null } | null;
   permissions?: Record<string, 'full' | 'view' | 'assigned' | 'self' | 'none'>;
 }
 

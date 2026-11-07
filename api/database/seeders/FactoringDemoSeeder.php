@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use App\Models\FactoredLoad;
 use App\Models\Noa;
 use App\Models\Organization;
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
@@ -47,7 +47,7 @@ class FactoringDemoSeeder extends Seeder
                 'decided_at'     => now()->subDays(13),
             ]);
 
-            $shipments = Shipment::where('carrier_id', $carrier->id)->orderBy('id')->get()->keyBy('item_description');
+            $shipments = FreightJob::where('carrier_id', $carrier->id)->orderBy('id')->get()->keyBy('title');
             $loads = [
                 ['Pallet of surgical instruments', 'accepted', ['shipper_acknowledged_at' => now()->subDays(2), 'shipper_acknowledged_by' => $alex?->id]],
                 ['Restaurant kitchen equipment',   'requested', []],
@@ -61,9 +61,9 @@ class FactoringDemoSeeder extends Seeder
                     'noa_id'         => $noa->id,
                     'carrier_id' => $carrier->id,
                     'factor_id'  => $factor->id,
-                    'load_type'      => 'shipment',
+                    'load_type'      => 'freight_job',
                     'load_id'        => $s->id,
-                    'load_amount'    => $s->agreed_cost,
+                    'load_amount'    => $s->amount(),
                     'status'         => $status,
                     'requested_by'   => $jordan->id,
                     'decided_by'     => $status === 'requested' ? null : $dana->id,

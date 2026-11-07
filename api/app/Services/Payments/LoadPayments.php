@@ -10,7 +10,6 @@ use App\Models\LoadPayment;
 use App\Models\Organization;
 use App\Models\OrgMember;
 use App\Models\PaymentMethod;
-use App\Models\Shipment;
 use App\Models\User;
 use App\Services\Fees;
 use Illuminate\Database\Eloquent\Model;
@@ -462,17 +461,12 @@ class LoadPayments
         return $id;
     }
 
-    /** amount, shipper, carrier and pickup date of a shipment or freight job */
+    /** amount, shipper, carrier and pickup date of a load (freight job) */
     private function facts(string $type, Model $load): array
     {
-        if ($type === 'freight_job') {
-            /** @var FreightJob $load */
-            $pickup = $load->stops()->where('stop_type', 'pickup')->whereNotNull('scheduled_date')->min('scheduled_date');
-            return ['amount_cents' => (int) $load->payment_amount_cents, 'shipper_id' => $load->shipper_id, 'carrier_id' => $load->carrier_id, 'pickup_date' => $pickup];
-        }
-        /** @var Shipment $load */
-        return ['amount_cents' => (int) round((float) $load->agreed_cost * 100), 'shipper_id' => $load->shipper_id, 'carrier_id' => $load->carrier_id,
-                'pickup_date' => $load->pickup_date];
+        /** @var FreightJob $load */
+        $pickup = $load->stops()->where('stop_type', 'pickup')->whereNotNull('scheduled_date')->min('scheduled_date');
+        return ['amount_cents' => (int) $load->payment_amount_cents, 'shipper_id' => $load->shipper_id, 'carrier_id' => $load->carrier_id, 'pickup_date' => $pickup];
     }
 
     /** The company of a given type a user owns or belongs to */

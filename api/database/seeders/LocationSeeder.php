@@ -150,7 +150,6 @@ class LocationSeeder extends Seeder
         foreach ($pickups as $data) {
             Location::create(array_merge($data, [
                 'org_id'     => $orgId,
-                'type'       => 'pickup',
                 'country'    => 'US',
             ]));
         }
@@ -158,8 +157,8 @@ class LocationSeeder extends Seeder
         foreach ($deliveries as $data) {
             Location::create(array_merge($data, [
                 'org_id'     => $orgId,
-                'type'       => 'delivery',
                 'country'    => 'US',
+                'visibility' => 'private',   // the shipper's own customer addresses
             ]));
         }
     }

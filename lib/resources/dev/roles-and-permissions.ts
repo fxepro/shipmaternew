@@ -72,6 +72,16 @@ export const ROLES_AND_PERMISSIONS_TOPIC: AdminManualTopic = {
       ],
     },
     {
+      id: 'view-as',
+      title: 'Viewing a company as an admin',
+      paragraphs: [
+        'The Admin Console sidebar has a Carrier View and a Shipper View, each listing every page of that sidebar. An admin isn’t part of any company, so these pages need to know which company to show. On any carrier or shipper page a dark bar sits above the top bar with a search box. Typing two or more letters searches companies of that type by name, MC, DOT or EIN and lists the first ten; picking one opens the page as that company, and the bar then reads Viewing, the company name, read-only, with Change and Exit. Until a company is picked the page shows a prompt instead of calling the API. The choice is kept in the browser, one for Carrier View and one for Shipper View, and is cleared on sign-out.',
+        'The frontend sends the chosen company’s id in the X-View-As-Org header on carrier and shipper pages. The ViewAsCompany middleware honours it only for platform admins and only for that request: the company becomes the admin’s current company in memory, never saved, and every action reads as view. The role matrix lets every read through, the carrier approval gate is skipped so an unapproved carrier’s pages can still be seen, and anything other than a read is refused with the code read_only. Action buttons are hidden because the viewed company’s permissions are all view. The header is ignored for everyone else, so a company user can’t use it to see another company.',
+        'Personal tabs, such as the Personal tab of the carrier profile, still show the signed-in admin’s own details, because those belong to the person and not the company. Each time an admin opens a company this way a row is written to admin_company_views with the admin, the company, the page and the time, at most once per admin and company every half hour.',
+        'A rolled-back script checked it: the admin read every carrier page as Reyes Transport and every shipper page as Morgan Freight with no refusals, each profile showed the right company, five kinds of change were refused, an unknown company gave a 404, a carrier user sending the header saw only their own company, the admin’s saved company never changed, the view was logged once per company, and search found a carrier by its MC number. Every Carrier View and Shipper View page was then opened in the browser with no failed calls.',
+      ],
+    },
+    {
       id: 'demo',
       title: 'Demo logins for each role',
       paragraphs: [

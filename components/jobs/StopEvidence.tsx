@@ -33,6 +33,8 @@ interface Props {
   job: { id: number; status: string };
   stop: StopData;
   role: 'shipper' | 'carrier';
+  /** Whether this person may add photos, a signature or the POD on this stop (defaults to any carrier) */
+  canUpload?: boolean;
   apiBase: string;
   onStopChanged?: () => void;
 }
@@ -181,7 +183,7 @@ function SignaturePadModal({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function StopEvidence({ job, stop: initialStop, role, apiBase, onStopChanged }: Props) {
+export function StopEvidence({ job, stop: initialStop, role, canUpload: canUploadProp, apiBase, onStopChanged }: Props) {
   const qc        = useQueryClient();
   const fileRef   = useRef<HTMLInputElement>(null);
   const [sigModal, setSigModal] = useState(false);
@@ -274,7 +276,7 @@ export function StopEvidence({ job, stop: initialStop, role, apiBase, onStopChan
   if (!jobActive) return null;
 
   // Carrier can upload/sign, shipper can view
-  const canUpload = role === 'carrier';
+  const canUpload = canUploadProp ?? role === 'carrier';
   const stopDone  = stop.status === 'completed';
 
   const podUrl = stop.pod_pdf_url

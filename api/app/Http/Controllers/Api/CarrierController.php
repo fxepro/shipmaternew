@@ -10,7 +10,7 @@ use App\Models\Organization;
 use App\Models\PersonIdentity;
 use App\Models\PersonVerification;
 use App\Models\ServiceType;
-use App\Models\Shipment;
+use App\Models\FreightJob;
 use App\Models\User;
 use App\Services\PersonChecks;
 use App\Services\ServiceTypeRules;
@@ -410,15 +410,14 @@ class CarrierController extends Controller
         abort_unless($request->user()->isCarrier(), 403);
 
         $user      = $request->user();
-        $shipments = Shipment::where('carrier_id', $user->current_org_id)
-            ->whereIn('status', ['delivered', 'in_transit', 'assigned'])
-            ->get(['id', 'status', 'agreed_cost', 'pickup_city', 'pickup_state',
-                   'delivery_city', 'delivery_state', 'distance_miles', 'delivered_at']);
+        $shipments = FreightJob::where('carrier_id', $user->current_org_id)
+            ->whereIn('status', ['posted', 'in_progress', 'completed'])
+            ->with('stops')->latest()->get();
 
-        $delivered     = $shipments->where('status', 'delivered');
-        $pendingEscrow = $shipments->whereIn('status', ['in_transit', 'assigned']);
-        $totalPaid     = $delivered->sum('agreed_cost');
-        $pendingAmount = $pendingEscrow->sum('agreed_cost');
+        $delivered     = $shipments->where('status', 'completed');
+        $pendingEscrow = $shipments->whereIn('status', ['posted', 'in_progress']);
+        $totalPaid     = $delivered->sum(fn ($j) => $j->amount() ?? 0);
+        $pendingAmount = $pendingEscrow->sum(fn ($j) => $j->amount() ?? 0);
 
         return response()->json([
             'data' => [
@@ -426,12 +425,12 @@ class CarrierController extends Controller
                 'pending_escrow' => (float) $pendingAmount,
                 'shipments'      => $shipments->map(fn ($s) => [
                     'id'             => $s->id,
-                    'status'         => $s->status,
-                    'amount'         => (float) $s->agreed_cost,
-                    'route'          => "{$s->pickup_city}, {$s->pickup_state} → {$s->delivery_city}, {$s->delivery_state}",
-                    'distance_miles' => (float) $s->distance_miles,
-                    'delivered_at'   => $s->delivered_at?->toISOString(),
-                ]),
+                    'status'         => $s->displayStatus(),
+                    'amount'         => (float) ($s->amount() ?? 0),
+                    'route'          => $s->routeLabel(),
+                    'distance_miles' => (float) $s->route_distance_miles,
+                    'delivered_at'   => $s->completed_at?->toISOString(),
+                ])->values(),
             ],
         ]);
     }

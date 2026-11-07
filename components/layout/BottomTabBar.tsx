@@ -11,7 +11,7 @@ const TABS: Record<UserRole, { label: string; href: string; icon: React.ElementT
   shipper: [
     { label: 'Home',      href: '/shipper',           icon: LayoutDashboard },
     { label: 'Shipments', href: '/shipper/shipments', icon: Package         },
-    { label: 'Bids',      href: '/shipper/bids',      icon: Radio           },
+    { label: 'Offers',    href: '/shipper/jobs/offers', icon: Radio         },
     { label: 'Account',   href: '/shipper/payments',  icon: User            },
   ],
   carrier: [

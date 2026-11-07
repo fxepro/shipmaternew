@@ -5,228 +5,52 @@ namespace App\Http\Controllers\Api;
 use App\Events\ShipmentPingReceived;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ShipmentResource;
-use App\Models\Contract;
+use App\Models\FreightJob;
 use App\Models\GpsPing;
-use App\Models\ServiceType;
-use App\Models\Shipment;
+use App\Models\LoadPerson;
 use App\Models\User;
-use App\Services\GeocodingService;
-use App\Services\PaymentService;
-use App\Services\RoutingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Str;
 
+/**
+ * Shipments are freight jobs (one load table, stops for every pickup and drop-off).
+ * This controller serves the summary lists and panels (My Shipments, dashboards, receiver pages)
+ * and the carrier's GPS pings. Creating, offers and stops are in FreightJobController and FreightJobOfferController.
+ */
 class ShipmentController extends Controller
 {
-    public function __construct(
-        private GeocodingService $geocoder,
-        private RoutingService   $router,
-    ) {}
-    // GET /api/v1/shipments
-    // ?phase=jobs      — pre-activation (pending/bidding/offered/assigned)
-    // ?phase=active    — post-activation (in_transit/delivered/disputed/cancelled)
-    // ?status=x        — exact status filter
-    // ?job_type=open|contracted
-    // ?with_bids=1     — include bids in response (shipper offers page)
+    private const WITH = ['stops', 'shipper', 'carrier', 'people.user', 'latestPing'];
+
+    // GET /api/v1/shipments   ?status=pending|assigned|in_transit|delivered|cancelled|disputed  ?include_drafts=1
     public function index(Request $request): AnonymousResourceCollection
     {
         /** @var User $user */
-        $user = $request->user();
-
-        // shipper_id / carrier_id are companies; a driver sees only the loads they are on
-        if ($user->isPlatformAdmin())   $query = Shipment::query();
-        elseif ($user->isReceiver())    $query = Shipment::where('receiver_id', $user->id);
-        elseif ($user->isCarrier()) {
-            $query = Shipment::where('carrier_id', $user->current_org_id);
-            if ($user->onlyAssignedLoads()) $query->forPerson($user->id);
-        } else                          $query = Shipment::where('shipper_id', $user->current_org_id);
-
-        if ($request->filled('phase')) {
-            match ($request->input('phase')) {
-                'jobs'   => $query->whereIn('status', ['pending', 'bidding', 'offered', 'assigned']),
-                'active' => $query->whereIn('status', ['in_transit', 'delivered', 'disputed', 'cancelled']),
-                default  => null,
-            };
-        }
+        $user  = $request->user();
+        $query = $this->visibleTo($user);
 
         if ($request->filled('status')) {
-            $query->where('status', $request->input('status'));
+            $query->displayStatus($request->input('status'));
+        } elseif (!$request->boolean('include_drafts')) {
+            $query->where('status', '!=', 'draft');
         }
 
-        if ($request->filled('job_type')) {
-            $query->where('job_type', $request->input('job_type'));
-        }
-
-        $with = ['shipper', 'carrier', 'receiver', 'latestPing'];
-
-        if ($request->boolean('with_bids')) {
-            $with[] = 'bids.carrier';
-        }
-
-        $shipments = $query->with($with)->latest()->paginate(50);
-
-        return ShipmentResource::collection($shipments);
+        return ShipmentResource::collection($query->with(self::WITH)->latest()->paginate(50));
     }
 
-    // POST /api/v1/shipments
-    public function store(Request $request): JsonResponse
+    // GET /api/v1/shipments/{job}
+    public function show(Request $request, FreightJob $job): JsonResponse
+    {
+        abort_unless($this->visibleTo($request->user())->whereKey($job->id)->exists(), 403);
+        return response()->json(['data' => new ShipmentResource($job->load(self::WITH))]);
+    }
+
+    // POST /api/v1/jobs/{job}/ping — the carrier's GPS position while the load moves
+    public function ping(Request $request, FreightJob $job): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
-
-        $data = $request->validate([
-            'job_type'    => ['sometimes', 'in:open,contracted'],
-            'contract_id' => ['required_if:job_type,contracted', 'nullable', 'exists:contracts,id'],
-
-            'item_description'      => ['required', 'string', 'max:500'],
-            'item_category'         => ['nullable', 'string', 'max:100'],
-            'weight_lbs'            => ['nullable', 'numeric', 'min:0'],
-            'handling_requirements' => ['nullable', 'array'],
-            'special_notes'         => ['nullable', 'string', 'max:1000'],
-
-            'pickup_address'       => ['required', 'string'],
-            'pickup_city'          => ['nullable', 'string'],
-            'pickup_state'         => ['nullable', 'string'],
-            'pickup_lat'           => ['nullable', 'numeric'],
-            'pickup_lng'           => ['nullable', 'numeric'],
-            'pickup_contact_name'  => ['nullable', 'string'],
-            'pickup_contact_phone' => ['nullable', 'string'],
-            'pickup_date'          => ['nullable', 'date'],
-            'pickup_time_window'   => ['nullable', 'string'],
-
-            'delivery_address'       => ['required', 'string'],
-            'delivery_city'          => ['nullable', 'string'],
-            'delivery_state'         => ['nullable', 'string'],
-            'delivery_lat'           => ['nullable', 'numeric'],
-            'delivery_lng'           => ['nullable', 'numeric'],
-            'delivery_contact_name'  => ['nullable', 'string'],
-            'delivery_contact_phone' => ['nullable', 'string'],
-            'delivery_date'          => ['nullable', 'date'],
-            'delivery_time_window'   => ['nullable', 'string'],
-
-            'distance_miles'          => ['nullable', 'numeric'],
-            'estimated_duration_mins' => ['nullable', 'integer'],
-
-            'carrier_id'       => ['nullable', 'exists:organizations,id'],
-            'receiver_id'      => ['nullable', 'exists:users,id'],
-            'receiver_email'   => ['nullable', 'email'],
-            'agreed_cost'      => ['nullable', 'numeric', 'min:0'],
-            'service_type_key' => ['nullable', 'string'],
-            'required_cert_keys' => ['nullable', 'array'],
-        ]);
-
-        // Resolve receiver by email if provided
-        if (!empty($data['receiver_email']) && empty($data['receiver_id'])) {
-            $receiver = User::firstOrCreate(
-                ['email' => $data['receiver_email']],
-                [
-                    'name'     => explode('@', $data['receiver_email'])[0],
-                    'password' => bcrypt(Str::random(16)),
-                    'role'     => 'receiver',
-                ]
-            );
-            $data['receiver_id'] = $receiver->id;
-        }
-        unset($data['receiver_email']);
-
-        // Resolve service_type_id from key
-        if (!empty($data['service_type_key'])) {
-            $st = ServiceType::where('key', $data['service_type_key'])->first();
-            if ($st) $data['service_type_id'] = $st->id;
-            unset($data['service_type_key']);
-        }
-
-        $jobType = $data['job_type'] ?? 'open';
-
-        if ($jobType === 'contracted') {
-            /** @var Contract $contract */
-            $contract = Contract::findOrFail($data['contract_id']);
-            abort_unless($user->isShipperOf($contract), 403, 'Contract does not belong to you.');
-            abort_unless($contract->status === 'active', 422, 'Contract must be active to create a contracted job.');
-            $data['carrier_id'] = $contract->carrier_id;
-            $data['agreed_cost'] = $data['agreed_cost'] ?? $contract->rate;
-            $status = 'offered';
-        } else {
-            $status = isset($data['carrier_id']) ? 'assigned' : 'pending';
-        }
-
-        // Geocode addresses if coordinates not provided
-        if (empty($data['pickup_lat']) && !empty($data['pickup_address'])) {
-            $coords = $this->geocoder->geocode(
-                $data['pickup_address'],
-                $data['pickup_city']  ?? '',
-                $data['pickup_state'] ?? '',
-            );
-            if ($coords) {
-                $data['pickup_lat'] = $coords['lat'];
-                $data['pickup_lng'] = $coords['lng'];
-            }
-        }
-
-        if (empty($data['delivery_lat']) && !empty($data['delivery_address'])) {
-            $coords = $this->geocoder->geocode(
-                $data['delivery_address'],
-                $data['delivery_city']  ?? '',
-                $data['delivery_state'] ?? '',
-            );
-            if ($coords) {
-                $data['delivery_lat'] = $coords['lat'];
-                $data['delivery_lng'] = $coords['lng'];
-            }
-        }
-
-        // Fetch real road route if both endpoints are geocoded
-        if (!empty($data['pickup_lat']) && !empty($data['delivery_lat'])) {
-            $route = $this->router->getRoute(
-                (float) $data['pickup_lat'],
-                (float) $data['pickup_lng'],
-                (float) $data['delivery_lat'],
-                (float) $data['delivery_lng'],
-            );
-
-            if ($route) {
-                $data['route_polyline']         = $route['polyline'];
-                $data['distance_miles']         = $data['distance_miles'] ?? $route['distance_miles'];
-                $data['estimated_duration_mins'] = $data['estimated_duration_mins'] ?? $route['duration_mins'];
-            }
-        }
-
-        abort_unless($user->current_org_id, 422, 'Join or create a shipper company first.');
-        $shipment = Shipment::create(array_merge($data, [
-            'shipper_id' => $user->current_org_id,
-            'job_type'   => $jobType,
-            'status'     => $status,
-        ]));
-        $shipment->addPerson($user->current_org_id, $user->id);
-
-        // Payment is scheduled once a carrier is assigned (docs/fees-and-billing.md)
-        if ($status === 'assigned') app(\App\Services\Payments\LoadPayments::class)->schedule('shipment', $shipment);
-
-        $shipment->load(['shipper', 'carrier', 'receiver']);
-
-        return response()->json(['data' => new ShipmentResource($shipment)], 201);
-    }
-
-    // GET /api/v1/shipments/{shipment}
-    public function show(Request $request, Shipment $shipment): JsonResponse
-    {
-        $this->authorizeView($request->user(), $shipment);
-        $shipment->load(['shipper', 'carrier', 'receiver', 'latestPing', 'bids.carrier']);
-
-        return response()->json(['data' => new ShipmentResource($shipment)]);
-    }
-
-    // POST /api/v1/shipments/{shipment}/ping  — carrier GPS update
-    public function ping(Request $request, Shipment $shipment): JsonResponse
-    {
-        /** @var User $user */
-        $user = $request->user();
-
-        if (!$user->isPlatformAdmin() && !$user->isCarrierOf($shipment)) {
-            abort(403, 'Only the assigned carrier can send GPS pings.');
-        }
+        abort_unless($user->isPlatformAdmin() || $user->isCarrierOf($job), 403, 'Only the assigned carrier can send GPS pings.');
 
         $data = $request->validate([
             'lat'   => ['required', 'numeric'],
@@ -235,114 +59,45 @@ class ShipmentController extends Controller
             'eta'   => ['nullable', 'string'],
         ]);
 
-        $ping = GpsPing::create(array_merge($data, [
-            'shipment_id' => $shipment->id,
-            'pinged_at'   => now(),
-        ]));
+        $ping = GpsPing::create($data + ['freight_job_id' => $job->id, 'pinged_at' => now()]);
+        $ping->setRelation('freightJob', $job);
 
-        // Eager-set relationship so event can access tracking_token for public broadcast channel
-        $ping->setRelation('shipment', $shipment);
-
-        if ($shipment->status === 'assigned') {
-            $shipment->update(['status' => 'in_transit']);
+        // The first ping starts the trip
+        if ($job->status === 'posted' && $job->carrier_id) {
+            $job->update(['status' => 'in_progress']);
         }
 
-        // Broadcast to WebSocket subscribers
-        broadcast(new ShipmentPingReceived($ping));
+        // Live map update. The ping is already saved, so a realtime server that is down must not fail it
+        try {
+            broadcast(new ShipmentPingReceived($ping));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json(['data' => $ping]);
     }
 
-    // PUT /api/v1/shipments/{shipment}/accept-offer  — carrier accepts contracted job
-    public function acceptOffer(Request $request, Shipment $shipment): JsonResponse
+    /** Loads this person may see: their company's (shipper or carrier), a driver's own, or ones they are on (receivers) */
+    private function visibleTo(User $user)
     {
-        /** @var User $user */
-        $user = $request->user();
+        if ($user->isPlatformAdmin()) return FreightJob::query();
 
-        abort_unless($user->isCarrierOf($shipment), 403);
-        abort_unless($shipment->status === 'offered', 422, 'This job is not awaiting acceptance.');
+        // A receiver company sees loads with a stop at one of its locations, and loads it was added to
+        if ($user->isReceiver() || $user->currentOrg?->type === 'receiver') {
+            $org = $user->current_org_id;
+            return FreightJob::where(fn ($q) => $q
+                ->whereIn('id', \App\Models\JobStop::whereIn('location_id', \App\Models\Location::where('org_id', $org ?? 0)->select('id'))->select('freight_job_id'))
+                ->orWhereIn('id', LoadPerson::where('load_type', 'freight_job')
+                    ->where(fn ($p) => $p->where('user_id', $user->id)->when($org, fn ($x) => $x->orWhere('org_id', $org)))
+                    ->select('load_id')))
+                ->where('status', '!=', 'draft');
+        }
 
-        $shipment->update(['status' => 'assigned']);
-        $shipment->addPerson($user->current_org_id, $user->id);
-        app(\App\Services\Payments\LoadPayments::class)->schedule('shipment', $shipment);
+        if ($user->isCarrier()) {
+            $q = FreightJob::where('carrier_id', $user->current_org_id);
+            return $user->onlyAssignedLoads() ? $q->forPerson($user->id) : $q;
+        }
 
-        return response()->json(['data' => new ShipmentResource($shipment)]);
-    }
-
-    // PUT /api/v1/shipments/{shipment}/decline-offer  — carrier declines contracted job
-    public function declineOffer(Request $request, Shipment $shipment): JsonResponse
-    {
-        /** @var User $user */
-        $user = $request->user();
-
-        abort_unless($user->isCarrierOf($shipment), 403);
-        abort_unless($shipment->status === 'offered', 422, 'This job is not awaiting acceptance.');
-
-        $shipment->people()->where('org_id', $shipment->carrier_id)->delete();
-        $shipment->update([
-            'status'     => 'pending',
-            'carrier_id' => null,
-        ]);
-
-        return response()->json(['message' => 'Job declined.']);
-    }
-
-    // POST /api/v1/shipments/{shipment}/deliver  — carrier marks job delivered
-    public function deliver(Request $request, Shipment $shipment): JsonResponse
-    {
-        $user = $request->user();
-        abort_unless($user->isCarrierOf($shipment), 403);
-        abort_unless(
-            in_array($shipment->status, ['assigned', 'in_transit']),
-            422,
-            'Only assigned or in-transit jobs can be marked delivered.'
-        );
-
-        $data = $request->validate([
-            'delivery_photo_url' => ['nullable', 'string'],
-            'delivery_notes'     => ['nullable', 'string', 'max:500'],
-        ]);
-
-        $shipment->update([
-            'status'             => 'delivered',
-            'delivered_at'       => now(),
-            'delivery_photo_url' => $data['delivery_photo_url'] ?? null,
-        ]);
-
-        // Delivered: charge the shipper's hold (or charge now if there is none)
-        $payments = app(\App\Services\Payments\LoadPayments::class);
-        $payment  = \App\Models\LoadPayment::where('load_type', 'shipment')->where('load_id', $shipment->id)->first()
-            ?? $payments->schedule('shipment', $shipment);
-        if ($payment) $payments->charge($payment);
-
-        $shipment->load(['shipper', 'carrier', 'receiver', 'latestPing']);
-
-        return response()->json(['data' => new ShipmentResource($shipment)]);
-    }
-
-    // PUT /api/v1/shipments/{shipment}/start  — carrier starts job (activation)
-    public function start(Request $request, Shipment $shipment): JsonResponse
-    {
-        /** @var User $user */
-        $user = $request->user();
-
-        abort_unless($user->isCarrierOf($shipment), 403);
-        abort_unless($shipment->status === 'assigned', 422, 'Only assigned jobs can be started.');
-
-        $shipment->update(['status' => 'in_transit']);
-
-        return response()->json(['data' => new ShipmentResource($shipment)]);
-    }
-
-    // ── Private ────────────────────────────────────────────────────────
-
-    private function authorizeView(User $user, Shipment $shipment): void
-    {
-        $allowed = $user->isPlatformAdmin()
-            || $user->isShipperOf($shipment)
-            || $user->isCarrierOf($shipment)
-            || (int) $shipment->receiver_id === (int) $user->id;
-
-        abort_unless($allowed, 403);
+        return FreightJob::where('shipper_id', $user->current_org_id);
     }
 }

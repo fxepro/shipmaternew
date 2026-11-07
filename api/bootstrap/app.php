@@ -23,6 +23,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'shipper.subscribed' => \App\Http\Middleware\RequireShipperSubscription::class,
             'account.status'   => \App\Http\Middleware\EnforceAccountStatus::class,
             'perm'             => \App\Http\Middleware\RequireOrgPermission::class,
+            'view.as'          => \App\Http\Middleware\ViewAsCompany::class,
+            'email.verified'   => \App\Http\Middleware\RequireVerifiedEmail::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
