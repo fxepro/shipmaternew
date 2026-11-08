@@ -172,10 +172,11 @@ export const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Onboarding & Compliance',
       items: [
-        { label: 'Organizations',    href: '/admin/companies', icon: Building2     },
+        { label: 'Companies',        href: '/admin/companies', icon: Building2     },
         { label: 'Claims',           href: '/admin/claims',    icon: FileSignature },
         { label: 'People',           href: '/admin/people',    icon: Users         },
         { label: 'NOAs / Factoring', href: '/admin/noas',      icon: FileSignature },
+        { label: 'Compliance',       href: '/admin/compliance', icon: ShieldCheck   },
       ],
     },
     {
@@ -188,8 +189,8 @@ export const NAV: Record<UserRole, NavSection[]> = {
       ],
     },
     {
-      section: 'Payment routing',
-      items: [{ label: 'Stripe & Tenants', href: '/admin/orgs', icon: Building2 }],
+      section: 'Organizations',
+      items: [{ label: 'Organizations', href: '/admin/orgs', icon: Building2 }],
     },
     {
       section: 'Settings',

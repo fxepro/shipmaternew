@@ -10,6 +10,7 @@ use App\Models\OrgMember;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -26,10 +27,17 @@ class AdminOrgController extends Controller
     {
         abort_unless($request->user()->isPlatformAdmin(), 403);
 
-        $query = Organization::query()->with('owner');
+        // Every organization: companies signed up on Shipmater and the third parties connected to them
+        $query = Organization::query()->with(['owner', 'listedBy:id,name'])->withCount('locations')
+            ->addSelect(['connected_count' => DB::table('org_partners')->selectRaw('count(*)')->whereColumn('org_partners.partner_org_id', 'organizations.id')]);
 
         if ($request->filled('type')) {
             $query->where('type', $request->input('type'));
+        }
+        if ($request->input('relation') === 'companies') {
+            $query->where('status', '!=', 'listed')->whereNotNull('owner_id');
+        } elseif ($request->input('relation') === 'third_party') {
+            $query->where(fn ($w) => $w->where('status', 'listed')->orWhereNull('owner_id'));
         }
         if ($request->filled('plan')) {
             $query->where('plan', $request->input('plan'));
@@ -41,7 +49,7 @@ class AdminOrgController extends Controller
             $query->where('name', 'ilike', '%' . $request->input('search') . '%');
         }
 
-        $orgs = $query->orderByDesc('created_at')->paginate(25);
+        $orgs = $query->orderByDesc('created_at')->paginate(100);
 
         return response()->json([
             'data' => $orgs->map(fn($o) => $this->formatOrg($o)),
@@ -308,6 +316,13 @@ class AdminOrgController extends Controller
             'fmcsa_broker_mc'   => $o->fmcsa_broker_mc,
             'owner'             => $o->owner ? ['id' => $o->owner->id, 'name' => $o->owner->name, 'email' => $o->owner->email] : null,
             'created_at'        => $o->created_at->toDateString(),
+            // Third party: added by a company, nobody from it signed up
+            'third_party'       => $o->status === 'listed' || !$o->owner_id,
+            'added_by'          => $o->relationLoaded('listedBy') ? $o->listedBy?->name : null,
+            'connected_count'   => (int) ($o->connected_count ?? 0),
+            'locations_count'   => (int) ($o->locations_count ?? 0),
+            'city'              => $o->city,
+            'state'             => $o->state,
         ];
 
         if ($detailed) {

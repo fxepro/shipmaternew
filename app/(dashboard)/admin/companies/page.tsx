@@ -6,7 +6,7 @@ import { CompanyList } from '@/components/admin/CompanyList';
 
 function Companies() {
   const type = useSearchParams().get('type');
-  return <CompanyList initialType={type === 'carrier' || type === 'shipper' || type === 'factor' || type === 'receiver' || type === 'broker' ? type : 'all'} />;
+  return <CompanyList initialType={type === 'carrier' || type === 'shipper' || type === 'factor' ? type : 'all'} />;
 }
 
 export default function AdminCompaniesPage() {

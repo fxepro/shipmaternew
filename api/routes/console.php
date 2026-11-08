@@ -21,6 +21,7 @@ Artisan::command('people:refresh-checks', function () {
 })->purpose('Send approved people with expired or failed required items back to review');
 
 Schedule::command('people:refresh-checks')->dailyAt('06:00');
+Schedule::command('compliance:enforce-deadlines')->dailyAt('06:15');
 
 // Load payments: card holds the day before pickup, and charges before a hold expires (docs/fees-and-billing.md)
 Artisan::command('payments:run', function () {

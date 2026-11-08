@@ -29,23 +29,28 @@ class AdminCompanyController extends Controller
 
         $data = $request->validate([
             'type'   => ['nullable', 'in:all,carrier,shipper,factor,receiver,broker'],
+            // companies = Shipmater's own customers (Companies page); all = every org (Organizations page)
+            'scope'  => ['nullable', 'in:companies,all'],
             'status' => ['nullable', 'string'],
             'q'      => ['nullable', 'string', 'max:100'],
             'limit'  => ['nullable', 'integer', 'min:1', 'max:500'],
         ]);
 
-        $types = ($data['type'] ?? 'all') === 'all' ? Organization::TYPES : [$data['type']];
+        // Companies are Shipmater's own customers: shippers, carriers and factors that signed up.
+        // Receivers, brokers and anything a customer added are only in Organizations (/admin/orgs).
+        $all   = ($data['scope'] ?? 'companies') === 'all';
+        $own   = ['shipper', 'carrier', 'factor'];
+        $types = ($data['type'] ?? 'all') === 'all' ? ($all ? Organization::TYPES : $own) : [$data['type']];
+        if (!$all && !in_array($types[0], $own, true)) {
+            return response()->json(['message' => 'Receivers and brokers are in Organizations.'], 422);
+        }
         $query = Organization::whereIn('type', $types)
+            ->when(!$all, fn ($w) => $w->where('status', '!=', 'listed')->whereNotNull('owner_id'))
             ->withCount(['orgMembers', 'locations', 'contacts'])
-            ->with(['owner', 'listedBy:id,name'])
+            ->with(['owner'])
             ->latest();
 
-        // listed / claimed are about the account; everything else is the verification status
-        if (($data['status'] ?? null) === 'listed') {
-            $query->where('status', 'listed');
-        } elseif (($data['status'] ?? null) === 'claimed') {
-            $query->where('status', '!=', 'listed');
-        } elseif (!empty($data['status']) && $data['status'] !== 'all') {
+        if (!empty($data['status']) && $data['status'] !== 'all') {
             $query->where('verification_status', $data['status']);
         }
         if (!empty($data['q'])) {
@@ -58,9 +63,10 @@ class AdminCompanyController extends Controller
         }
 
         $orgs = $query->limit($data['limit'] ?? 500)->get();
+        $promos = DB::table('compliance_promotions')->pluck('name', 'id');
 
         return response()->json([
-            'data' => $orgs->map(function (Organization $o) {
+            'data' => $orgs->map(function (Organization $o) use ($promos) {
                 $carrier = $o->type === 'carrier';
                 return [
                     'id'                      => $o->id,
@@ -74,12 +80,12 @@ class AdminCompanyController extends Controller
                     'verification_status'     => $o->verification_status,
                     'background_check_status' => $o->background_check_status,
                     'status'                  => $o->status,
-                    'listed'                  => $o->isListed(),
-                    'listed_by'               => $o->listedBy?->name,
                     'city'                    => $o->city,
                     'state'                   => $o->state,
                     'locations'               => $o->locations_count,
                     'contacts'                => $o->contacts_count,
+                    'third_party'             => $o->status === 'listed' || !$o->owner_id,
+                    'joined_promotion'        => $o->joined_promotion_id ? ($promos[$o->joined_promotion_id] ?? null) : null,
                     'created_at'              => $o->created_at?->toISOString(),
                 ];
             }),
@@ -93,8 +99,7 @@ class AdminCompanyController extends Controller
 
         $org->load(['owner', 'orgMembers.user.personVerification']);
         $isCarrier = $org->type === 'carrier';
-        $isFactor  = $org->type === 'factor';
-        // Receivers and brokers have no profile or documents to review: their page is locations and contacts
+        // Receivers and brokers have the same record as a shipper; only their loads are found through their locations
         $isListing = in_array($org->type, ['receiver', 'broker'], true);
 
         // Loads hold the company directly; a receiver's loads are the ones with a stop at its locations
@@ -121,8 +126,10 @@ class AdminCompanyController extends Controller
                     'tax_id'     => $isCarrier ? null : $org->tax_id,
                     'stripe_mode'     => $org->stripe_mode,
                     'commission_rate' => $org->commission_rate,
+                    // Joined during an open season (relaxed checks)
+                    'joined_promotion' => $org->joined_promotion_id ? DB::table('compliance_promotions')->where('id', $org->joined_promotion_id)->value('name') : null,
                 ],
-                'company_profile' => ($isFactor || $isListing) ? null : $this->companyFields($org, $isCarrier),
+                'company_profile' => $this->companyFields($org, $isCarrier),
                 // Locations, contacts, listing and claims (every type)
                 'directory' => app(\App\Services\OrgDirectory::class)->detail($org, $request->user()),
                 'verification' => [
@@ -135,7 +142,7 @@ class AdminCompanyController extends Controller
                     'background_notes'     => $org->background_check_notes,
                     'background_checked_at'=> $org->background_checked_at?->toISOString(),
                 ],
-                'documents' => ($isFactor || $isListing) ? [] : ($isCarrier
+                'documents' => ($isCarrier
                     ? DB::table('carrier_documents')->where('carrier_id', $org->id)->orderByDesc('created_at')
                         ->get(['id', 'type', 'name', 'url', 'expiry_date', 'verified_at', 'created_at'])
                     : DB::table('shipper_documents')->where('shipper_id', $org->id)->orderByDesc('created_at')
@@ -165,7 +172,11 @@ class AdminCompanyController extends Controller
                     'value'     => (float) (clone $shipments)->where('status', 'completed')->sum('payment_amount_cents') / 100,
                     'bids'      => $isCarrier ? DB::table('freight_job_offers')->where('carrier_id', $org->id)->count() : null,
                 ],
-                'tabs' => $isFactor ? null : $this->tabs($org, $isCarrier),
+                'tabs' => $this->tabs($org, $isCarrier),
+                // What is checked before approval, and where each item stands
+                'checklist' => $this->approvalChecklist($org, $isCarrier),
+                // What this type must or may have on file (Compliance tab)
+                'compliance' => \App\Support\ComplianceRules::items($org),
                 'recent_shipments' => (clone $shipments)->with('stops')->latest()->limit(10)->get()
                     ->map(fn (FreightJob $j) => [
                         'id'          => $j->id,
@@ -189,40 +200,58 @@ class AdminCompanyController extends Controller
             'notes'  => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Factors aren't approved by Shipmater (docs/noa-factoring.md)
-        if ($org->type === 'factor') {
-            return response()->json(['error' => "Factoring companies don't need Shipmater approval.", 'code' => 'not_required'], 422);
+        // Every check the policy (Admin Console, Compliance) marks required must have passed
+        if ($data['action'] === 'approve') {
+            $blocking = $this->blockingChecks($org);
+            if ($blocking) {
+                $code = count($blocking) === 1 && $blocking[0]['key'] === 'background' ? 'background_not_clear'
+                    : (count($blocking) === 1 && $blocking[0]['key'] === 'owner_approved' ? 'owner_not_approved' : 'checks_not_passed');
+                return response()->json([
+                    'error'    => 'These required checks have not passed yet: ' . implode(', ', array_column($blocking, 'label')) . '.',
+                    'code'     => $code,
+                    'blocking' => array_column($blocking, 'key'),
+                ], 422);
+            }
         }
 
-        if ($data['action'] === 'approve' && !in_array($org->background_check_status, self::BACKGROUND_PASSED, true)) {
-            return response()->json([
-                'error' => 'A clear company background check is required before this company can be approved.',
-                'code'  => 'background_not_clear',
-            ], 422);
-        }
+        $this->setDecision($org, $data['action'] === 'approve', $data['notes'] ?? null, $request->user()->id);
+        return response()->json(['message' => "Company {$org->verification_status}.", 'status' => $org->verification_status]);
+    }
 
-        // A carrier's owner must be approved as a person first
-        if ($data['action'] === 'approve' && $org->type === 'carrier'
-            && User::find($org->owner_id)?->personVerification?->status !== 'approved') {
-            return response()->json([
-                'error' => 'The owner must be approved as a person (People) before this carrier can be approved.',
-                'code'  => 'owner_not_approved',
-            ], 422);
-        }
+    /** Required checks that have not passed */
+    public function blockingChecks(Organization $org): array
+    {
+        $org->loadMissing(['owner', 'orgMembers.user.personVerification']);
+        return array_values(array_filter($this->approvalChecklist($org, $org->type === 'carrier'),
+            fn ($r) => $r['required'] && $r['state'] !== 'passed'));
+    }
 
-        $approved = $data['action'] === 'approve';
+    /**
+     * Automatic approval: when the type is set to approve automatically and every required check has passed.
+     * Called after anything that can complete a check (compliance file verified, background recorded, ...).
+     */
+    public static function autoApprove(Organization $org): bool
+    {
+        if (in_array($org->verification_status, ['approved', 'rejected'], true)) return false;
+        if (\App\Services\VerificationPolicy::approvalMode($org->type) !== 'auto' || !$org->owner_id) return false;
+        $self = app(self::class);
+        if ($self->blockingChecks($org)) return false;
+        $self->setDecision($org, true, 'Approved automatically: all required checks passed.', null);
+        return true;
+    }
+
+    private function setDecision(Organization $org, bool $approved, ?string $notes, ?int $by): void
+    {
         $org->update(array_merge([
             'verification_status'     => $approved ? 'approved' : 'rejected',
-            'verification_notes'      => $data['notes'] ?? null,
+            'verification_notes'      => $notes,
             'verification_updated_at' => now(),
-            'verification_updated_by' => $request->user()->id,
+            'verification_updated_by' => $by,
         ], $org->type === 'shipper' ? [
             // The shipper's business verification shown on their own screens
             'shipper_verification_status' => $approved ? 'verified' : 'incomplete',
             'shipper_ein_verified_at'     => $approved ? now() : null,
         ] : []));
-
-        return response()->json(['message' => "Company {$org->verification_status}.", 'status' => $org->verification_status]);
     }
 
     // POST /api/v1/admin/companies/{org}/background   { result, reference?, notes? }
@@ -244,7 +273,82 @@ class AdminCompanyController extends Controller
             'background_checked_at'      => now(),
         ]);
 
+        self::autoApprove($org->fresh());
         return response()->json(['message' => 'Background check recorded.', 'status' => $org->background_check_status]);
+    }
+
+    /**
+     * Everything checked before a shipper or carrier is approved, with its state:
+     * passed, pending (waiting on someone), missing (not provided), failed or expired.
+     * required = blocks approval or working on the platform; the rest is recorded for the review.
+     */
+    public function approvalChecklist(Organization $o, bool $isCarrier): array
+    {
+        $rows = [];
+        $add = function (string $key, string $group, string $label, bool $required, string $state, ?string $detail = null) use (&$rows) {
+            $rows[] = compact('key', 'group', 'label', 'required', 'state', 'detail');
+        };
+        $date = fn ($d) => $d ? \Illuminate\Support\Carbon::parse($d)->toFormattedDateString() : null;
+        $type = $o->type;
+        $bg = $o->background_check_status ?? 'not_started';
+        $bgState = in_array($bg, self::BACKGROUND_PASSED, true) ? 'passed' : (in_array($bg, ['failed', 'consider'], true) ? 'failed' : ($bg === 'pending' ? 'pending' : 'missing'));
+        $owner = $o->owner;
+
+        if ($owner) {
+            $add('owner_email', 'Account', 'Owner email verified', true, $owner->email_verified_at ? 'passed' : 'pending',
+                $owner->email_verified_at ? $date($owner->email_verified_at) : 'Waiting for the owner to enter the code');
+        }
+
+        // Business details everyone but carriers and receivers gives
+        if (in_array($type, ['shipper', 'factor', 'broker'], true)) {
+            $add('address', 'Business', 'Registered address', true, $o->street && $o->city && $o->state && $o->zip ? 'passed' : 'missing',
+                collect([$o->street, $o->city, $o->state, $o->zip])->filter()->implode(', ') ?: null);
+        }
+        if ($type === 'shipper') {
+            $add('phone_verified', 'Business', 'Business phone verified', false, $o->shipper_phone_verified_at ? 'passed' : ($o->phone ? 'pending' : 'missing'),
+                $o->shipper_phone_verified_at ? $date($o->shipper_phone_verified_at) : ($o->phone ?: 'No phone'));
+            $add('submitted', 'Business', 'Submitted for review', false, $o->verification_submitted_at ? 'passed' : 'pending',
+                $o->verification_submitted_at ? $date($o->verification_submitted_at) : 'Not submitted yet');
+        }
+
+        // Compliance items for this type (same list as the Compliance tab)
+        foreach (\App\Support\ComplianceRules::items($o, false) as $i) {
+            $add($i['key'], $i['section'], $i['label'], $i['required'], $i['state'], $i['detail'] ?? $i['value']);
+        }
+
+        if (in_array($type, ['carrier', 'shipper'], true)) {
+            $docs = $isCarrier ? DB::table('carrier_documents')->where('carrier_id', $o->id) : DB::table('shipper_documents')->where('shipper_id', $o->id);
+            $total = (clone $docs)->count(); $verified = (clone $docs)->whereNotNull('verified_at')->count();
+            $add('documents', 'Documents', $isCarrier ? 'Documents reviewed' : 'Business documents', false, $total === 0 ? 'missing' : ($verified === $total ? 'passed' : 'pending'), "{$verified} of {$total} verified");
+        }
+
+        if ($isCarrier) {
+            $ownerStatus = $owner?->personVerification?->status ?? 'incomplete';
+            $add('owner_approved', 'People', 'Owner approved (identity and background)', true,
+                $ownerStatus === 'approved' ? 'passed' : ($ownerStatus === 'rejected' ? 'failed' : 'pending'), ucfirst(str_replace('_', ' ', $ownerStatus)));
+            $drivers = $o->orgMembers->filter(fn ($m) => $m->role === 'driver' && $m->user);
+            $okDrivers = $drivers->filter(fn ($m) => $m->user->personVerification?->status === 'approved')->count();
+            $add('drivers_approved', 'People', 'Drivers approved', false, $drivers->isEmpty() ? 'missing' : ($okDrivers === $drivers->count() ? 'passed' : 'pending'),
+                $drivers->isEmpty() ? 'No drivers yet' : "{$okDrivers} of {$drivers->count()} approved");
+            $add('vehicles', 'Fleet', 'Vehicles on file', false, DB::table('carrier_vehicles')->where('carrier_id', $o->id)->exists() ? 'passed' : 'missing');
+        }
+
+        // Receivers have no background check
+        if ($type !== 'receiver') {
+            $add('background', 'Background', 'Company background check', true, $bgState, ucfirst(str_replace('_', ' ', $bg)));
+        }
+
+        if ($isCarrier) {
+            $payout = $o->stripe_connect_status ?? ($o->stripe_connect_id ? 'reviewing' : 'not_connected');
+            $add('payouts', 'Money', 'Payouts set up', true, in_array($payout, ['active', 'verified'], true) ? 'passed' : ($payout === 'not_connected' ? 'missing' : 'pending'), ucfirst(str_replace('_', ' ', $payout)));
+        } elseif ($type === 'shipper') {
+            $methods = DB::table('payment_methods')->where('org_id', $o->id)->whereNotNull('stripe_pm_id')->count();
+            $add('payment_method', 'Money', 'Payment method on file', true, $methods ? 'passed' : 'missing', $methods ? "{$methods} on file" : null);
+            $active = DB::table('shipper_subscriptions')->where('org_id', $o->id)->where('status', 'active')->exists();
+            $add('subscription', 'Money', 'Subscription active (needed to post loads)', true, $active ? 'passed' : 'missing');
+        }
+        // Admin policy (Compliance page): off drops the check, optional / deferred stop it blocking
+        return array_values(array_filter(array_map(fn ($r) => \App\Services\VerificationPolicy::apply($o, $r), $rows)));
     }
 
     /** Company fields for the admin page. Person fields (CDL, DOB, etc.) stay on the person. */

@@ -2,6 +2,17 @@ import { formatCurrency } from '@/lib/utils';
 
 export type Row = Record<string, unknown>;
 
+/** Columns that hold a code rather than free text */
+const ENUM_KEYS = new Set(['business_type', 'carrier_type', 'operating_authority_type', 'industry', 'employee_count', 'type', 'role', 'tier', 'plan']);
+const ACRONYMS: Record<string, string> = { llc: 'LLC', llp: 'LLP', lp: 'LP', s: 'S', c: 'C', corp: 'corp', inc: 'Inc', dba: 'DBA', ltl: 'LTL', ftl: 'FTL', usdot: 'USDOT', mc: 'MC', dot: 'DOT', hazmat: 'HazMat' };
+/** sole_proprietor -> Sole proprietor, llc -> LLC, s_corp -> S corp */
+export function humanize(code: string): string {
+  const words = code.replace(/-/g, '_').split('_').filter(Boolean).map((w) => ACRONYMS[w.toLowerCase()] ?? w.toLowerCase());
+  if (words.length === 0) return code;
+  words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1);
+  return words.join(' ');
+}
+
 export function display(key: string, value: unknown): React.ReactNode {
   if (value === null || value === undefined || value === '') return <span className="text-[var(--color-text-faint)]">—</span>;
   if (key === 'agreed_cost') return formatCurrency(Number(value));
@@ -18,6 +29,9 @@ export function display(key: string, value: unknown): React.ReactNode {
   // Raw database timestamps ("2026-10-28 02:47:42") are UTC
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) return new Date(str.replace(' ', 'T') + 'Z').toLocaleString();
   if (key === 'status' || key.endsWith('_status')) return str.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  // Same words the carrier sees on its own profile
+  if (key === 'carrier_type') return str === 'sole_proprietor' ? 'Owner-operator' : str === 'company' ? 'Freight company' : humanize(str);
+  if (ENUM_KEYS.has(key) || /^[a-z0-9]+(_[a-z0-9]+)+$/.test(str)) return humanize(str);
   if (/^https?:\/\//.test(str)) return <a href={str} target="_blank" rel="noreferrer" className="text-[var(--color-teal)] underline break-all">Open</a>;
   return <span className="break-all">{str}</span>;
 }

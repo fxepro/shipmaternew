@@ -25,6 +25,14 @@ export interface OrgAdmin extends Org {
   fmcsa_broker_mc: string | null;
   owner: { id: number; name: string; email: string } | null;
   created_at: string;
+  /** Added by a company (a customer, a receiver); nobody from it signed up */
+  third_party: boolean;
+  added_by: string | null;
+  /** Companies that have it in their list */
+  connected_count: number;
+  locations_count: number;
+  city: string | null;
+  state: string | null;
 }
 
 export interface PlatformTenant {

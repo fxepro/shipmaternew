@@ -3,17 +3,19 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Landmark, Users, Loader2, Save } from 'lucide-react';
+import { Building2, Landmark, Users, Loader2, Save, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { orgApi, payoutsApi } from '@/lib/api';
+import { api, orgApi, payoutsApi } from '@/lib/api';
 import { TeamManager } from '@/components/team/TeamManager';
+import { ComplianceItems, type ComplianceItem } from '@/components/compliance/ComplianceItems';
 import { BusinessDetailsForm, BankAccountForm, PayoutStatus } from '@/components/payouts/PayoutSetup';
 
-type Tab = 'company' | 'finance' | 'team';
+type Tab = 'company' | 'finance' | 'compliance' | 'team';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'company', label: 'Company', icon: Building2 },
   { id: 'finance', label: 'Finance', icon: Landmark  },
+  { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
   { id: 'team',    label: 'Team',    icon: Users     },
 ];
 
@@ -244,6 +246,20 @@ function FinanceTab({ onGoTo }: { onGoTo: (tab: string) => void }) {
   );
 }
 
+// ── Compliance ──────────────────────────────────────────────────────────────
+
+/** W-9, licence, NOA template: upload them here; Shipmater verifies them */
+function MyCompliance() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['org-compliance'],
+    queryFn: () => api.get('/api/v1/org/compliance').then((r) => r.data.data as ComplianceItem[]),
+  });
+  if (isLoading) return <div className="skeleton h-64 rounded-xl" />;
+  return <ComplianceItems items={data ?? []} uploadUrl={(key) => `/api/v1/org/compliance/${key}`}
+    onChange={(items) => qc.setQueryData(['org-compliance'], items)} />;
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 function Account() {
@@ -286,6 +302,7 @@ function Account() {
 
       {tab === 'company' && <CompanyTab />}
       {tab === 'finance' && <FinanceTab onGoTo={(t) => router.replace(`/factor/profile?tab=${t}`)} />}
+      {tab === 'compliance' && <MyCompliance />}
       {tab === 'team'    && <TeamManager type="factor" />}
     </div>
   );

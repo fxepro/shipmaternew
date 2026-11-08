@@ -10,6 +10,16 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Organization extends Model
 {
+    /** A company that signs up during an open season is tagged with it (relaxed checks, catch-up deadline later) */
+    protected static function booted(): void
+    {
+        static::creating(function (Organization $o) {
+            if (!$o->joined_promotion_id && $o->owner_id && $o->type) {
+                $o->joined_promotion_id = \App\Services\VerificationPolicy::activePromotion($o->type)?->id;
+            }
+        });
+    }
+
     protected $fillable = [
         'name', 'slug', 'type', 'plan', 'status', 'owner_id', 'listed_by_org_id', 'listed_by_user_id', 'claimed_at',
         'phone', 'email', 'website',

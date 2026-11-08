@@ -3,6 +3,7 @@ export const COMPANY_STATUSES: { value: string; label: string; cls: string }[] =
   { value: 'pending_review', label: 'Pending review', cls: 'bg-amber-50 text-amber-700' },
   { value: 'approved',       label: 'Approved',       cls: 'badge-success' },
   { value: 'rejected',       label: 'Rejected',       cls: 'badge-danger' },
+  { value: 'restricted',     label: 'Restricted',     cls: 'badge-danger' },
 ];
 
 export const BACKGROUND_RESULTS: { value: string; label: string; cls: string }[] = [

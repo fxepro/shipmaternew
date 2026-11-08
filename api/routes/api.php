@@ -165,6 +165,9 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     // Org / Team management
     Route::get('/org',                             [OrgController::class, 'show']);
     Route::put('/org',                             [OrgController::class, 'update'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
+    // Compliance uploads (W-9, licence, COI...) for the types that keep them as files
+    Route::get('/org/compliance',                  [\App\Http\Controllers\Api\OrgComplianceController::class, 'index'])->middleware('perm:factor:company.profile=view,receiver:company.profile=view');
+    Route::post('/org/compliance/{key}',           [\App\Http\Controllers\Api\OrgComplianceController::class, 'upload'])->middleware('perm:factor:company.profile,receiver:company.profile');
     Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
     Route::put('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'update'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
     Route::get('/org/members',                     [OrgController::class, 'members']);
@@ -299,6 +302,15 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/admin/companies/{org}',            [AdminCompanyController::class, 'show']);
     Route::post('/admin/companies/{org}/review',    [AdminCompanyController::class, 'review']);
     Route::post('/admin/companies/{org}/background',[AdminCompanyController::class, 'recordBackground']);
+    // Verification policy (Admin Console, Compliance)
+    Route::get('/admin/verification-policy',                      [\App\Http\Controllers\Api\VerificationPolicyController::class, 'show']);
+    Route::put('/admin/verification-policy/{type}/checks/{key}',  [\App\Http\Controllers\Api\VerificationPolicyController::class, 'updateCheck']);
+    Route::put('/admin/verification-policy/{type}/approval-mode', [\App\Http\Controllers\Api\VerificationPolicyController::class, 'updateApprovalMode']);
+    Route::post('/admin/compliance-promotions',                   [\App\Http\Controllers\Api\VerificationPolicyController::class, 'savePromotion']);
+    Route::put('/admin/compliance-promotions/{id}',               [\App\Http\Controllers\Api\VerificationPolicyController::class, 'savePromotion']);
+    Route::post('/admin/compliance-promotions/{id}/end',          [\App\Http\Controllers\Api\VerificationPolicyController::class, 'endPromotion']);
+    Route::post('/admin/companies/{org}/compliance/{key}',        [\App\Http\Controllers\Api\OrgComplianceController::class, 'adminUpload']);
+    Route::post('/admin/companies/{org}/compliance/{key}/verify', [\App\Http\Controllers\Api\OrgComplianceController::class, 'verify']);
     Route::get('/admin/claims',                     [DirectoryController::class, 'adminClaims']);
     Route::post('/admin/claims/{claim}/decide',     [DirectoryController::class, 'decideClaim']);
     Route::get('/admin/shippers/pending-review',    [ShipperVerificationController::class, 'pendingReview']);
