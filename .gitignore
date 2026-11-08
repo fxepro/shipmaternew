@@ -43,3 +43,6 @@ USCIS/
 *.log
 dev.err.log
 dev.out.log
+
+# Local demo material and research (never committed)
+/demo
