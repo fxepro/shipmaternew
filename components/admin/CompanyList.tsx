@@ -33,15 +33,15 @@ interface CompanyRow {
 type Tab = 'all' | OrgType;
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'all', label: 'All' }, { key: 'shipper', label: 'Shippers' }, { key: 'carrier', label: 'Carriers' },
+  { key: 'all', label: 'All' }, { key: 'shipper', label: 'Shippers' }, { key: 'broker', label: 'Brokers' }, { key: 'carrier', label: 'Carriers' },
   { key: 'factor', label: 'Factors' },
 ];
 // Organizations also has the orgs Shipmater doesn't sell to
-const ORG_TABS: { key: Tab; label: string }[] = [...TABS, { key: 'receiver', label: 'Receivers' }, { key: 'broker', label: 'Brokers' }];
+const ORG_TABS: { key: Tab; label: string }[] = [...TABS, { key: 'receiver', label: 'Receivers' }];
 const TYPE_LABEL: Record<OrgType, string> = { carrier: 'Carrier', shipper: 'Shipper', factor: 'Factor', receiver: 'Receiver', broker: 'Broker' };
 const TYPE_ICON: Record<OrgType, React.ElementType> = { carrier: Truck, shipper: Building2, factor: Landmark, receiver: PackageCheck, broker: Handshake };
-/** Shipmater reviews shippers, carriers and factors */
-const REVIEWED: OrgType[] = ['carrier', 'shipper', 'factor'];
+/** Shipmater reviews shippers, brokers, carriers and factors */
+const REVIEWED: OrgType[] = ['carrier', 'shipper', 'broker', 'factor'];
 
 /**
  * scope 'companies': Shipmater's own customers (shippers, carriers, factors that signed up).

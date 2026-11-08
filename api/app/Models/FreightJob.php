@@ -20,12 +20,14 @@ class FreightJob extends Model
     protected $table = 'freight_jobs';
 
     protected $fillable = [
-        'contract_id', 'shipper_id', 'carrier_id',
-        'title', 'reference_number', 'tracking_token', 'special_instructions',
+        'contract_id', 'shipper_id', 'broker_id', 'shipper_name', 'carrier_id',
+        'title', 'commodity', 'reference_number', 'tracking_token', 'special_instructions', 'sanitary_instructions',
+        'declared_at', 'declared_by',
         'total_weight_lbs', 'status', 'optimization_mode',
         'route_distance_miles', 'route_duration_minutes',
         'route_optimized_at', 'route_snapshot', 'cost_breakdown',
         'quote_requirements',
+        'equipment_types', 'required_capabilities', 'required_service_types', 'hazmat', 'temp_min_f', 'temp_max_f',
         'payment_amount_cents', 'payment_status', 'currency', 'posted_at', 'completed_at',
         'bol_pdf_key', 'bol_pdf_url', 'bol_generated_at',
         'invoice_number', 'invoice_date', 'invoice_due_date',
@@ -38,8 +40,13 @@ class FreightJob extends Model
             'route_snapshot'        => 'array',
             'cost_breakdown'        => 'array',
             'quote_requirements'    => 'array',
+            'equipment_types'        => 'array',
+            'required_capabilities'  => 'array',
+            'required_service_types' => 'array',
+            'hazmat'                 => 'boolean',
             'route_optimized_at'    => 'datetime',
             'posted_at'             => 'datetime',
+            'declared_at'           => 'datetime',
             'completed_at'          => 'datetime',
             'bol_generated_at'      => 'datetime',
             'invoice_date'          => 'date',
@@ -61,6 +68,22 @@ class FreightJob extends Model
     }
 
     public function contract(): BelongsTo  { return $this->belongsTo(Contract::class); }
+    public function broker(): BelongsTo    { return $this->belongsTo(Organization::class, 'broker_id'); }
+
+    /** The company that posts the load, books the carrier and pays it: the broker when there is one, otherwise the shipper */
+    public function posterId(): ?int { return $this->broker_id ?? $this->shipper_id; }
+
+    /** Loads a company posted (as the shipper with no broker, or as the broker) */
+    public function scopePostedBy(\Illuminate\Database\Eloquent\Builder $q, ?int $orgId): \Illuminate\Database\Eloquent\Builder
+    {
+        return $q->where(fn ($w) => $w->where('broker_id', $orgId)->orWhere(fn ($s) => $s->whereNull('broker_id')->where('shipper_id', $orgId)));
+    }
+
+    /** Loads a company is the shipper or broker on (a shipper also sees loads a broker handles for it) */
+    public function scopeShipperSide(\Illuminate\Database\Eloquent\Builder $q, ?int $orgId): \Illuminate\Database\Eloquent\Builder
+    {
+        return $q->where(fn ($w) => $w->where('shipper_id', $orgId)->orWhere('broker_id', $orgId));
+    }
     public function gpsPings(): HasMany    { return $this->hasMany(GpsPing::class)->orderByDesc('pinged_at'); }
     public function latestPing(): HasMany  { return $this->hasMany(GpsPing::class)->orderByDesc('pinged_at')->limit(1); }
 

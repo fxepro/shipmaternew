@@ -18,6 +18,8 @@ class Organization extends Model
                 $o->joined_promotion_id = \App\Services\VerificationPolicy::activePromotion($o->type)?->id;
             }
         });
+        // Profile forms still write DOT / MC / insurance on the company; mirror them onto its primary authority
+        static::saved(fn (Organization $o) => \App\Services\Authorities::syncFromOrg($o));
     }
 
     protected $fillable = [
@@ -29,7 +31,7 @@ class Organization extends Model
         // Stripe billing mode (admin-only toggle)
         'stripe_mode', 'stripe_connect_id', 'commission_rate',
         // Compliance / tenant flags
-        'fmcsa_broker_mc', 'is_platform_tenant',
+        'fmcsa_broker_mc', 'is_platform_tenant', 'categories',
         // Company-level approval (admin)
         'verification_status', 'verification_notes', 'verification_updated_at', 'verification_updated_by',
         'background_check_status', 'background_check_reference', 'background_check_notes', 'background_checked_at',
@@ -85,6 +87,7 @@ class Organization extends Model
             'shipper_phone_verified_at' => 'datetime',
             'shipper_ein_verified_at'   => 'datetime',
             'shipper_preferred_categories' => 'array',
+            'categories'                   => 'array',
             'shipper_notif_recipients'  => 'array',
             'shipper_notif_email'       => 'array',
             'shipper_notif_sms'         => 'array',
@@ -143,6 +146,17 @@ class Organization extends Model
     public function vehicles(): HasMany
     {
         return $this->hasMany(CarrierVehicle::class, 'carrier_id');
+    }
+
+    /** DOT / MC / broker authority this company holds */
+    public function authorities(): HasMany
+    {
+        return $this->hasMany(OperatingAuthority::class, 'org_id');
+    }
+
+    public function primaryAuthority(string $kind = 'carrier'): ?OperatingAuthority
+    {
+        return $this->authorities()->where('kind', $kind)->orderByDesc('is_primary')->orderBy('id')->first();
     }
 
     public function carrierDocuments(): HasMany

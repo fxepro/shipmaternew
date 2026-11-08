@@ -1,6 +1,7 @@
 'use client';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { usePortal } from '@/lib/portal';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -372,6 +373,7 @@ let idCounter = 0;
 function uid() { return `stop-${++idCounter}`; }
 
 export default function RoutePlannerPage() {
+  const to = usePortal();
   const router = useRouter();
   const [stops, setStops] = useState<Stop[]>([
     { id: uid(), address: '', role: 'pickup' },
@@ -500,7 +502,7 @@ export default function RoutePlannerPage() {
       durationS: result ? Math.round(result.totalDuration) : undefined,
     });
 
-    router.push('/shipper/shipments/new?fromPlanner=1');
+    router.push(to('/shipper/shipments/new?fromPlanner=1'));
   }
 
   async function handlePlan() {

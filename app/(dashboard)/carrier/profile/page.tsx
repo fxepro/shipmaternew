@@ -11,10 +11,17 @@ import {
 } from 'lucide-react';
 import ServiceTypeSelector from '@/components/carrier/ServiceTypeSelector';
 import CertificationSelector from '@/components/carrier/CertificationSelector';
-import { certificationApi } from '@/lib/api';
+import { certificationApi, serviceTypeApi } from '@/lib/api';
+import { ProProfileCard } from '@/components/entities/ProProfileCard';
+import { DataCard, SectionHeader, Pill, fmtDate, expiryPill, type DataRow } from '@/components/profile/DataCard';
+import { DriversSection } from '@/components/profile/DriversSection';
+import { PROFILE_SECTIONS, groupOf, toSection, type ProfileSection, type ProfileGroup } from '@/lib/profile-sections';
 import { FinancialTab as FinancialTabComponent } from './components/tabs/FinancialTab';
 import { BusinessTab } from './components/tabs/BusinessTab';
 import { BackgroundCheckPanel } from '@/components/background/BackgroundCheckPanel';
+import { AuthoritiesPanel } from '@/components/entities/AuthoritiesPanel';
+import { CategoriesEditor } from '@/components/entities/CategoriesEditor';
+import { ChipPicker, useCatalog, nameOf } from '@/components/entities/catalog';
 import { COUNTRIES, getCountry } from '@/lib/countries';
 import {
   collectCarrierFieldIssues,
@@ -66,11 +73,26 @@ interface Vehicle {
   climate_controlled: boolean;
   enclosed: boolean;
   is_primary: boolean;
+  unit_number: string;
+  equipment_type: string;
+  temp_min_f: string;
+  temp_max_f: string;
+  capabilities: string[];
+  owner: 'company' | 'driver';
+  owner_user_id: string;
 }
 
 type Tab = 'personal' | 'business' | 'services' | 'certifications' | 'dot' | 'financial' | 'background' | 'medical' | 'insurance' | 'vehicles' | 'reviews';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+
+const mask = (s?: string | null) => (s ? `•••• ${String(s).slice(-4)}` : null);
+type NamedTree = { key: string; name: string; children?: { key: string; name: string }[] }[];
+const namesFrom = (tree: NamedTree, keys: string[]) => {
+  const all = tree.flatMap(p => [p, ...(p.children ?? [])]);
+  return keys.map(k => all.find(i => i.key === k)?.name ?? k).join(', ') || null;
+};
+const sectionLabel = (id: string) => [...PROFILE_SECTIONS.me, ...PROFILE_SECTIONS.company].find(d => d.id === toSection(id))?.label ?? id;
 
 function RequiredMark() {
   return <span className="text-red-500 font-bold" aria-hidden="true"> *</span>;
@@ -143,7 +165,7 @@ function ValidationBanner({
               onClick={() => onGoToTab(issue.tab)}
               className="font-semibold text-[var(--color-teal)] hover:underline"
             >
-              Go to {issue.tab.charAt(0).toUpperCase() + issue.tab.slice(1)}
+              Go to {sectionLabel(issue.tab)}
             </button>
           </li>
         ))}
@@ -388,7 +410,14 @@ export default function CarrierProfilePage() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>('personal');
+  const [section, setSectionState] = useState<ProfileSection>('identity');
+  const [editing, setEditing] = useState(false);
+  const setSection = (s: ProfileSection, edit = false) => { setSectionState(s); setEditing(edit); };
+  /** Old tab ids (banners, links) open the matching section, in edit mode when it has one */
+  const goTo = (id: string) => {
+    const s = toSection(id);
+    if (s) setSection(s, [...PROFILE_SECTIONS.me, ...PROFILE_SECTIONS.company].find(d => d.id === s)?.editable ?? false);
+  };
   const [saved, setSaved] = useState(false);
 
   // FMCSA live verification state
@@ -417,16 +446,16 @@ export default function CarrierProfilePage() {
     const tabParam       = searchParams.get('tab') as Tab | null;
 
     // Deep-link: ?tab=financial (or any valid tab)
-    const validTabs: Tab[] = ['personal', 'business', 'services', 'certifications', 'insurance', 'medical', 'financial', 'background', 'vehicles', 'dot', 'reviews'];
-    // Stripe returns with ?tab=financial&stripe=..., so the Stripe result is handled first
-    if (tabParam && validTabs.includes(tabParam) && !stripeResult && !identityResult) {
-      setActiveTab(tabParam);
+    // Old tab ids still work (?tab=financial opens Payouts). Stripe returns with ?tab=financial&stripe=..., so the Stripe result is handled first
+    const tabSection = toSection(tabParam);
+    if (tabSection && !stripeResult && !identityResult) {
+      setSection(tabSection);
       router.replace('/carrier/profile');
       return;
     }
 
     if (stripeResult === 'success') {
-      setActiveTab('financial');
+      setSection('payouts');
       payoutsApi.refresh().then((r) => {
         qc.setQueryData(['payout-setup'], r.data.data);
         qc.invalidateQueries({ queryKey: ['carrier-profile'] });
@@ -437,19 +466,25 @@ export default function CarrierProfilePage() {
       }).catch(() => qc.invalidateQueries({ queryKey: ['payout-setup'] }));
       router.replace('/carrier/profile');
     } else if (stripeResult === 'refresh') {
-      setActiveTab('financial');
+      setSection('payouts');
       toast('Stripe setup was not finished. Continue whenever you are ready.');
       router.replace('/carrier/profile');
     }
 
     if (identityResult === 'success') {
-      setActiveTab('personal');
+      setSection('identity');
       qc.invalidateQueries({ queryKey: ['carrier-profile'] });
       toast.success('Identity submitted — verification typically takes a few minutes.');
       router.replace('/carrier/profile');
     }
   }, [searchParams]); // eslint-disable-line
 
+  const { data: serviceTypeTree = [] } = useQuery<NamedTree>({
+    queryKey: ['service-types'], queryFn: () => serviceTypeApi.list().then(r => r.data?.data ?? []), staleTime: 3600_000,
+  });
+  const { data: certificationTree = [] } = useQuery<NamedTree>({
+    queryKey: ['certifications'], queryFn: () => certificationApi.list().then(r => r.data?.data ?? []), staleTime: 3600_000,
+  });
   const [serviceTypeKeys, setServiceTypeKeys]       = useState<string[]>([]);
   const [certificationKeys, setCertificationKeys]   = useState<string[]>([]);
 
@@ -470,6 +505,8 @@ export default function CarrierProfilePage() {
     hazmat_endorsement: false, hazmat_expiry_date: '',
     tanker_endorsement: false,
     passenger_endorsement: false,
+    doubles_triples_endorsement: false,
+    school_bus_endorsement: false,
   });
 
   const [medicalForm, setMedicalForm] = useState({
@@ -499,6 +536,7 @@ export default function CarrierProfilePage() {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['carrier-profile'] });
+      qc.invalidateQueries({ queryKey: ['org-authorities'] });
       setInsuranceSaved(true);
       setTimeout(() => setInsuranceSaved(false), 2000);
       toast.success('Insurance information saved');
@@ -524,6 +562,20 @@ export default function CarrierProfilePage() {
     registration_expiry: '',
     liftgate: false, climate_controlled: false, enclosed: false,
     is_primary: isPrimary,
+    unit_number: '', equipment_type: '', temp_min_f: '', temp_max_f: '', capabilities: [],
+    owner: 'company', owner_user_id: '',
+  });
+  const catalog = useCatalog();
+  const { data: authorities = [], refetch: refetchAuthorities } = useQuery({
+    queryKey: ['org-authorities'],
+    queryFn: () => api.get('/api/v1/org/authorities').then(r => r.data?.data ?? []),
+    retry: false,
+  });
+  const { data: members = [] } = useQuery({
+    queryKey: ['org-members-for-vehicles'],
+    queryFn: () => api.get('/api/v1/org/members').then(r => r.data?.data ?? []),
+    retry: false,
+    enabled: showAddVehicle,
   });
   const [vehicleForm, setVehicleForm] = useState<Vehicle>(newVehicle(true));
 
@@ -590,6 +642,8 @@ export default function CarrierProfilePage() {
         hazmat_expiry_date: profile.hazmat_expiry_date || '',
         tanker_endorsement: profile.tanker_endorsement || false,
         passenger_endorsement: profile.passenger_endorsement || false,
+        doubles_triples_endorsement: profile.doubles_triples_endorsement || false,
+        school_bus_endorsement: profile.school_bus_endorsement || false,
       });
 
       // Restore last verification results — no need to re-check every visit
@@ -619,6 +673,7 @@ export default function CarrierProfilePage() {
     mutationFn: (data: any) => api.put('/api/v1/carrier/profile', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['carrier-profile'] });
+      qc.invalidateQueries({ queryKey: ['org-authorities'] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     },
@@ -700,20 +755,6 @@ export default function CarrierProfilePage() {
   });
 
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'personal',        label: 'Personal' },
-    { id: 'business',        label: 'Business' },
-    { id: 'financial',       label: 'Financial' },
-    { id: 'services',        label: 'Services' },
-    { id: 'certifications',  label: 'Certifications' },
-    { id: 'insurance',       label: 'Insurance' },
-    { id: 'medical',         label: 'Medical' },
-    { id: 'background',      label: 'Background' },
-    { id: 'vehicles',        label: 'Vehicles' },
-    { id: 'dot',             label: 'Commercial' },
-    { id: 'reviews',         label: 'Reviews' },
-  ];
-
   const initials = (() => {
     const parts = profile.name.trim().split(/\s+/);
     return parts.length > 1
@@ -736,7 +777,7 @@ export default function CarrierProfilePage() {
 
       <ValidationBanner
         issues={validationIssues}
-        onGoToTab={(tab) => setActiveTab(tab as Tab)}
+        onGoToTab={(tab) => goTo(tab)}
       />
 
       {/* Profile card */}
@@ -762,27 +803,128 @@ export default function CarrierProfilePage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-[var(--color-cream-dark)]">
-        <div className="flex gap-8">
-          {tabs.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`px-1 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-[var(--color-teal)] text-[var(--color-teal)]'
-                  : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+      {/* Me / Company, then the sections of each */}
+      <div className="space-y-3">
+        <div className="inline-flex rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-1">
+          {(['me', 'company'] as ProfileGroup[]).map(g => (
+            <button key={g} onClick={() => setSection(PROFILE_SECTIONS[g][0].id)}
+              className={`rounded-lg px-5 py-1.5 text-sm font-semibold transition-colors ${
+                groupOf(section) === g ? 'bg-[var(--color-slate)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
               }`}>
-              {tab.label}
+              {g === 'me' ? 'Me' : 'Company'}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {PROFILE_SECTIONS[groupOf(section)].map(d => (
+            <button key={d.id} onClick={() => setSection(d.id)}
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                section === d.id
+                  ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)] text-[var(--color-teal)]'
+                  : 'border-[var(--color-cream-dark)] bg-[var(--color-white)] text-[var(--color-text-muted)] hover:border-[var(--color-teal)]'
+              }`}>
+              {d.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Tab panels */}
-      <div className="bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-xl p-8">
+      {/* Section panel */}
+      <div className="bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-xl p-8 space-y-6">
+
+        {(() => {
+          const def = [...PROFILE_SECTIONS.me, ...PROFILE_SECTIONS.company].find(d => d.id === section)!;
+          return <SectionHeader title={def.label} description={def.description} editable={def.editable} editing={editing} onToggle={() => setEditing(e => !e)} />;
+        })()}
+
+        {/* ── VIEW CARDS (field name left, value right) ─────────────────── */}
+        {section === 'identity' && !editing && (
+          <div className="space-y-4">
+            <DataCard title="Name and contact" rows={[
+              ['Legal name', profile.name],
+              ['Email', profile.email],
+              ['Phone', profile.phone ? `${getCountry(profile.phone_country_code || 'US').dialCode} ${profile.phone}` : null],
+              ['WhatsApp', profile.whatsapp ? `${getCountry(profile.whatsapp_country_code || profile.phone_country_code || 'US').dialCode} ${profile.whatsapp}` : null],
+              ['Company / DBA name', profile.company_name],
+              ['Date of birth', fmtDate(profile.date_of_birth)],
+            ]} />
+            <DataCard title="Home address" rows={[
+              ['Street', profile.street], ['City', profile.city], ['State', profile.state], ['ZIP code', profile.zip],
+            ]} />
+            <DataCard title="Government ID" rows={[
+              ['ID type', profile.id_type === 'passport' ? 'Passport' : profile.id_type === 'cdl' ? 'CDL (the same card as Driving credentials)' : "Driver's license"],
+              ...(profile.id_type !== 'passport' ? [
+                ['Number', mask(profile.id_type === 'cdl' ? profile.cdl_number : profile.dl_number)],
+                ['Issuing state', profile.id_type === 'cdl' ? profile.cdl_issuing_state : profile.dl_state],
+                ['Expires', expiryPill(profile.id_type === 'cdl' ? profile.cdl_expiry_date : profile.dl_expiry)],
+              ] as DataRow[] : []),
+              ['SSN (last 4)', profile.has_ssn_last_4 ? 'On file (encrypted)' : null],
+              ['Identity verification', profile.identity_verified
+                ? <Pill tone="good">Verified{profile.identity_verified_at ? ` ${fmtDate(profile.identity_verified_at)}` : ''}</Pill>
+                : <button onClick={startIdentityVerification} disabled={identityLoading} className="text-sm font-medium text-[var(--color-teal)] hover:underline disabled:opacity-50">
+                    {identityLoading ? 'Opening Stripe…' : 'Not verified. Verify with Stripe'}
+                  </button>],
+            ]} />
+          </div>
+        )}
+
+        {section === 'driving' && !editing && (
+          <div className="space-y-4">
+            <DataCard title="Commercial driver's license (CDL)" rows={[
+              ['CDL number', mask(profile.cdl_number)],
+              ['Class', profile.cdl_number && profile.cdl_class ? `Class ${profile.cdl_class}` : null],
+              ['Issuing state', profile.cdl_issuing_state],
+              ['Expires', expiryPill(profile.cdl_expiry_date)],
+              ['Also my government ID', profile.id_type === 'cdl' ? 'Yes' : 'No'],
+            ]} />
+            <DataCard title="Endorsements" subtitle="Used to match loads. H and N together count as X (tank + hazmat)." rows={[
+              ['H — Hazardous materials', profile.hazmat_endorsement
+                ? <span className="inline-flex items-center gap-2">Yes{profile.hazmat_expiry_date && <> · expires {expiryPill(profile.hazmat_expiry_date)}</>}</span> : 'No'],
+              ['N — Tank vehicle', profile.tanker_endorsement ? 'Yes' : 'No'],
+              ['P — Passenger', profile.passenger_endorsement ? 'Yes' : 'No'],
+              ['T — Double / triple trailers', profile.doubles_triples_endorsement ? 'Yes' : 'No'],
+              ['S — School bus', profile.school_bus_endorsement ? 'Yes' : 'No'],
+            ]} />
+            <DataCard title="DOT medical card and drug testing" rows={[
+              ['Medical examiner', profile.medical_examiner_name],
+              ['Medical card expires', expiryPill(profile.dot_medical_expiry)],
+              ['Last drug test', fmtDate(profile.drug_test_date)],
+              ['Result', profile.drug_test_date && profile.drug_test_result ? profile.drug_test_result.charAt(0).toUpperCase() + profile.drug_test_result.slice(1) : null],
+            ]} />
+          </div>
+        )}
+
+        {section === 'authority' && !editing && (
+          <div className="space-y-4">
+            <AuthoritiesPanel items={authorities} mode="own" onChange={() => refetchAuthorities()} />
+            {dotResult && (
+              <DataCard title="Last FMCSA lookup" rows={[
+                ['Result', <Pill key="r" tone={dotResult.allowed_to_operate ? 'good' : 'bad'}>{dotResult.allowed_to_operate ? 'Authorized to operate' : 'Not authorized to operate'}</Pill>],
+                ['Legal name', dotResult.legal_name],
+                ['Operating status', dotResult.operating_status],
+                ['Safety rating', dotResult.safety_rating || 'Not rated'],
+                ['Power units / drivers', `${dotResult.total_power_units} / ${dotResult.total_drivers}`],
+                ['Checked', fmtDate(profile.fmcsa_checked_at)],
+              ]} />
+            )}
+          </div>
+        )}
+
+        {section === 'services' && !editing && (
+          <div className="space-y-4">
+            <DataCard title="What the company transports" rows={[['Services', namesFrom(serviceTypeTree, serviceTypeKeys)]]} />
+            <DataCard title="Certifications" rows={[['Certifications', namesFrom(certificationTree, certificationKeys)]]} />
+          </div>
+        )}
+
+        {section === 'pro' && <ProProfileCard />}
+
+        {section === 'drivers' && (
+          <DriversSection isOwnerOperator={profile.carrier_type === 'sole_proprietor'} onGoToDriving={() => setSection('driving', true)} />
+        )}
 
         {/* ── SERVICES ──────────────────────────────────────────────────── */}
-        {activeTab === 'services' && (
+        {section === 'services' && editing && (
           <div className="space-y-4">
             <div>
               <p className="text-sm font-semibold text-[var(--color-text)] mb-1">What do you transport?</p>
@@ -803,7 +945,7 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── CERTIFICATIONS ────────────────────────────────────────────── */}
-        {activeTab === 'certifications' && (
+        {section === 'services' && editing && (
           <div className="space-y-4">
             <div>
               <p className="text-sm font-semibold text-[var(--color-text)] mb-1">Your Certifications</p>
@@ -829,7 +971,7 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── PERSONAL ──────────────────────────────────────────────────── */}
-        {activeTab === 'personal' && (
+        {section === 'identity' && editing && (
           <div className="space-y-6">
             <SectionTitle>Legal Name</SectionTitle>
             <div className="grid grid-cols-2 gap-4">
@@ -977,19 +1119,28 @@ export default function CarrierProfilePage() {
               <SectionTitle>Government-Issued ID</SectionTitle>
               <p className="text-xs text-[var(--color-text-faint)] mb-4">Required for identity verification and background check</p>
               <div className="flex gap-3 mb-4">
-                {(['dl', 'passport'] as const).map(t => (
+                {(['dl', 'passport', 'cdl'] as const).map(t => (
                   <button key={t} onClick={() => setPersonalForm(p => ({...p, id_type: t}))}
                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                       personalForm.id_type === t
                         ? 'bg-[var(--color-teal)] text-white border-[var(--color-teal)]'
                         : 'bg-[var(--color-cream)] text-[var(--color-text-muted)] border-[var(--color-cream-dark)]'
                     }`}>
-                    {t === 'dl' ? "Driver's License" : 'Passport'}
+                    {t === 'dl' ? "Driver's License" : t === 'passport' ? 'Passport' : 'My CDL (same card)'}
                   </button>
                 ))}
               </div>
 
-              {personalForm.id_type === 'dl' ? (
+              {personalForm.id_type === 'cdl' ? (
+                <div className="space-y-4">
+                  <p className="rounded-xl bg-[var(--color-cream)] px-4 py-3 text-sm text-[var(--color-text-muted)]">
+                    Your CDL is your ID. Its number, state and expiry come from Driving credentials
+                    {dotForm.cdl_number ? ` (${mask(dotForm.cdl_number)}${dotForm.cdl_issuing_state ? `, ${dotForm.cdl_issuing_state}` : ''})` : ' (not entered yet)'}, so you enter it once.{' '}
+                    <button type="button" onClick={() => setSection('driving', true)} className="font-semibold text-[var(--color-teal)] hover:underline">Edit CDL</button>
+                  </p>
+                  <UploadBox label="Selfie (for identity matching)" required docType="selfie" hint="Clear photo of your face. Must match your CDL." />
+                </div>
+              ) : personalForm.id_type === 'dl' ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <Field label="DL Number" value={personalForm.dl_number} onChange={v => setPersonalForm(p => ({...p, dl_number: v}))} placeholder="D1234567" />
@@ -1117,9 +1268,10 @@ export default function CarrierProfilePage() {
                 state:         personalForm.state,
                 zip:           personalForm.zip,
                 id_type:       personalForm.id_type,
-                dl_number:     personalForm.dl_number,
-                dl_state:      personalForm.dl_state,
-                dl_expiry:     personalForm.dl_expiry || null,
+                // A CDL used as ID is entered once, under Driving credentials
+                ...(personalForm.id_type === 'dl' ? {
+                  dl_number: personalForm.dl_number, dl_state: personalForm.dl_state, dl_expiry: personalForm.dl_expiry || null,
+                } : {}),
                 ...(personalForm.ssn_last_4 ? { ssn_last_4: personalForm.ssn_last_4 } : {}),
               });
               setPersonalForm(p => ({ ...p, ssn_last_4: '' }));
@@ -1128,7 +1280,7 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── DOT-COMMERCIAL ────────────────────────────────────────────── */}
-        {activeTab === 'dot' && (
+        {section === 'driving' && editing && (
           <div className="space-y-6">
             <SectionTitle>Commercial Driver License</SectionTitle>
             <div className="grid grid-cols-2 gap-4">
@@ -1154,16 +1306,18 @@ export default function CarrierProfilePage() {
               <SectionTitle>Endorsements</SectionTitle>
               <div className="space-y-3">
                 {([
-                  ['hazmat_endorsement', 'HazMat', true],
-                  ['tanker_endorsement', 'Tanker', false],
-                  ['passenger_endorsement', 'Passenger', false],
+                  ['hazmat_endorsement', 'H — Hazardous materials', true],
+                  ['tanker_endorsement', 'N — Tank vehicle', false],
+                  ['passenger_endorsement', 'P — Passenger', false],
+                  ['doubles_triples_endorsement', 'T — Double / triple trailers', false],
+                  ['school_bus_endorsement', 'S — School bus', false],
                 ] as [keyof typeof dotForm, string, boolean][]).map(([key, label]) => (
                   <div key={key}>
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input type="checkbox" checked={!!dotForm[key]}
                         onChange={e => setDotForm(p => ({...p, [key]: e.target.checked}))}
                         className="w-4 h-4 rounded accent-[var(--color-teal)]" />
-                      <span className="text-sm font-medium text-[var(--color-text)]">{label} Endorsement</span>
+                      <span className="text-sm font-medium text-[var(--color-text)]">{label}</span>
                     </label>
                     {key === 'hazmat_endorsement' && dotForm.hazmat_endorsement && (
                       <div className="mt-3 ml-7 max-w-xs">
@@ -1175,10 +1329,23 @@ export default function CarrierProfilePage() {
               </div>
             </div>
 
-            {/* ── Operating Authority + FMCSA Verification ──────────────── */}
-            <div className="border-t border-[var(--color-cream-dark)] pt-6">
+            <p className="text-xs text-[var(--color-text-faint)]">H and N together count as X (tank + hazmat). These endorsements are the ones used to match loads.</p>
+
+            <SaveBar saved={saved} onSave={() => {
+              const msg = validateCarrierCommercialForm(dotForm, (profile.required_fields ?? []).filter((f: string) => !['dot_number', 'mc_number'].includes(f)));
+              if (msg) { toast.error(msg); return; }
+              const { usdot_number, mc_number, ...driving } = dotForm;
+              save(driving);
+            }} isPending={updateMutation.isPending} />
+          </div>
+        )}
+
+        {/* ── OPERATING AUTHORITY (edit): USDOT / MC + FMCSA, then insurance ── */}
+        {section === 'authority' && editing && (
+          <div className="space-y-6">
+            <div>
               <SectionTitle>
-                Operating Authority
+                Motor carrier authority (USDOT / MC)
                 <span className="text-xs font-normal text-[var(--color-text-faint)] ml-2">— Only if operating under independent authority</span>
               </SectionTitle>
 
@@ -1361,14 +1528,14 @@ export default function CarrierProfilePage() {
             </div>
 
             <SaveBar saved={saved} onSave={() => {
-              const msg = validateCarrierCommercialForm(dotForm, profile.required_fields ?? []);
+              const msg = validateCarrierCommercialForm(dotForm, (profile.required_fields ?? []).filter((f: string) => ['dot_number', 'mc_number'].includes(f)));
               if (msg) {
                 toast.error(msg);
                 return;
               }
               save({
-                ...dotForm,
                 usdot_number: dotForm.usdot_number,
+                mc_number: dotForm.mc_number,
                 // Keep legacy alias in sync when API still reads dot_number
                 dot_number: dotForm.usdot_number || undefined,
               });
@@ -1377,16 +1544,20 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── FINANCIAL ─────────────────────────────────────────────────── */}
-        {activeTab === 'business' && (
-          <BusinessTab profile={profile} />
+        {section === 'business' && (
+          <div className="space-y-6">
+            <CategoriesEditor value={profile.categories ?? []} saveUrl="/api/v1/org/categories"
+              onSaved={() => qc.invalidateQueries({ queryKey: ['carrier-profile'] })} />
+            <BusinessTab profile={profile} />
+          </div>
         )}
 
-        {activeTab === 'financial' && (
-          <FinancialTabComponent onGoTo={(tab) => setActiveTab(tab as Tab)} />
+        {section === 'payouts' && (
+          <FinancialTabComponent onGoTo={(tab) => goTo(tab)} />
         )}
 
         {/* ── BACKGROUND ────────────────────────────────────────────────── */}
-        {activeTab === 'background' && (
+        {section === 'checks' && (
           <div className="space-y-6">
             <div>
               <SectionTitle>Background Screening</SectionTitle>
@@ -1629,7 +1800,7 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── MEDICAL ───────────────────────────────────────────────────── */}
-        {activeTab === 'medical' && (
+        {section === 'driving' && editing && (
           <div className="space-y-6">
             <SectionTitle>DOT Medical Certificate</SectionTitle>
             <p className="text-sm text-[var(--color-text-muted)]">Required for all CDL holders. Must be renewed before expiry or your account will be suspended.</p>
@@ -1665,7 +1836,7 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── INSURANCE ─────────────────────────────────────────────────── */}
-        {activeTab === 'insurance' && (
+        {section === 'authority' && editing && (
           <div className="space-y-6">
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900">
               <strong>Minimums:</strong> $750,000 commercial auto (general freight) · $1,000,000+ (HazMat) · Cargo insurance recommended
@@ -1712,7 +1883,7 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── VEHICLES ──────────────────────────────────────────────────── */}
-        {activeTab === 'vehicles' && (
+        {section === 'fleet' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
@@ -1746,7 +1917,12 @@ export default function CarrierProfilePage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[var(--color-text-faint)] mt-0.5 capitalize">{v.type?.replace('_', ' ')} · {v.license_plate} {v.license_plate_state}</p>
+                    <p className="text-xs text-[var(--color-text-faint)] mt-0.5">
+                      {v.unit_number && <>Unit {v.unit_number} · </>}
+                      {v.equipment_type ? nameOf(catalog.equipment, v.equipment_type) : <span className="capitalize">{v.type?.replace('_', ' ')}</span>}
+                      {' · '}{v.license_plate} {v.license_plate_state}
+                      {v.owner_user_id && v.owner_name && <> · Owned by {v.owner_name}</>}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {!v.is_primary && (
@@ -1782,6 +1958,11 @@ export default function CarrierProfilePage() {
                   {v.climate_controlled && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">Climate</span>}
                   {v.enclosed && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">Enclosed</span>}
                   {v.registration_expiry && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">Reg. exp. {v.registration_expiry}</span>}
+                  {(v.temp_min_f != null || v.temp_max_f != null) && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">{v.temp_min_f ?? '?'}° to {v.temp_max_f ?? '?'}°F</span>}
+                  {(v.capabilities ?? []).filter((k: string) => k !== 'liftgate').map((k: string) => (
+                    <span key={k} className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">{nameOf(catalog.features, k)}</span>
+                  ))}
+                  {!v.equipment_type && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-xs text-amber-700">Add equipment type to be matched with loads</span>}
                 </div>
               </div>
             ))}
@@ -1812,6 +1993,48 @@ export default function CarrierProfilePage() {
                     <option value="step_deck">Step Deck</option>
                     <option value="lowboy">Lowboy</option>
                   </select>
+                </div>
+
+                {/* Equipment (used to match loads) */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2">
+                    <Label>Equipment</Label>
+                    <select value={vehicleForm.equipment_type} onChange={e => setVehicleForm(p => ({...p, equipment_type: e.target.value}))}
+                      className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                      <option value="">Choose…</option>
+                      {catalog.equipment.map(e => <option key={e.key} value={e.key}>{e.name}</option>)}
+                    </select>
+                    <p className="mt-1 text-xs text-[var(--color-text-faint)]">Loads are matched to carriers by equipment.</p>
+                  </div>
+                  <Field label="Unit #" value={vehicleForm.unit_number} onChange={v => setVehicleForm(p => ({...p, unit_number: v}))} placeholder="T-104" />
+                </div>
+                {vehicleForm.equipment_type === 'reefer' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Lowest temperature (°F)" value={vehicleForm.temp_min_f} onChange={v => setVehicleForm(p => ({...p, temp_min_f: v}))} placeholder="-20" />
+                    <Field label="Highest temperature (°F)" value={vehicleForm.temp_max_f} onChange={v => setVehicleForm(p => ({...p, temp_max_f: v}))} placeholder="70" />
+                  </div>
+                )}
+
+                {/* Owner vs operator */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Owned by</Label>
+                    <select value={vehicleForm.owner} onChange={e => setVehicleForm(p => ({...p, owner: e.target.value as Vehicle['owner']}))}
+                      className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                      <option value="company">This company</option>
+                      <option value="driver">A person in this company (owner-operator leased on)</option>
+                    </select>
+                  </div>
+                  {vehicleForm.owner === 'driver' && (
+                    <div>
+                      <Label>Owner</Label>
+                      <select value={vehicleForm.owner_user_id} onChange={e => setVehicleForm(p => ({...p, owner_user_id: e.target.value}))}
+                        className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                        <option value="">Choose…</option>
+                        {members.map((m: any) => <option key={m.user_id ?? m.id} value={m.user_id ?? m.user?.id}>{m.name ?? m.user?.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* VIN / Plate */}
@@ -1866,6 +2089,10 @@ export default function CarrierProfilePage() {
                       </label>
                     ))}
                   </div>
+                  <div className="mt-3">
+                    <ChipPicker items={catalog.features.filter(f => f.key !== 'liftgate')} value={vehicleForm.capabilities}
+                      onChange={v => setVehicleForm(p => ({...p, capabilities: v}))} />
+                  </div>
                 </div>
 
                 {/* Primary */}
@@ -1884,8 +2111,17 @@ export default function CarrierProfilePage() {
                         toast.error(msg);
                         return;
                       }
-                      const { id, ...data } = vehicleForm;
-                      addVehicleMutation.mutate(data as any);
+                      if (vehicleForm.owner === 'driver' && !vehicleForm.owner_user_id) {
+                        toast.error('Choose who owns the vehicle');
+                        return;
+                      }
+                      const { id, owner_user_id, ...data } = vehicleForm;
+                      addVehicleMutation.mutate({
+                        ...data,
+                        equipment_type: data.equipment_type || null,
+                        capabilities: [...data.capabilities, ...(data.liftgate ? ['liftgate'] : [])],
+                        ...(data.owner === 'driver' ? { owner_user_id: Number(owner_user_id) } : {}),
+                      } as any);
                     }}
                     disabled={addVehicleMutation.isPending}
                     className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[var(--color-teal-light)] disabled:opacity-60"
@@ -1906,7 +2142,7 @@ export default function CarrierProfilePage() {
         )}
 
         {/* ── REVIEWS ──────────────────────────────────────────────────── */}
-        {activeTab === 'reviews' && (
+        {section === 'reviews' && (
           <ReviewsTab orgId={profile.org_id} rating={profile.rating} totalRatings={profile.total_ratings} />
         )}
 

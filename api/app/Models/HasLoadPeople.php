@@ -34,10 +34,10 @@ trait HasLoadPeople
         return User::whereIn('id', LoadPerson::drivers($this->loadType(), $this->id, $this->carrier_id)->select('user_id'));
     }
 
-    /** Loads where the company is the shipper or the carrier */
+    /** Loads where the company is the shipper, the broker or the carrier */
     public function scopeForOrg(Builder $q, ?int $orgId): Builder
     {
-        return $q->where(fn ($w) => $w->where('shipper_id', $orgId)->orWhere('carrier_id', $orgId));
+        return $q->where(fn ($w) => $w->where('shipper_id', $orgId)->orWhere('broker_id', $orgId)->orWhere('carrier_id', $orgId));
     }
 
     /** Loads a person is on */

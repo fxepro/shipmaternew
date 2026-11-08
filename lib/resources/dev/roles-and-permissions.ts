@@ -85,7 +85,7 @@ export const ROLES_AND_PERMISSIONS_TOPIC: AdminManualTopic = {
       id: 'demo',
       title: 'Demo logins for each role',
       paragraphs: [
-        'RoleDemoSeeder adds one login for each role. At Reyes Transport, the demo carrier, they are reyes.staff, reyes.dispatcher, reyes.driver and reyes.viewer. At Morgan Freight, the demo shipper, they are morgan.staff and morgan.viewer. At Summit Freight Capital, the demo factoring company, they are summit.staff and summit.viewer. All are at demo.com and use the demo password from the main seeder. The driver is on demo load DEMO0001, so they have one assigned load. The seeder runs with the main seeder and can be run on its own with php artisan db:seed --class=RoleDemoSeeder.',
+        'RoleDemoSeeder adds one login for each role. At Reyes Transport, the demo carrier, they are reyes.staff, reyes.dispatcher, reyes.driver and reyes.viewer. At Morgan Freight, the demo broker, they are morgan.staff, morgan.agent (from BrokerDemoSeeder) and morgan.viewer. Front Range Foods, the demo shipper, is riley@demo.com. At Summit Freight Capital, the demo factoring company, they are summit.staff and summit.viewer. All are at demo.com and use the demo password from the main seeder. The driver is on demo load DEMO0001, so they have one assigned load. The seeder runs with the main seeder and can be run on its own with php artisan db:seed --class=RoleDemoSeeder.',
       ],
     },
     {

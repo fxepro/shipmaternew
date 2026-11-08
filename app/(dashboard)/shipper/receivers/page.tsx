@@ -7,6 +7,7 @@
  * or list a new one with its locations and contacts. Every load stop can then point at their locations.
  */
 
+import { usePortal } from '@/lib/portal';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -22,6 +23,7 @@ import { useCan } from '@/components/layout/PermissionsContext';
 type Tab = 'receiver' | 'broker';
 
 export default function ShipperReceiversPage() {
+  const to = usePortal();
   const [tab, setTab] = useState<Tab>('receiver');
   const [adding, setAdding] = useState(false);
   const qc = useQueryClient();
@@ -63,7 +65,7 @@ export default function ShipperReceiversPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {orgs.map(o => (
-            <Link key={o.id} href={`/shipper/receivers/${o.id}`}
+            <Link key={o.id} href={to(`/shipper/receivers/${o.id}`)}
               className="flex flex-col rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-5 transition-all hover:border-[var(--color-teal)] hover:shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-semibold text-[var(--color-text)]">{o.name}</p>
@@ -81,7 +83,7 @@ export default function ShipperReceiversPage() {
 
       {adding && (
         <AddOrgDialog relation={tab} onClose={() => setAdding(false)}
-          onAdded={id => { qc.invalidateQueries({ queryKey: ['partners'] }); router.push(`/shipper/receivers/${id}`); }} />
+          onAdded={id => { qc.invalidateQueries({ queryKey: ['partners'] }); router.push(to(`/shipper/receivers/${id}`)); }} />
       )}
     </div>
   );

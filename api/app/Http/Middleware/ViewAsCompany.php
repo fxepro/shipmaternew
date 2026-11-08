@@ -27,7 +27,7 @@ class ViewAsCompany
         if (!$id || !$user?->isPlatformAdmin()) return $next($request);
 
         $org = ctype_digit((string) $id)
-            ? Organization::whereIn('type', ['carrier', 'shipper', 'factor'])->find((int) $id)
+            ? Organization::whereIn('type', ['carrier', 'shipper', 'broker', 'factor'])->find((int) $id)
             : null;
         if (!$org) {
             return response()->json(['error' => 'That company was not found.', 'code' => 'view_as_not_found'], 404);

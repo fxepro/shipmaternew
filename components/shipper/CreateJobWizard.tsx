@@ -1,5 +1,7 @@
 'use client';
 
+import { usePortal, useIsBrokerPortal } from '@/lib/portal';
+import { ShipperCustomerPicker, type ShipperCustomer } from '@/components/shipper/ShipperCustomerPicker';
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -15,6 +17,9 @@ import { contractApi, locationApi, freightJobApi, feesApi } from '@/lib/api';
 import { RouteMap, type RouteMapStop } from '@/components/RouteMap';
 import { LocationSearch, type LocationOption } from '@/components/shipper/LocationSearch';
 import { loadPlannerHandoff } from '@/lib/route-planner-handoff';
+import { LoadRequirements, EMPTY_REQUIREMENTS, type Requirements } from '@/components/entities/LoadRequirements';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 // ── Contract table helpers (mirror of Contracts page) ─────────────────────────
 
@@ -741,6 +746,12 @@ export type CreateJobWizardMode = 'job' | 'shipment';
  *            Select contract → Build → Route → Billing (confirm contract charge) → Send
  */
 export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }) {
+  const to = usePortal();
+  const isBroker = useIsBrokerPortal();
+  // Brokers: the shipper customer this load is for
+  const [customer, setCustomer] = useState<ShipperCustomer>({ orgId: null, name: '' });
+  // Shipper declaration, given when the load is posted
+  const [declaration, setDeclaration] = useState({ commodity: '', weight: '', sanitary: '', confirmed: false });
   const router       = useRouter();
   const searchParams = useSearchParams();
   const editParam    = searchParams.get('edit');
@@ -767,6 +778,8 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
   const [title,        setTitle]        = useState('');
   const [refNum,       setRefNum]        = useState('');
   const [instructions, setInstructions] = useState('');
+  const [requirements, setRequirements] = useState<Requirements>(EMPTY_REQUIREMENTS);
+  const [savingReqs, setSavingReqs] = useState(false);
   const [optimMode,    setOptimMode]    = useState<'shortest_route' | 'cluster_pickups'>('shortest_route');
   const [stops,        setStops]        = useState<Stop[]>([]);
 
@@ -1034,8 +1047,13 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
     setJobType(type);
     setContractId(job.contract_id ?? null);
     setTitle(job.title ?? '');
+    setCustomer({ orgId: job.shipper_id && job.broker_id ? job.shipper_id : null, name: job.shipper_name ?? job.shipper?.name ?? '' });
     setRefNum(job.reference_number ?? '');
     setInstructions(job.special_instructions ?? '');
+    setRequirements({
+      equipment_types: job.equipment_types ?? [], required_capabilities: job.required_capabilities ?? [],
+      hazmat: !!job.hazmat, temp_min_f: job.temp_min_f ?? null, temp_max_f: job.temp_max_f ?? null,
+    });
     setOptimMode(job.optimization_mode ?? 'shortest_route');
     setCreatedJob(job);
 
@@ -1226,6 +1244,8 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
         special_instructions: instructions || null,
         optimization_mode:    optimMode,
         stops:                [...pickupPayload, ...deliveryPayload],
+        ...requirements,
+        ...(isBroker ? (customer.orgId ? { shipper_org_id: customer.orgId } : { shipper_name: customer.name.trim() }) : {}),
       });
     },
     onSuccess: res => { setCreatedJob(res.data.data); setStep(2); },
@@ -1269,15 +1289,21 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
   });
 
   const postMutation = useMutation({
-    mutationFn: () => freightJobApi.post(createdJob.id),
+    mutationFn: () => freightJobApi.post(createdJob.id, {
+      declaration: declaration.confirmed,
+      commodity: declaration.commodity.trim() || stops.flatMap(s => s.items).map(i => i.description.trim()).filter(Boolean).join(', ') || title,
+      ...(declaration.weight ? { total_weight_lbs: Number(declaration.weight) } : {}),
+      ...(declaration.sanitary.trim() ? { sanitary_instructions: declaration.sanitary.trim() } : {}),
+    }),
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Could not post the load'),
     onSuccess: res => {
       const posted = res.data.data;
       setCreatedJob(posted);
       // Route to the correct viewer based on whether a contract is attached
       const isCtd = !!posted.contract_id;
       router.push(isCtd
-        ? `/shipper/jobs/contracted/${posted.id}`
-        : `/shipper/jobs/${posted.id}`
+        ? to(`/shipper/jobs/contracted/${posted.id}`)
+        : to(`/shipper/jobs/${posted.id}`)
       );
     },
   });
@@ -1582,6 +1608,9 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
 
               <div className="rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-5 space-y-4">
                 <h2 className="text-base font-semibold text-[var(--color-text)]">Job details</h2>
+                {isBroker && !createdJob && (
+                  <ShipperCustomerPicker value={customer} onChange={setCustomer} inputCls={inputCls} labelCls={labelCls} />
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Title <span className="normal-case font-normal opacity-60">optional</span></label>
@@ -1597,6 +1626,15 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                   <textarea value={instructions} onChange={e => setInstructions(e.target.value)}
                     rows={2} placeholder="Fragile cargo, call ahead at each stop…" className={`${inputCls} resize-none`} />
                 </div>
+              </div>
+
+              {/* What the load needs from the carrier: used to match carriers */}
+              <div className="rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-5 space-y-3">
+                <div>
+                  <h2 className="text-base font-semibold text-[var(--color-text)]">Equipment &amp; requirements</h2>
+                  <p className="text-xs text-[var(--color-text-faint)]">Only carriers whose fleet, authority and drivers fit are matched to this load.</p>
+                </div>
+                <LoadRequirements value={requirements} onChange={setRequirements} />
               </div>
 
               {/* Pickups */}
@@ -1627,16 +1665,30 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                 <button
                   onClick={() => editJobId
                     ? router.push(jobType === 'contracted'
-                        ? `/shipper/jobs/contracted/${editJobId}`
-                        : `/shipper/jobs/${editJobId}`)
+                        ? to(`/shipper/jobs/contracted/${editJobId}`)
+                        : to(`/shipper/jobs/${editJobId}`))
                     : setStep(0)}
                   className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
                   <ChevronLeft size={15} /> {editJobId ? 'Back to job' : 'Prev'}
                 </button>
                 {/* In edit mode: job already exists — skip createMutation and go straight to Route */}
                 <button
-                  onClick={() => createdJob ? setStep(2) : createMutation.mutate()}
-                  disabled={createMutation.isPending}
+                  onClick={async () => {
+                    if (!createdJob && isBroker && !customer.name.trim()) return toast.error('Name the shipper this load is for.');
+                    if (!createdJob) return createMutation.mutate();
+                    if (['draft', 'posted'].includes(createdJob.status) && !createdJob.carrier_id) {
+                      setSavingReqs(true);
+                      try {
+                        await api.patch(`/api/v1/shipper/freight-jobs/${createdJob.id}/requirements`, requirements);
+                      } catch (e: any) {
+                        setSavingReqs(false);
+                        return toast.error(e?.response?.data?.message ?? 'Could not save requirements');
+                      }
+                      setSavingReqs(false);
+                    }
+                    setStep(2);
+                  }}
+                  disabled={createMutation.isPending || savingReqs}
                   className={`flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold transition-all ${
                     !createMutation.isPending
                       ? 'bg-[var(--color-teal)] text-white hover:bg-[var(--color-teal-dark)] shadow-sm'
@@ -2228,6 +2280,44 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                 )}
               </div>
 
+              {createdJob.status !== 'posted' && (() => {
+                const fromItems = stops.flatMap(s => s.items).map(i => i.description.trim()).filter(Boolean).join(', ');
+                const tempControlled = createdJob.temp_min_f != null || createdJob.temp_max_f != null || requirements.temp_min_f != null || requirements.temp_max_f != null;
+                const hazmat = createdJob.hazmat || requirements.hazmat;
+                return (
+                  <div className="rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-5 space-y-3">
+                    <h2 className="text-base font-semibold text-[var(--color-text)]">Shipper declaration</h2>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Commodity</label>
+                        <input value={declaration.commodity} onChange={e => setDeclaration(d => ({ ...d, commodity: e.target.value }))}
+                          placeholder={fromItems || 'e.g. Packaged frozen vegetables'} className={inputCls} />
+                      </div>
+                      {!createdJob.total_weight_lbs && (
+                        <div>
+                          <label className={labelCls}>Total weight (lbs)</label>
+                          <input type="number" min={1} value={declaration.weight} onChange={e => setDeclaration(d => ({ ...d, weight: e.target.value }))}
+                            placeholder="e.g. 18000" className={inputCls} />
+                        </div>
+                      )}
+                    </div>
+                    {tempControlled && (
+                      <div>
+                        <label className={labelCls}>Temperature and sanitation instructions for the carrier</label>
+                        <textarea value={declaration.sanitary} onChange={e => setDeclaration(d => ({ ...d, sanitary: e.target.value }))} rows={2}
+                          placeholder="e.g. Pre-cool trailer to 34°F; clean, odor-free trailer; no prior raw meat loads" className={`${inputCls} resize-none`} />
+                        <p className="mt-1 text-xs text-[var(--color-text-faint)]">Required for temperature-controlled loads (FSMA sanitary transportation rule).</p>
+                      </div>
+                    )}
+                    <label className="flex items-start gap-2 text-sm text-[var(--color-text)]">
+                      <input type="checkbox" checked={declaration.confirmed} onChange={e => setDeclaration(d => ({ ...d, confirmed: e.target.checked }))}
+                        className="mt-0.5 h-4 w-4 accent-[var(--color-teal)]" />
+                      <span>I confirm the commodity, weight{hazmat ? ' and hazardous materials class' : ' and that it contains no hazardous materials'} are accurate. The shipper is responsible for this declaration.</span>
+                    </label>
+                  </div>
+                );
+              })()}
+
               {createdJob.status === 'posted' ? (
                 <div className="flex items-center justify-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-6 py-4">
                   <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
@@ -2242,7 +2332,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                     className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
                     <ChevronLeft size={15} /> Prev
                   </button>
-                  <button onClick={() => postMutation.mutate()} disabled={postMutation.isPending}
+                  <button onClick={() => postMutation.mutate()} disabled={postMutation.isPending || !declaration.confirmed}
                     className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] shadow-sm transition-colors disabled:opacity-60">
                     {postMutation.isPending
                       ? <><Loader2 size={13} className="animate-spin" /> Posting…</>

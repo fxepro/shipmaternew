@@ -212,7 +212,7 @@ class SubscriptionController extends Controller
     private function shipperOrg(Request $request)
     {
         $org = $request->user()->currentOrg;
-        abort_unless($org && $org->type === 'shipper', 403, 'Subscriptions are for shipper companies.');
+        abort_unless($org && in_array($org->type, ['shipper', 'broker'], true), 403, 'Subscriptions are for shipper and broker companies.');
         return $org;
     }
 

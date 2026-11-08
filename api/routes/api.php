@@ -166,6 +166,12 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/org',                             [OrgController::class, 'show']);
     Route::put('/org',                             [OrgController::class, 'update'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
     // Compliance uploads (W-9, licence, COI...) for the types that keep them as files
+    // Operating authorities (DOT / MC / broker) and directory categories of your company
+    Route::get('/org/authorities',                 [\App\Http\Controllers\Api\AuthorityController::class, 'index'])->middleware('perm:carrier:company.profile=view,shipper:company.profile=view,factor:company.profile=view');
+    Route::post('/org/authorities',                [\App\Http\Controllers\Api\AuthorityController::class, 'store'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
+    Route::put('/org/authorities/{authority}',     [\App\Http\Controllers\Api\AuthorityController::class, 'update'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
+    Route::delete('/org/authorities/{authority}',  [\App\Http\Controllers\Api\AuthorityController::class, 'destroy'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
+    Route::put('/org/categories',                  [\App\Http\Controllers\Api\CapabilityController::class, 'updateOwnCategories'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile,receiver:company.profile');
     Route::get('/org/compliance',                  [\App\Http\Controllers\Api\OrgComplianceController::class, 'index'])->middleware('perm:factor:company.profile=view,receiver:company.profile=view');
     Route::post('/org/compliance/{key}',           [\App\Http\Controllers\Api\OrgComplianceController::class, 'upload'])->middleware('perm:factor:company.profile,receiver:company.profile');
     Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
@@ -174,6 +180,9 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::put('/org/members/{id}',                [OrgController::class, 'updateMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     // A person's own checks: identity record and credentials (docs/people-types-and-checks.md)
+    Route::get('/capabilities',                      [\App\Http\Controllers\Api\CapabilityController::class, 'catalog']);
+    Route::get('/me/pro-profile',                    [\App\Http\Controllers\Api\ProProfileController::class, 'show']);
+    Route::put('/me/pro-profile',                    [\App\Http\Controllers\Api\ProProfileController::class, 'update']);
     Route::get('/me/checks',                         [MyChecksController::class, 'show']);
     Route::put('/me/identity',                       [MyChecksController::class, 'updateIdentity']);
     Route::post('/me/identity/files',                [MyChecksController::class, 'uploadIdentityFile']);
@@ -279,6 +288,7 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     // People at carrier/shipper companies: identity, background (drivers), credentials, approval (owners + drivers)
     Route::get('/admin/people',                                  [AdminPeopleController::class, 'index']);
     Route::get('/admin/people/{user}',                           [AdminPeopleController::class, 'show']);
+    Route::get('/admin/people/{user}/pro-profile',               [\App\Http\Controllers\Api\ProProfileController::class, 'adminShow']);
     Route::post('/admin/people/{user}/identity',                 [AdminPeopleController::class, 'recordIdentity']);
     Route::post('/admin/people/{user}/background',               [AdminPeopleController::class, 'recordBackground']);
     Route::post('/admin/people/{user}/credentials',              [AdminPeopleController::class, 'storeCredential']);
@@ -301,6 +311,9 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/admin/companies',                  [AdminCompanyController::class, 'index']);
     Route::get('/admin/companies/{org}',            [AdminCompanyController::class, 'show']);
     Route::post('/admin/companies/{org}/review',    [AdminCompanyController::class, 'review']);
+    Route::put('/admin/companies/{org}/categories', [\App\Http\Controllers\Api\CapabilityController::class, 'adminUpdateCategories']);
+    Route::post('/admin/companies/{org}/authorities', [\App\Http\Controllers\Api\AuthorityController::class, 'adminStore']);
+    Route::put('/admin/authorities/{authority}',    [\App\Http\Controllers\Api\AuthorityController::class, 'adminUpdate']);
     Route::post('/admin/companies/{org}/background',[AdminCompanyController::class, 'recordBackground']);
     // Verification policy (Admin Console, Compliance)
     Route::get('/admin/verification-policy',                      [\App\Http\Controllers\Api\VerificationPolicyController::class, 'show']);
@@ -380,6 +393,8 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::post('/shipper/freight-jobs/{job}/optimise',              [FreightJobController::class, 'optimise'])->middleware('perm:shipper:loads.post');
     Route::patch('/shipper/freight-jobs/{job}/billing',              [FreightJobController::class, 'saveBilling'])->middleware('perm:shipper:loads.post');
     Route::patch('/shipper/freight-jobs/{job}/terms',                [FreightJobController::class, 'saveTerms'])->middleware('perm:shipper:loads.post');
+    Route::patch('/shipper/freight-jobs/{job}/requirements',         [FreightJobController::class, 'saveRequirements'])->middleware('perm:shipper:loads.post');
+    Route::get('/shipper/freight-jobs/{job}/matches',                [FreightJobController::class, 'matches'])->middleware('perm:shipper:loads.view=view');
     Route::post('/shipper/freight-jobs/{job}/post',                  [FreightJobController::class, 'post'])->middleware('perm:shipper:loads.post');
     Route::get('/jobs/{job}/rate-confirmation',                      [FreightJobController::class, 'rateConfirmation'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
     Route::get('/jobs/{job}/bol',                                    [FreightJobController::class, 'bol'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');

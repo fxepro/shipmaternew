@@ -1,4 +1,4 @@
-export type UserRole   = 'shipper' | 'carrier' | 'receiver' | 'admin' | 'factor';
+export type UserRole   = 'shipper' | 'broker' | 'carrier' | 'receiver' | 'admin' | 'factor';
 export type OrgType    = 'carrier' | 'shipper' | 'factor' | 'receiver' | 'broker';
 export type OrgRole    = 'owner' | 'staff' | 'dispatcher' | 'driver' | 'viewer';
 export type OrgPlan    = 'free' | 'pro' | 'enterprise';

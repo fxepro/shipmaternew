@@ -92,6 +92,12 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(PersonIdentity::class);
     }
 
+    /** Professional profile: CDL, endorsements, experience, open to work */
+    public function proProfile(): HasOne
+    {
+        return $this->hasOne(ProProfile::class);
+    }
+
     public function personCredentials(): HasMany
     {
         return $this->hasMany(PersonCredential::class);
@@ -123,6 +129,18 @@ class User extends Authenticatable implements MustVerifyEmail
             || $this->role === 'shipper';
     }
 
+    public function isBroker(): bool
+    {
+        return $this->currentOrg?->type === 'broker'
+            || $this->role === 'broker';
+    }
+
+    /** Shippers and brokers post loads, book carriers and pay them */
+    public function postsLoads(): bool
+    {
+        return $this->isShipper() || $this->isBroker();
+    }
+
     public function isFactor(): bool
     {
         return $this->currentOrg?->type === 'factor'
@@ -144,10 +162,21 @@ class User extends Authenticatable implements MustVerifyEmail
     // ── Company sides on a row ─────────────────────────────────────────────
     // shipper_id / carrier_id on loads, contracts, bids and so on are companies (organizations.id).
 
-    /** The person's current company is the shipper on this row */
+    /**
+     * The person's current company is the shipper side on this row: on a load, the company that posted it
+     * (the broker when there is one); on contracts, bids and payments, the company that books and pays.
+     */
     public function isShipperOf($row): bool
     {
-        return $this->current_org_id && (int) $row?->shipper_id === (int) $this->current_org_id;
+        $id = $row instanceof FreightJob ? $row->posterId() : $row?->shipper_id;
+        return $this->current_org_id && (int) $id === (int) $this->current_org_id;
+    }
+
+    /** The person's company is the shipper whose freight a broker handles (it may look, not act) */
+    public function isCustomerOf($row): bool
+    {
+        return $this->current_org_id && $row instanceof FreightJob && $row->broker_id
+            && (int) $row->shipper_id === (int) $this->current_org_id;
     }
 
     /** The person's current company is the carrier on this row */

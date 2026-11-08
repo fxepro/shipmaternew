@@ -28,6 +28,7 @@ interface NavSection {
 }
 
 export const NAV: Record<UserRole, NavSection[]> = {
+  broker: [], // the shipper menu under /broker, filled in below
   shipper: [
     {
       section: 'Overview',
@@ -224,6 +225,12 @@ function surrogateView(type: 'shipper' | 'carrier', title: string): NavSection {
   };
 }
 NAV.admin.push(surrogateView('shipper', 'Shipper View'), surrogateView('carrier', 'Carrier View'));
+
+// Brokers: the shipper pages under /broker (lib/portal.ts)
+NAV.broker = NAV.shipper.map((s) => ({
+  ...s,
+  items: s.items.map((i) => ({ ...i, href: i.href.replace(/^\/shipper(?=\/|$)/, '/broker') })),
+}));
 
 interface SidebarProps {
   role: UserRole;

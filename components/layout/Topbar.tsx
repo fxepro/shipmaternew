@@ -5,6 +5,7 @@ import type { UserRole } from '@/types/user';
 
 const ROLE_TITLE: Record<UserRole, string> = {
   shipper:  'Shipper Portal',
+  broker:   'Broker Portal',
   carrier:  'Carrier Portal',
   receiver: 'My Deliveries',
   admin:    'Admin Console',

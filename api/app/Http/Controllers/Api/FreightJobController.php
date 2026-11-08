@@ -24,8 +24,9 @@ class FreightJobController extends Controller
 
     public function shipperIndex(Request $request): JsonResponse
     {
-        $jobs = FreightJob::where('shipper_id', $request->user()->current_org_id)
-            ->with(['contract.carrier:' . Organization::PUBLIC, 'carrier:' . Organization::PUBLIC, 'stops'])
+        // A shipper sees its own loads and those a broker handles for it; a broker sees the loads it posted
+        $jobs = FreightJob::shipperSide($request->user()->current_org_id)
+            ->with(['contract.carrier:' . Organization::PUBLIC, 'carrier:' . Organization::PUBLIC, 'shipper:' . Organization::PUBLIC, 'broker:' . Organization::PUBLIC, 'stops'])
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->when($request->filled('contract_id'), fn($q) => $q->where('contract_id', $request->contract_id))
             ->when($request->type === 'contracted', fn($q) => $q->whereNotNull('contract_id'))
@@ -59,6 +60,22 @@ class FreightJobController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
+        // Open loads: does this carrier's fleet, authority and drivers fit?
+        $org = Organization::find($uid);
+        if ($org && $org->type === 'carrier') {
+            $matcher = app(\App\Services\CarrierMatcher::class);
+            $ctx = $matcher->context($org);
+            foreach ($jobs as $j) {
+                if (!$j->carrier_id && $j->status === 'posted') {
+                    $r = $matcher->evaluate($j, $ctx);
+                    $j->setAttribute('fit', ['fit' => $r['fit'], 'misses' => $r['misses'], 'unknown' => $r['unknown']]);
+                }
+            }
+            if ($request->boolean('fits')) {
+                $jobs = $jobs->filter(fn ($j) => $j->carrier_id || ($j->fit['fit'] ?? false))->values();
+            }
+        }
+
         return response()->json(['data' => $jobs]);
     }
 
@@ -66,13 +83,15 @@ class FreightJobController extends Controller
 
     public function show(Request $request, FreightJob $job): JsonResponse
     {
-        $this->authorise($request, $job);
+        // The shipper whose freight a broker handles may look at the load
+        if (!$request->user()->isCustomerOf($job)) $this->authorise($request, $job);
         $job->load([
             'contract.carrier:' . Organization::PUBLIC,
             'stops.pickupItems.deliveryStop',
             'stops.deliveryItems.pickupStop',
             'stops.evidence',
             'shipper:' . Organization::PUBLIC,
+            'broker:' . Organization::PUBLIC,
             'carrier:' . Organization::PUBLIC,
             'offers.carrier:' . Organization::PUBLIC,
             'people.user:id,name',
@@ -99,6 +118,7 @@ class FreightJobController extends Controller
             'stops.deliveryItems.pickupStop',
             'stops.evidence',
             'shipper:' . Organization::PUBLIC,
+            'broker:' . Organization::PUBLIC,
             'carrier:' . Organization::PUBLIC,
             'offers' => fn($q) => $q->where('carrier_id', $uid),
             'people.user:id,name',
@@ -112,6 +132,9 @@ class FreightJobController extends Controller
     {
         $data = $request->validate([
             'contract_id'                            => 'nullable|exists:contracts,id',
+            // Brokers: the shipper customer, on Shipmater (shipper_org_id) or by name
+            'shipper_org_id'                         => 'nullable|integer|exists:organizations,id',
+            'shipper_name'                           => 'nullable|string|max:200',
             'title'                                  => 'nullable|string|max:200',
             'reference_number'                       => 'nullable|string|max:100',
             'special_instructions'                   => 'nullable|string',
@@ -142,7 +165,7 @@ class FreightJobController extends Controller
             'stops.*.items.*.unit'                   => 'nullable|in:pallet,box,piece,bag,drum,crate,other',
             'stops.*.items.*.weight_lbs'             => 'nullable|integer',
             'stops.*.items.*.sku'                    => 'nullable|string|max:100',
-        ]);
+        ] + self::requirementRules());
 
         $contract = !empty($data['contract_id']) ? Contract::findOrFail($data['contract_id']) : null;
         if ($contract) {
@@ -151,6 +174,17 @@ class FreightJobController extends Controller
 
         abort_unless($request->user()->current_org_id, 422, 'Join or create a shipper company first.');
 
+        // Who the load is for: a shipper posts its own; a broker posts for a shipper customer
+        $orgId = $request->user()->current_org_id;
+        if ($request->user()->currentOrg?->type === 'broker') {
+            $customer = !empty($data['shipper_org_id']) ? Organization::where('type', 'shipper')->find($data['shipper_org_id']) : null;
+            abort_if(!empty($data['shipper_org_id']) && !$customer, 422, 'That company is not a shipper.');
+            abort_if(!$customer && blank($data['shipper_name'] ?? null), 422, 'Name the shipper this load is for.');
+            $parties = ['shipper_id' => $customer?->id, 'broker_id' => $orgId, 'shipper_name' => $customer ? null : trim($data['shipper_name'])];
+        } else {
+            $parties = ['shipper_id' => $orgId, 'broker_id' => null, 'shipper_name' => null];
+        }
+
         // A stop may use your own locations or any public one, never another company's private address
         $locIds = collect($data['stops'])->pluck('location_id')->filter()->unique();
         if ($locIds->isNotEmpty()) {
@@ -158,10 +192,9 @@ class FreightJobController extends Controller
             abort_if($usable !== $locIds->count(), 422, 'One of the stop locations is private to another company.');
         }
 
-        return DB::transaction(function () use ($data, $contract, $request) {
-            $job = FreightJob::create([
+        return DB::transaction(function () use ($data, $contract, $request, $parties) {
+            $job = FreightJob::create($parties + [
                 'contract_id'          => $contract?->id,
-                'shipper_id'           => $request->user()->current_org_id,
                 'carrier_id'           => $contract?->carrier_id,
                 'title'                => $data['title'] ?? null,
                 'reference_number'     => $data['reference_number'] ?? null,
@@ -169,7 +202,7 @@ class FreightJobController extends Controller
                 'total_weight_lbs'     => $data['total_weight_lbs'] ?? null,
                 'optimization_mode'    => $data['optimization_mode'] ?? $contract?->optimization_mode ?? 'shortest_route',
                 'status'               => 'draft',
-            ]);
+            ] + self::requirementValues($data));
             $job->addPerson($request->user()->current_org_id, $request->user()->id);
 
             // Create stops keyed by sequence for item linking
@@ -302,6 +335,55 @@ class FreightJobController extends Controller
         return response()->json(['data' => $job]);
     }
 
+    // ── Load requirements (equipment, features, specializations, temperature, hazmat) ──
+
+    public static function requirementRules(): array
+    {
+        return [
+            'equipment_types'          => 'sometimes|array',
+            'equipment_types.*'        => [\Illuminate\Validation\Rule::in(\App\Models\Capability::keys('equipment'))],
+            'required_capabilities'    => 'sometimes|array',
+            'required_capabilities.*'  => [\Illuminate\Validation\Rule::in(array_merge(\App\Models\Capability::keys('feature'), \App\Models\Capability::keys('endorsement')))],
+            'required_service_types'   => 'sometimes|array',
+            'required_service_types.*' => 'string|exists:service_types,key',
+            'hazmat'                   => 'sometimes|boolean',
+            'temp_min_f'               => 'nullable|integer|min:-40|max:120',
+            'temp_max_f'               => 'nullable|integer|min:-40|max:120|gte:temp_min_f',
+        ];
+    }
+
+    public static function requirementValues(array $data): array
+    {
+        $out = [];
+        foreach (['equipment_types', 'required_capabilities', 'required_service_types'] as $k) {
+            if (array_key_exists($k, $data)) $out[$k] = array_values(array_unique($data[$k] ?? []));
+        }
+        foreach (['hazmat', 'temp_min_f', 'temp_max_f'] as $k) {
+            if (array_key_exists($k, $data)) $out[$k] = $data[$k];
+        }
+        // Hazmat loads need the hazmat specialization
+        if (!empty($out['hazmat'])) {
+            $out['required_service_types'] = array_values(array_unique(array_merge($out['required_service_types'] ?? [], ['hazmat'])));
+        }
+        return $out;
+    }
+
+    // PATCH /api/v1/shipper/freight-jobs/{job}/requirements
+    public function saveRequirements(Request $request, FreightJob $job): JsonResponse
+    {
+        abort_unless($request->user()->isShipperOf($job), 403);
+        abort_unless(in_array($job->status, ['draft', 'posted'], true) && !$job->carrier_id, 422, 'Requirements are fixed once a carrier is booked.');
+        $job->update(self::requirementValues($request->validate(self::requirementRules())));
+        return response()->json(['data' => $job->only(['id', 'equipment_types', 'required_capabilities', 'required_service_types', 'hazmat', 'temp_min_f', 'temp_max_f'])]);
+    }
+
+    // GET /api/v1/shipper/freight-jobs/{job}/matches   ?all=1 also lists carriers that do not fit, with reasons
+    public function matches(Request $request, FreightJob $job): JsonResponse
+    {
+        abort_unless($request->user()->isShipperOf($job), 403);
+        return response()->json(['data' => app(\App\Services\CarrierMatcher::class)->forJob($job, $request->boolean('all'))]);
+    }
+
     // ── Save billing ─────────────────────────────────────────────────────────
 
     public function saveBilling(Request $request, FreightJob $job): JsonResponse
@@ -330,9 +412,42 @@ class FreightJobController extends Controller
         abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($job->status !== 'draft', 422, 'Job is not in draft status.');
 
+        // The shipper (or the broker for it) declares what is being shipped; the shipper is legally responsible for it
+        $data = $request->validate([
+            'declaration'           => 'accepted',
+            'commodity'             => 'required|string|max:200',
+            'total_weight_lbs'      => 'nullable|integer|min:1',
+            'sanitary_instructions' => 'nullable|string|max:2000',
+        ], [
+            'declaration.accepted' => 'Confirm the commodity, weight and hazmat details are accurate.',
+            'commodity.required'   => 'Say what is being shipped.',
+        ]);
+        $weight = $data['total_weight_lbs'] ?? $job->total_weight_lbs ?? ((int) $job->stops()->sum('weight_lbs') ?: null);
+        abort_unless($weight, 422, 'Enter the total weight of the load.');
+
+        // Temperature-controlled food: written temperature and sanitation instructions for the carrier (FSMA)
+        $tempControlled = $job->temp_min_f !== null || $job->temp_max_f !== null;
+        abort_if($tempControlled && blank($data['sanitary_instructions'] ?? $job->sanitary_instructions), 422,
+            'Temperature-controlled loads need written temperature and sanitation instructions for the carrier.');
+
+        // Hazmat posted by a shipper: its PHMSA registration, hazmat training and a 24-hour emergency phone
+        $poster = Organization::find($job->posterId());
+        if ($job->hazmat && $poster?->type === 'shipper') {
+            $items = collect(\App\Support\ComplianceRules::items($poster, false))->keyBy('key');
+            $missing = collect(['hazmat_reg', 'hazmat_training', 'emergency_phone'])
+                ->filter(fn ($k) => in_array($items[$k]['state'] ?? 'missing', ['missing', 'expired'], true))
+                ->map(fn ($k) => $items[$k]['label'] ?? $k)->values();
+            abort_if($missing->isNotEmpty(), 422, 'Hazmat loads need these on your company profile first: ' . $missing->implode(', ') . '.');
+        }
+
         $job->update([
-            'status'    => 'posted',
-            'posted_at' => now(),
+            'status'                => 'posted',
+            'posted_at'             => now(),
+            'commodity'             => $data['commodity'],
+            'total_weight_lbs'      => $weight,
+            'sanitary_instructions' => $data['sanitary_instructions'] ?? $job->sanitary_instructions,
+            'declared_at'           => now(),
+            'declared_by'           => $request->user()->id,
         ]);
         // Contracted jobs already have their carrier: schedule the payment now
         if ($job->carrier_id) {

@@ -63,7 +63,7 @@ class ShipperVerificationController extends Controller
 
     public function sendPhoneCode(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isShipper(), 403);
+        abort_unless($request->user()->postsLoads(), 403);
 
         $validated = $request->validate([
             'phone' => ['sometimes', 'nullable', 'string', 'max:40'],
@@ -93,7 +93,7 @@ class ShipperVerificationController extends Controller
 
     public function confirmPhoneCode(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isShipper(), 403);
+        abort_unless($request->user()->postsLoads(), 403);
 
         $validated = $request->validate([
             'code' => ['required', 'string', 'min:4', 'max:10'],
@@ -135,7 +135,7 @@ class ShipperVerificationController extends Controller
 
     public function listDocuments(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isShipper(), 403);
+        abort_unless($request->user()->postsLoads(), 403);
         $org = $this->shipper($request->user());
         if (!$org) {
             return response()->json(['data' => []]);
@@ -148,7 +148,7 @@ class ShipperVerificationController extends Controller
 
     public function uploadDocument(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isShipper(), 403);
+        abort_unless($request->user()->postsLoads(), 403);
 
         $validated = $request->validate([
             'document' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
@@ -192,7 +192,7 @@ class ShipperVerificationController extends Controller
 
     public function submitBusiness(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isShipper(), 403);
+        abort_unless($request->user()->postsLoads(), 403);
 
         $user = $request->user();
         $org = $this->shipper($user);
@@ -302,7 +302,7 @@ class ShipperVerificationController extends Controller
 
     private function shipper(User $user): ?Organization
     {
-        return PersonChecks::companyOf($user, 'shipper');
+        return PersonChecks::companyOf($user, ['shipper', 'broker']);
     }
 
     private function refreshStatus(Organization $org): void

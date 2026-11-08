@@ -18,7 +18,7 @@ class PlaidController extends Controller
     public function linkToken(Request $request): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isShipper(), 403);
+        abort_unless($user->postsLoads(), 403);
 
         if (!$this->plaid->isConfigured()) {
             return response()->json(['pending' => true, 'message' => 'Plaid not configured yet.'], 503);
@@ -38,7 +38,7 @@ class PlaidController extends Controller
     public function exchange(Request $request): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isShipper(), 403);
+        abort_unless($user->postsLoads(), 403);
 
         $data = $request->validate([
             'public_token' => ['required', 'string'],
@@ -74,7 +74,7 @@ class PlaidController extends Controller
             // 5. Attach bank account to Stripe customer as a source
             // Remove old bank source first if present
             // The bank account belongs to the shipper company
-            $org = \App\Services\PersonChecks::companyOf($user, 'shipper');
+            $org = \App\Services\PersonChecks::companyOf($user, ['shipper', 'broker']);
             abort_unless($org, 422, 'You are not part of a shipper company.');
             if ($org->shipper_stripe_bank_source_id) {
                 try {
@@ -117,9 +117,9 @@ class PlaidController extends Controller
     public function status(Request $request): JsonResponse
     {
         $user    = $request->user();
-        abort_unless($user->isShipper(), 403);
+        abort_unless($user->postsLoads(), 403);
 
-        $org = \App\Services\PersonChecks::companyOf($user, 'shipper');
+        $org = \App\Services\PersonChecks::companyOf($user, ['shipper', 'broker']);
 
         if (!$org?->shipper_plaid_access_token) {
             return response()->json(['connected' => false]);
@@ -140,9 +140,9 @@ class PlaidController extends Controller
     public function disconnect(Request $request): JsonResponse
     {
         $user    = $request->user();
-        abort_unless($user->isShipper(), 403);
+        abort_unless($user->postsLoads(), 403);
 
-        $org = \App\Services\PersonChecks::companyOf($user, 'shipper');
+        $org = \App\Services\PersonChecks::companyOf($user, ['shipper', 'broker']);
         if (!$org) return response()->json(['disconnected' => true]);
         abort_unless($user->canDo('money.methods'), 403, "Your role can't do this. Ask your company's owner if you need it.");
 

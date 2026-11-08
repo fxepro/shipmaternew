@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -41,6 +42,7 @@ const FILTERS: { key: Status; label: string }[] = [
 ];
 
 export default function MyJobsPage() {
+  const to = usePortal();
   const can = useCan();
   const [filter, setFilter] = useState<Status>('all');
 
@@ -72,7 +74,7 @@ export default function MyJobsPage() {
           </p>
         </div>
         {can.do('loads.post') && <Link
-          href="/shipper/jobs/contracted/new"
+          href={to('/shipper/jobs/contracted/new')}
           className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] shadow-sm transition-colors"
         >
           <Plus size={15} /> New job
@@ -125,7 +127,7 @@ export default function MyJobsPage() {
             return (
               <Link
                 key={job.id}
-                href={`/shipper/jobs/${job.id}`}
+                href={to(`/shipper/jobs/${job.id}`)}
                 className="block bg-[var(--color-white)] rounded-xl border border-[var(--color-cream-dark)] px-5 py-4 hover:border-[var(--color-teal)] transition-colors shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
               >
                 <div className="flex items-start justify-between gap-4">

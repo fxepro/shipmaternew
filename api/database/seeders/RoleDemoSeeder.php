@@ -14,7 +14,7 @@ use Illuminate\Database\Seeder;
  * (Admin Console, Settings, Roles & Permissions). Every login uses the demo password.
  *
  *   Reyes Transport (carrier): staff, dispatcher, driver, viewer   (jordan@demo.com is the owner)
- *   Morgan Freight (shipper):  staff, viewer                       (alex@demo.com is the owner)
+ *   Morgan Freight (broker):   staff, viewer; the agent comes from BrokerDemoSeeder (alex@demo.com is the owner)
  *   Summit Freight Capital (factor): staff, viewer                 (dana@demo.com is the owner)
  *
  * The driver is put on demo load DEMO0001 so they have one assigned load to see.

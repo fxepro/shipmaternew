@@ -172,7 +172,7 @@ class OrgDirectory
                 'verification_status' => $claim->as_type === 'receiver' ? 'not_required' : 'incomplete',
             ]);
             OrgMember::firstOrCreate(['org_id' => $org->id, 'user_id' => $user->id], ['role' => 'owner', 'status' => 'active', 'joined_at' => now()]);
-            $user->update(['current_org_id' => $org->id, 'role' => in_array($claim->as_type, ['shipper', 'carrier', 'receiver', 'factor'], true) ? $claim->as_type : $user->role]);
+            $user->update(['current_org_id' => $org->id, 'role' => in_array($claim->as_type, ['shipper', 'broker', 'carrier', 'receiver', 'factor'], true) ? $claim->as_type : $user->role]);
             // A contact with this email is this person
             $org->contacts()->whereRaw('lower(email) = ?', [strtolower($user->email)])->update(['user_id' => $user->id]);
 

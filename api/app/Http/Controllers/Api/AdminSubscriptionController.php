@@ -28,7 +28,7 @@ class AdminSubscriptionController extends Controller
         $status = $data['status'] ?? 'all';
 
         // One row per shipper company: its subscription, or none yet
-        $orgs = Organization::where('type', 'shipper')->with('owner:id,name,email')
+        $orgs = Organization::whereIn('type', ['shipper', 'broker'])->with('owner:id,name,email')
             ->when(!empty($data['q']), fn ($q) => $q->where('name', 'ilike', '%' . $data['q'] . '%'))
             ->orderBy('name')->get();
         $subs = ShipperSubscription::whereIn('org_id', $orgs->pluck('id'))->with('starter:id,name')->get()->keyBy('org_id');
@@ -63,7 +63,7 @@ class AdminSubscriptionController extends Controller
     public function show(Request $request, Organization $org): JsonResponse
     {
         abort_unless($request->user()->isPlatformAdmin(), 403);
-        abort_unless($org->type === 'shipper', 404);
+        abort_unless(in_array($org->type, ['shipper', 'broker'], true), 404);
 
         $sub = ShipperSubscription::with('starter:id,name')->firstWhere('org_id', $org->id);
         // Bring it up to date from Stripe so the page shows the real state and every payment

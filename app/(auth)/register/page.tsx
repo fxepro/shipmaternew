@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Package, Truck, Landmark, PackageCheck, Check } from 'lucide-react';
+import { Package, Handshake, Truck, Landmark, PackageCheck, Check } from 'lucide-react';
 import { authApi, orgApi, directoryApi } from '@/lib/api';
 import { establishSession, getRolePath } from '@/lib/auth';
 import { getTenantConfigClient, type TenantConfig } from '@/lib/tenant';
@@ -33,7 +33,7 @@ const schema = z.object({
   email:                 z.string().email('Enter a valid email'),
   password:              z.string().min(8, 'At least 8 characters'),
   password_confirmation: z.string(),
-  role:                  z.enum(['shipper', 'carrier', 'receiver', 'factor']),
+  role:                  z.enum(['shipper', 'broker', 'carrier', 'receiver', 'factor']),
   company_name:          z.string().optional(),
   joining:               z.boolean().optional(),
   claiming:              z.boolean().optional(),
@@ -54,6 +54,12 @@ const ROLES = [
     label:       'Shipper',
     icon:        Package,
     description: 'Post jobs, hire verified providers, track every delivery live.',
+  },
+  {
+    value:       'broker' as const,
+    label:       'Freight broker',
+    icon:        Handshake,
+    description: 'Post loads for your shipper customers, book carriers, track and pay them.',
   },
   {
     value:       'carrier' as const,
@@ -91,7 +97,7 @@ interface InviteInfo {
   email: string;
   role: string;
   company_name: string | null;
-  company_type: 'carrier' | 'shipper' | 'factor' | 'receiver' | null;
+  company_type: 'carrier' | 'shipper' | 'broker' | 'factor' | 'receiver' | null;
   expired: boolean;
   accepted: boolean;
 }
@@ -176,7 +182,7 @@ function RegisterForm() {
       // Step 2 of sign-up: verify the email (an accepted invitation already proves it)
       if (!created?.email_verified) { router.replace('/verify-email'); return; }
       // Invited people start with their own verification checklist
-      router.replace(inviteUsable && (data.role === 'carrier' || data.role === 'shipper') ? `${getRolePath(data.role)}/verification` : getRolePath(data.role));
+      router.replace(inviteUsable && (data.role === 'carrier' || data.role === 'shipper' || data.role === 'broker') ? `${getRolePath(data.role)}/verification` : getRolePath(data.role));
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Registration failed. Please try again.');
@@ -238,7 +244,7 @@ function RegisterForm() {
             <p style={{ fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 10 }}>
               I am a…
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 10 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5" style={{ gap: 10 }}>
               {ROLES.map(({ value, label, icon: Icon, description }) => {
                 const active = selectedRole === value;
                 return (

@@ -24,7 +24,7 @@ class AuthController extends Controller
             'name'     => ['required', 'string', 'max:255'],
             'email'    => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role'     => ['required', Rule::in(['shipper', 'carrier', 'receiver', 'factor'])],
+            'role'     => ['required', Rule::in(['shipper', 'broker', 'carrier', 'receiver', 'factor'])],
             // The legal business name is the company's name; required unless joining a company by invitation
             'company_name' => [Rule::requiredIf(fn () => !$request->filled('invite_token') && !$request->filled('claim_org_id')),
                 'nullable', 'string', 'max:200'],
@@ -74,7 +74,7 @@ class AuthController extends Controller
             $user->refresh();
         }
         // Otherwise they're starting a company: create their solo org
-        elseif (in_array($data['role'], ['carrier', 'shipper', 'factor', 'receiver'])) {
+        elseif (in_array($data['role'], ['carrier', 'shipper', 'broker', 'factor', 'receiver'])) {
             // The person signing up owns the new company; everyone else joins by invitation
             $org = $this->createSoloOrg($user, $data['role'], $companyName);
             // Factors and receivers don't need Shipmater approval (docs/noa-factoring.md)

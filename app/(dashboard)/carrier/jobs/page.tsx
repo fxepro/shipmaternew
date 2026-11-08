@@ -41,6 +41,12 @@ function LoadCard({ job }: { job: any }) {
         <p className="text-sm font-semibold text-[var(--color-text)] line-clamp-2">{job.title || `Load #${job.id}`}</p>
         {budget && <span className="shrink-0 text-sm font-semibold text-[var(--color-teal)]">{budget}</span>}
       </div>
+      {job.fit && (
+        <p className={`mt-2 w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${job.fit.fit ? 'bg-emerald-50 text-emerald-700' : 'bg-[var(--color-cream)] text-[var(--color-text-muted)]'}`}
+          title={job.fit.fit ? job.fit.unknown.join(' · ') : job.fit.misses.join(' · ')}>
+          {job.fit.fit ? 'Fits your fleet' : job.fit.misses[0]}
+        </p>
+      )}
 
       <div className="mt-3 space-y-1.5 text-xs text-[var(--color-text-muted)]">
         {first && (

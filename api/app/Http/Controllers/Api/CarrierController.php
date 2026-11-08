@@ -84,6 +84,7 @@ class CarrierController extends Controller
 
         $serviceKeys = $org?->serviceTypes()->pluck('key')->toArray() ?? [];
         $passport    = $identity?->id_type === 'passport';
+        $idIsCdl     = (bool) $identity?->id_is_cdl;
 
         return [
             'name'                    => $user->name,
@@ -114,13 +115,18 @@ class CarrierController extends Controller
             'hazmat_expiry_date'      => $hazmat?->expires_at?->toDateString(),
             'tanker_endorsement'      => (bool) $cred('tanker_endorsement'),
             'passenger_endorsement'   => (bool) $cred('passenger_endorsement'),
+            'doubles_triples_endorsement' => (bool) $cred('doubles_triples_endorsement'),
+            'school_bus_endorsement'  => (bool) $cred('school_bus_endorsement'),
+            'medical_card_on_file'    => (bool) $medical,
 
             // Home address and government ID
             'street'                  => $identity?->street ?? '',
             'city'                    => $identity?->city ?? '',
             'state'                   => $identity?->state ?? '',
             'zip'                     => $identity?->zip ?? '',
-            'id_type'                 => $passport ? 'passport' : 'dl',
+            'id_type'                 => $passport ? 'passport' : ($idIsCdl ? 'cdl' : 'dl'),
+            'id_is_cdl'               => $idIsCdl,
+            'identity_status'         => $identity?->status ?? 'not_started',
             'dl_number'               => $passport ? '' : ($identity?->id_number ?? ''),
             'dl_state'                => $identity?->id_issuing_state ?? '',
             'dl_country'              => $identity?->id_issuing_country,
@@ -185,6 +191,7 @@ class CarrierController extends Controller
 
             // Services and certifications (company)
             'service_type_keys'       => $serviceKeys,
+            'categories'              => $org?->categories ?? [],
             'certification_keys'      => $org?->certifications()->pluck('key')->toArray() ?? [],
             'required_fields'         => ServiceTypeRules::requiredFields($serviceKeys),
             'relevant_tabs'           => ServiceTypeRules::relevantTabs($serviceKeys),
@@ -266,6 +273,8 @@ class CarrierController extends Controller
             'hazmat_expiry_date'    => ['sometimes', 'nullable', 'date'],
             'tanker_endorsement'    => ['sometimes', 'boolean'],
             'passenger_endorsement' => ['sometimes', 'boolean'],
+            'doubles_triples_endorsement' => ['sometimes', 'boolean'],
+            'school_bus_endorsement' => ['sometimes', 'boolean'],
 
             // Company
             'usdot_number'          => ['sometimes', 'nullable', 'string', 'max:20'],
@@ -282,7 +291,7 @@ class CarrierController extends Controller
             'city'                  => ['sometimes', 'nullable', 'string', 'max:100'],
             'state'                 => ['sometimes', 'nullable', 'string', 'max:2'],
             'zip'                   => ['sometimes', 'nullable', 'string', 'max:10'],
-            'id_type'               => ['sometimes', 'nullable', 'string', 'in:dl,passport'],
+            'id_type'               => ['sometimes', 'nullable', 'string', 'in:dl,passport,cdl'],
             'dl_number'             => ['sometimes', 'nullable', 'string', 'max:30'],
             'dl_state'              => ['sometimes', 'nullable', 'string', 'max:2'],
             'dl_expiry'             => ['sometimes', 'nullable', 'date'],
@@ -356,6 +365,8 @@ class CarrierController extends Controller
             if (!empty($validated['ssn_last_4'])) $identity->ssn_last4 = $validated['ssn_last_4'];
             if ($has('id_type')) {
                 $identity->id_type = $validated['id_type'] === 'passport' ? 'passport' : 'driver_license';
+                // A CDL is a driver licence: the ID is the CDL, entered once under Driving credentials
+                $identity->id_is_cdl = $validated['id_type'] === 'cdl';
             }
             if ($has('dl_number')) {
                 $identity->id_number = $validated['dl_number'] ?: null;
@@ -392,11 +403,22 @@ class CarrierController extends Controller
                 fn ($v, $c) => array_key_exists('hazmat_endorsement', $v) ? (bool) $v['hazmat_endorsement'] : (bool) $c);
             $cred('tanker_endorsement', ['tanker_endorsement' => null], fn ($v) => (bool) $v['tanker_endorsement']);
             $cred('passenger_endorsement', ['passenger_endorsement' => null], fn ($v) => (bool) $v['passenger_endorsement']);
+            $cred('doubles_triples_endorsement', ['doubles_triples_endorsement' => null], fn ($v) => (bool) $v['doubles_triples_endorsement']);
+            $cred('school_bus_endorsement', ['school_bus_endorsement' => null], fn ($v) => (bool) $v['school_bus_endorsement']);
             $cred('dot_medical', ['medical_examiner_name' => 'issuer', 'dot_medical_expiry' => 'expires_at'],
                 fn ($v, $c) => (bool) (($v['dot_medical_expiry'] ?? $c?->expires_at) || ($v['medical_examiner_name'] ?? $c?->issuer)));
             $cred('drug_test', ['drug_test_date' => 'issued_at', 'drug_test_result' => 'result'],
                 fn ($v, $c) => (bool) (array_key_exists('drug_test_date', $v) ? $v['drug_test_date'] : $c?->issued_at));
         });
+
+        // ID is the CDL: copy its number, state and expiry onto the government ID
+        $identity = PersonIdentity::where('user_id', $user->id)->first();
+        if ($identity?->id_is_cdl && ($cdl = PersonChecks::credential($user->id, 'cdl'))) {
+            $identity->forceFill([
+                'id_type' => 'driver_license', 'id_number' => $cdl->number,
+                'id_issuing_state' => $cdl->issuing_state, 'id_expiry_date' => $cdl->expires_at,
+            ])->save();
+        }
 
         PersonChecks::refresh($user->fresh());
 
@@ -584,6 +606,18 @@ class CarrierController extends Controller
                     'enclosed'             => $v->enclosed,
                     'is_primary'           => $v->is_primary,
                     'registration_expiry'  => $v->registration_expiry?->toDateString(),
+                    'unit_number'          => $v->unit_number,
+                    'vehicle_class'        => $v->vehicle_class,
+                    'equipment_type'       => $v->equipment_type,
+                    'temp_min_f'           => $v->temp_min_f,
+                    'temp_max_f'           => $v->temp_max_f,
+                    'trailer_length_ft'    => $v->trailer_length_ft,
+                    'status'               => $v->status,
+                    'capabilities'         => $v->capabilityKeys(),
+                    'owner_org_id'         => $v->owner_org_id,
+                    'owner_user_id'        => $v->owner_user_id,
+                    'owner_name'           => $v->owner_user_id ? $v->ownerUser?->name : $v->ownerOrg?->name,
+                    'operating_authority_id' => $v->operating_authority_id,
                 ]),
         ]);
     }
@@ -612,7 +646,7 @@ class CarrierController extends Controller
             'enclosed'             => ['sometimes', 'boolean'],
             'is_primary'           => ['sometimes', 'boolean'],
             'registration_expiry'  => ['sometimes', 'nullable', 'date'],
-        ]);
+        ] + self::vehicleExtraRules());
 
         $org = $this->carrier($request->user());
         abort_unless($org, 422, 'You are not part of a carrier company.');
@@ -627,7 +661,11 @@ class CarrierController extends Controller
             $validated['is_primary'] = true;
         }
 
+        $caps = $validated['capabilities'] ?? null;
+        unset($validated['capabilities']);
+        $validated = $this->vehicleOwnership($org, $validated, true);
         $vehicle = $org->vehicles()->create($validated);
+        $vehicle->syncCapabilities($caps ?? (!empty($validated['liftgate']) ? ['liftgate'] : []));
 
         return response()->json(['data' => $vehicle], 201);
     }
@@ -660,15 +698,74 @@ class CarrierController extends Controller
             'enclosed'             => ['sometimes', 'boolean'],
             'is_primary'           => ['sometimes', 'boolean'],
             'registration_expiry'  => ['sometimes', 'nullable', 'date'],
-        ]);
+        ] + self::vehicleExtraRules());
 
         if (!empty($validated['is_primary'])) {
             $org->vehicles()->update(['is_primary' => false]);
         }
 
+        $caps = $validated['capabilities'] ?? null;
+        unset($validated['capabilities']);
+        $validated = $this->vehicleOwnership($org, $validated, false);
         $vehicle->update($validated);
+        if ($caps !== null) $vehicle->syncCapabilities($caps);
+        elseif (array_key_exists('liftgate', $validated)) {
+            $keys = array_values(array_diff($vehicle->capabilityKeys(), ['liftgate']));
+            if ($validated['liftgate']) $keys[] = 'liftgate';
+            $vehicle->syncCapabilities($keys);
+        }
 
         return response()->json(['data' => $vehicle]);
+    }
+
+    /** Fields beyond the original form: equipment, features, temperature, owner vs operator */
+    private static function vehicleExtraRules(): array
+    {
+        return [
+            'unit_number'            => ['sometimes', 'nullable', 'string', 'max:40'],
+            'vehicle_class'          => ['sometimes', 'nullable', 'in:tractor,trailer,straight_truck,van,pickup'],
+            'equipment_type'         => ['sometimes', 'nullable', \Illuminate\Validation\Rule::in(\App\Models\Capability::keys('equipment'))],
+            'temp_min_f'             => ['sometimes', 'nullable', 'integer', 'min:-40', 'max:120'],
+            'temp_max_f'             => ['sometimes', 'nullable', 'integer', 'min:-40', 'max:120'],
+            'trailer_length_ft'      => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:80'],
+            'status'                 => ['sometimes', 'in:active,out_of_service,sold'],
+            'capabilities'           => ['sometimes', 'array'],
+            'capabilities.*'         => [\Illuminate\Validation\Rule::in(\App\Models\Capability::keys('feature'))],
+            'owner'                  => ['sometimes', 'in:company,driver,other_company'],
+            'owner_user_id'          => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'owner_org_id'           => ['sometimes', 'nullable', 'integer', 'exists:organizations,id'],
+            'operating_authority_id' => ['sometimes', 'nullable', 'integer', 'exists:operating_authorities,id'],
+        ];
+    }
+
+    /**
+     * Who owns the vehicle vs who operates it. The carrier always operates it (under one of its authorities);
+     * the owner is the company, one of its people (an owner-operator leased on), or another company.
+     */
+    private function vehicleOwnership(Organization $org, array $v, bool $creating): array
+    {
+        $owner = $v['owner'] ?? null;
+        unset($v['owner']);
+        if ($owner === 'company' || ($creating && !$owner && empty($v['owner_user_id']) && empty($v['owner_org_id']))) {
+            $v['owner_org_id'] = $org->id;
+            $v['owner_user_id'] = null;
+        } elseif ($owner === 'driver' || (!$owner && !empty($v['owner_user_id']))) {
+            abort_unless(!empty($v['owner_user_id']) && \Illuminate\Support\Facades\DB::table('org_members')->where('org_id', $org->id)->where('user_id', $v['owner_user_id'])->exists(),
+                422, 'The owner must be a person in your company.');
+            $v['owner_org_id'] = null;
+        } elseif ($owner === 'other_company' || (!$owner && !empty($v['owner_org_id']))) {
+            abort_unless(!empty($v['owner_org_id']), 422, 'Choose the company that owns it.');
+            $v['owner_user_id'] = null;
+        }
+        if (array_key_exists('operating_authority_id', $v) && $v['operating_authority_id']) {
+            abort_unless($org->authorities()->where('id', $v['operating_authority_id'])->where('kind', 'carrier')->exists(), 422, 'That authority is not yours.');
+        } elseif ($creating) {
+            $v['operating_authority_id'] = $org->primaryAuthority('carrier')?->id;
+        }
+        if (isset($v['temp_min_f'], $v['temp_max_f']) && $v['temp_min_f'] > $v['temp_max_f']) {
+            abort(422, 'The lowest temperature must be below the highest.');
+        }
+        return $v;
     }
 
     // ── DELETE /api/v1/carrier/vehicles/{id} ────────────────────────────────

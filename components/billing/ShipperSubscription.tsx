@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Check, CreditCard, Landmark, Loader2, Zap } from 'lucide-react';
@@ -30,6 +31,7 @@ function errorMessage(e: unknown): string {
  * loads, re-tiered after 12 months. The shipper confirms here; nobody is sent off to Stripe.
  */
 export function ShipperSubscription() {
+  const to = usePortal();
   const qc = useQueryClient();
   const confirmed = useRef(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -135,7 +137,7 @@ export function ShipperSubscription() {
             {methods.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[var(--color-cream-dark)] p-4 text-sm text-[var(--color-text-muted)]">
                 No card or bank account saved yet.{' '}
-                <a href="/shipper/profile?tab=payment" className="font-semibold text-[var(--color-teal)] underline">Add one on the Payment tab</a>, then come back here.
+                <a href={to('/shipper/profile?tab=payment')} className="font-semibold text-[var(--color-teal)] underline">Add one on the Payment tab</a>, then come back here.
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

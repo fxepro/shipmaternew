@@ -28,7 +28,7 @@ class PreferredCarrierController extends Controller
                 $parts  = explode(' ', $carrier->name);
                 $avatar = strtoupper(substr($parts[0], 0, 1) . (isset($parts[1]) ? substr($parts[1], 0, 1) : ''));
 
-                $together = FreightJob::where('shipper_id', $shipperId)
+                $together = FreightJob::postedBy($shipperId)
                     ->where('carrier_id', $carrier->id)
                     ->whereIn('status', ['posted', 'in_progress', 'completed'])
                     ->count();

@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -18,6 +19,7 @@ function SkeletonCard() {
 }
 
 export default function ShipperDashboard() {
+  const to = usePortal();
   const can = useCan();
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -59,7 +61,7 @@ export default function ShipperDashboard() {
         {/* Header */}
         <div className="page-header">
           <h1 className="page-title">Dashboard</h1>
-          {can.do('loads.post') && <Link href="/shipper/shipments/new" className="btn btn-primary">
+          {can.do('loads.post') && <Link href={to('/shipper/shipments/new')} className="btn btn-primary">
             <Plus size={15} /> New Shipment
           </Link>}
         </div>
@@ -76,7 +78,7 @@ export default function ShipperDashboard() {
         <div className="card">
           <div className="card-head">
             <p className="card-title">Recent Shipments</p>
-            <Link href="/shipper/shipments" className="link text-sm">View all</Link>
+            <Link href={to('/shipper/shipments')} className="link text-sm">View all</Link>
           </div>
           {isLoading ? (
             <div className="skeleton h-48 m-4 rounded-lg" />

@@ -20,12 +20,13 @@ class PersonChecks
     public const ROLES = [
         'carrier' => ['owner', 'staff', 'dispatcher', 'driver', 'viewer'],
         'shipper' => ['owner', 'staff', 'viewer'],
+        'broker'  => ['owner', 'staff', 'agent', 'viewer'],
         'factor'  => ['owner', 'staff', 'viewer'],
         'receiver' => ['owner', 'staff', 'viewer'],
     ];
 
     public const ROLE_LABELS = [
-        'owner' => 'Owner', 'staff' => 'Staff', 'dispatcher' => 'Dispatcher', 'driver' => 'Driver', 'viewer' => 'Viewer',
+        'owner' => 'Owner', 'staff' => 'Staff', 'dispatcher' => 'Dispatcher', 'agent' => 'Agent', 'driver' => 'Driver', 'viewer' => 'Viewer',
     ];
 
     public const CREDENTIAL_LABELS = [
@@ -37,6 +38,8 @@ class PersonChecks
         'hazmat_endorsement'       => 'Hazmat endorsement',
         'tanker_endorsement'       => 'Tanker endorsement',
         'passenger_endorsement'    => 'Passenger endorsement',
+        'doubles_triples_endorsement' => 'Doubles / triples endorsement',
+        'school_bus_endorsement'   => 'School bus endorsement',
         'dispatcher_certification' => 'Dispatcher certification',
         'hazmat_shipper_training'  => 'Hazmat shipper training (49 CFR 172.704)',
         'other'                    => 'Other certification',
@@ -51,7 +54,7 @@ class PersonChecks
             'carrier.driver' => [
                 'approval' => true, 'identity' => true, 'background' => true, 'min_age' => 21,
                 'required' => ['cdl', 'dot_medical', 'clearinghouse', 'mvr'],
-                'recorded' => ['hazmat_endorsement', 'tanker_endorsement', 'passenger_endorsement', 'drug_test'],
+                'recorded' => ['hazmat_endorsement', 'tanker_endorsement', 'passenger_endorsement', 'doubles_triples_endorsement', 'school_bus_endorsement', 'drug_test'],
             ],
             // Owners and every driver are background checked (App\Services\Background\BackgroundChecks)
             'carrier.owner' => [
@@ -75,7 +78,7 @@ class PersonChecks
         }
 
         $members = OrgMember::where('user_id', $user->id)->with('org')->get()
-            ->filter(fn ($m) => in_array($m->org?->type, ['carrier', 'shipper', 'factor'], true));
+            ->filter(fn ($m) => in_array($m->org?->type, ['carrier', 'shipper', 'broker', 'factor'], true));
 
         $m = $members->firstWhere('org_id', $user->current_org_id) ?? $members->first();
 
@@ -84,7 +87,7 @@ class PersonChecks
             return ['org' => $m->org, 'type' => $m->org->type, 'role' => $role];
         }
 
-        $type = in_array($user->role, ['carrier', 'shipper', 'factor'], true) ? $user->role : null;
+        $type = in_array($user->role, ['carrier', 'shipper', 'broker', 'factor'], true) ? $user->role : null;
         return ['org' => null, 'type' => $type, 'role' => $type ? 'owner' : null];
     }
 
@@ -95,12 +98,13 @@ class PersonChecks
     }
 
     /** The person's company of a type: the current company if it is one, otherwise their membership */
-    public static function companyOf(User $user, string $type): ?Organization
+    public static function companyOf(User $user, string|array $type): ?Organization
     {
+        $types = (array) $type;
         $current = $user->currentOrg;
-        if ($current && $current->type === $type) return $current;
+        if ($current && in_array($current->type, $types, true)) return $current;
         $m = self::membership($user);
-        return $m['org'] && $m['org']->type === $type ? $m['org'] : null;
+        return $m['org'] && in_array($m['org']->type, $types, true) ? $m['org'] : null;
     }
 
     /** "Ana María Reyes Jr" -> first Ana, middle María, last Reyes, suffix Jr */

@@ -180,9 +180,9 @@ class FreightJobOfferController extends Controller
 
         $offers = FreightJobOffer::with([
             'carrier',
-            'freightJob' => fn($q) => $q->where('shipper_id', $uid)->withCount('stops'),
+            'freightJob' => fn($q) => $q->postedBy($uid)->withCount('stops'),
         ])
-            ->whereHas('freightJob', fn($q) => $q->where('shipper_id', $uid))
+            ->whereHas('freightJob', fn($q) => $q->postedBy($uid))
             ->whereIn('status', ['pending', 'accepted', 'rejected'])
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->orderByDesc('created_at')

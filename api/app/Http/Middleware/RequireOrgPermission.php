@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
  *   ->middleware('perm:carrier:loads.view=view,shipper:loads.view=view')   any access other than none
  *
  * Each rule names a company type, so a route shared by shippers and carriers lists one rule for each.
+ * Brokers post and pay for loads like shippers, so a shipper rule also applies to a broker unless the route lists a broker rule.
  * People whose current company is not of a listed type pass through (the controller checks them).
  * When the level is "assigned", a load named in the route must be one the person is on.
  */
@@ -27,9 +28,11 @@ class RequireOrgPermission
         // An admin viewing a company may read every page (ViewAsCompany has already refused writes)
         if ($user->viewingAs) return $next($request);
 
+        $hasBrokerRule = collect($rules)->contains(fn ($r) => str_starts_with($r, 'broker:'));
         foreach ($rules as $rule) {
             [$ruleType, $rest] = array_pad(explode(':', $rule, 2), 2, '');
-            if ($ruleType !== $type) continue;
+            $applies = $ruleType === $type || ($type === 'broker' && $ruleType === 'shipper' && !$hasBrokerRule);
+            if (!$applies) continue;
 
             [$action, $need] = array_pad(explode('=', $rest, 2), 2, 'full');
             $level = $user->permLevel($action);

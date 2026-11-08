@@ -106,7 +106,7 @@ class PaymentMethodController extends Controller
         $user = $request->user();
         $org  = $user->currentOrg;
         abort_unless($org, 403, 'No company selected.');
-        abort_unless($user->canDo($org->type === 'shipper' ? 'money.methods' : 'money.payments'), 403, "Your role can't do this. Ask your company's owner if you need it.");
+        abort_unless($user->canDo(in_array($org->type, ['shipper', 'broker'], true) ? 'money.methods' : 'money.payments'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         return $org;
     }
 

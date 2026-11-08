@@ -16,7 +16,7 @@ class RequireShipperSubscription
         if (!$user || $user->isPlatformAdmin()) return $next($request);
 
         $org = $user->currentOrg;
-        if ($org?->type === 'shipper' && !ShipperSubscription::where('org_id', $org->id)->first()?->isActive()) {
+        if (in_array($org?->type, ['shipper', 'broker'], true) && !ShipperSubscription::where('org_id', $org->id)->first()?->isActive()) {
             return response()->json([
                 'error' => 'An active Shipmater subscription is needed to post loads.',
                 'code'  => 'subscription_required',

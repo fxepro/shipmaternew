@@ -19,6 +19,9 @@ import { formatCurrency } from '@/lib/utils';
 import { OrgProfile } from '@/components/orgs/OrgProfile';
 import { ClaimDecision } from '@/components/admin/ClaimDecision';
 import { ComplianceItems, type ComplianceItem } from '@/components/compliance/ComplianceItems';
+import { AuthoritiesPanel, type Authority } from '@/components/entities/AuthoritiesPanel';
+import { CategoriesEditor } from '@/components/entities/CategoriesEditor';
+import { useCatalog, nameOf } from '@/components/entities/catalog';
 
 interface CompanyDetail {
   company: Row & { name: string; type: 'carrier' | 'shipper' | 'factor' | 'receiver' | 'broker' };
@@ -35,6 +38,7 @@ interface CompanyDetail {
   compliance: ComplianceItem[];
   tabs: {
     services: string[]; certifications: string[]; vehicles: Row[];
+    authorities: Authority[]; categories: string[];
     payment: Row; payment_methods: Row[];
     subscription: { plan: string | null; history: Row[] };
     invitations: Row[]; contracts: Row[]; preferred: Row[]; locations: Row[];
@@ -158,7 +162,7 @@ function ChecklistTable({ rows }: { rows: CheckRow[] }) {
             {rows.map((r) => {
               const [cls, word] = CHECK_STYLE[r.state];
               return (
-                <tr key={r.label} className="border-b border-[var(--color-cream-dark)] last:border-b-0">
+                <tr key={r.key ?? r.label} className="border-b border-[var(--color-cream-dark)] last:border-b-0">
                   <td className="px-4 py-1.5 font-medium text-[var(--color-text)]">{r.label}</td>
                   <td className="px-2 py-1.5 text-[var(--color-text-muted)]">{r.group}</td>
                   <td className="px-2 py-1.5 text-[var(--color-text-muted)]">
@@ -214,6 +218,7 @@ function Callout({ children }: { children: React.ReactNode }) {
 export function OrgDetailView({ id }: { id: string }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const catalog = useCatalog();
   const [notes, setNotes] = useState('');
   const [bgResult, setBgResult] = useState('');
   const [bgReference, setBgReference] = useState('');
@@ -423,6 +428,11 @@ export function OrgDetailView({ id }: { id: string }) {
           <Panel title="Company record" subtitle="How the company is stored in Shipmater">
             <Details data={c as Row} fields={[['org_name', 'Company name'], ['plan', 'Plan'], ['status', 'Account status'], ['created_at', 'Created']]} />
           </Panel>
+          {t && (
+            <Panel title="Directory categories" subtitle="What the company is in the directory. Several allowed; its type stays the same.">
+              <CategoriesEditor value={t.categories ?? []} saveUrl={`/api/v1/admin/companies/${id}/categories`} onSaved={() => refresh()} />
+            </Panel>
+          )}
         </div>
       )}
 
@@ -444,6 +454,11 @@ export function OrgDetailView({ id }: { id: string }) {
 
       {/* Compliance */}
       {current === 'compliance' && (<>
+        {t && (isCarrier || c.type === 'broker' || (t.authorities ?? []).length > 0) && (
+          <Panel title="Operating authority" subtitle="DOT / MC and broker authority, with the insurance filed on each. Matching only uses an active authority with insurance in date.">
+            <AuthoritiesPanel items={t.authorities ?? []} mode="admin" orgId={Number(id)} onChange={() => refresh()} />
+          </Panel>
+        )}
         <ComplianceItems items={data.compliance ?? []}
           uploadUrl={(key) => `/api/v1/admin/companies/${id}/compliance/${key}`}
           verifyUrl={(key) => `/api/v1/admin/companies/${id}/compliance/${key}/verify`}
@@ -457,8 +472,13 @@ export function OrgDetailView({ id }: { id: string }) {
       {/* Vehicles */}
       {current === 'vehicles' && t && (
         <Panel title="Vehicles" subtitle={`${t.vehicles.length} on file`}>
-          <Table rows={t.vehicles} empty="No vehicles added."
-            columns={[['type', 'Type'], ['year', 'Year'], ['make', 'Make'], ['model', 'Model'], ['license_plate', 'Plate'], ['license_plate_state', 'State'], ['max_payload', 'Max payload (lb)'], ['registration_expiry', 'Registration expires'], ['is_primary', 'Primary']]} />
+          <Table rows={t.vehicles.map((v) => ({ ...v,
+              equipment: v.equipment_type ? nameOf(catalog.equipment, String(v.equipment_type)) : null,
+              features: ((v.capabilities as string[] | undefined) ?? []).map((k) => nameOf(catalog.features, k)).join(', ') || null,
+              temp: v.temp_min_f != null || v.temp_max_f != null ? `${v.temp_min_f ?? '?'}° to ${v.temp_max_f ?? '?'}°F` : null,
+              owned_by: v.owner_user_id ? 'Driver (owner-operator)' : v.owner_org_id && Number(v.owner_org_id) !== Number(id) ? 'Another company' : 'This company',
+            }))} empty="No vehicles added."
+            columns={[['unit_number', 'Unit'], ['equipment', 'Equipment'], ['year', 'Year'], ['make', 'Make'], ['model', 'Model'], ['license_plate', 'Plate'], ['max_payload', 'Max payload (lb)'], ['temp', 'Temp. range'], ['features', 'Features'], ['owned_by', 'Owned by'], ['status', 'Status'], ['registration_expiry', 'Registration expires']]} />
         </Panel>
       )}
 

@@ -44,7 +44,7 @@ class RatingController extends Controller
 
         // Company rates company; user_id is the person who wrote it
         $raterType   = $isShipper ? 'shipper' : 'carrier';
-        $rateeOrgId  = $isShipper ? $job->carrier_id : $job->shipper_id;
+        $rateeOrgId  = $isShipper ? $job->carrier_id : $job->posterId();
 
         $rating = Rating::create(array_merge($data, [
             'freight_job_id' => $job->id,

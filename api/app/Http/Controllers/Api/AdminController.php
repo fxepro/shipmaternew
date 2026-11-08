@@ -101,7 +101,7 @@ class AdminController extends Controller
                     'name'    => $p->user?->name,
                     'email'   => $p->user?->email,
                     'role'    => $p->org_id ? \App\Models\OrgMember::where('org_id', $p->org_id)->where('user_id', $p->user_id)->value('role') : 'receiver',
-                    'side'    => $p->org_id === null ? 'receiver' : ((int) $p->org_id === (int) $shipment->shipper_id ? 'shipper' : 'carrier'),
+                    'side'    => $p->org_id === null ? 'receiver' : ((int) $p->org_id === (int) $shipment->broker_id ? 'broker' : ((int) $p->org_id === (int) $shipment->shipper_id ? 'shipper' : 'carrier')),
                 ])->values(),
                 'contract'     => $shipment->contract?->only([
                     'id', 'title', 'status', 'rate_type', 'rate', 'fuel_surcharge', 'detention_rate',

@@ -36,13 +36,13 @@ class AdminCompanyController extends Controller
             'limit'  => ['nullable', 'integer', 'min:1', 'max:500'],
         ]);
 
-        // Companies are Shipmater's own customers: shippers, carriers and factors that signed up.
-        // Receivers, brokers and anything a customer added are only in Organizations (/admin/orgs).
+        // Companies are Shipmater's own customers: shippers, brokers, carriers and factors that signed up.
+        // Receivers, and brokers or anything else a customer only listed, are in Organizations (/admin/orgs).
         $all   = ($data['scope'] ?? 'companies') === 'all';
-        $own   = ['shipper', 'carrier', 'factor'];
+        $own   = ['shipper', 'broker', 'carrier', 'factor'];
         $types = ($data['type'] ?? 'all') === 'all' ? ($all ? Organization::TYPES : $own) : [$data['type']];
         if (!$all && !in_array($types[0], $own, true)) {
-            return response()->json(['message' => 'Receivers and brokers are in Organizations.'], 422);
+            return response()->json(['message' => 'Receivers are in Organizations.'], 422);
         }
         $query = Organization::whereIn('type', $types)
             ->when(!$all, fn ($w) => $w->where('status', '!=', 'listed')->whereNotNull('owner_id'))
@@ -428,7 +428,11 @@ class AdminCompanyController extends Controller
             'services'       => $services->values(),
             'certifications' => $isCarrier ? $org->certifications()->orderBy('name')->pluck('name') : [],
             'vehicles'       => $isCarrier ? DB::table('carrier_vehicles')->where('carrier_id', $org->id)
-                ->get(['id', 'type', 'year', 'make', 'model', 'license_plate', 'license_plate_state', 'max_payload', 'registration_expiry', 'is_primary']) : [],
+                ->get(['id', 'type', 'equipment_type', 'unit_number', 'year', 'make', 'model', 'license_plate', 'license_plate_state', 'max_payload', 'temp_min_f', 'temp_max_f', 'registration_expiry', 'is_primary', 'status', 'owner_org_id', 'owner_user_id', 'operating_authority_id'])
+                ->map(fn ($v) => (array) $v + ['capabilities' => DB::table('vehicle_capabilities')->where('vehicle_id', $v->id)->pluck('capability_key')]) : [],
+            'authorities'    => $org->authorities()->orderBy('kind')->orderByDesc('is_primary')->get()->map->toCard(),
+            'categories'     => $org->categories ?? [],
+            'service_types'  => $org->serviceTypes()->pluck('key'),
             'payment' => [
                 'stripe_mode'        => $org->stripe_mode,
                 'stripe_connected'   => (bool) $org->stripe_connect_id,

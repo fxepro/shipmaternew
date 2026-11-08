@@ -55,7 +55,7 @@ export const PAGE_PERMISSION: Record<string, [string, 'see' | 'do']> = {
 };
 
 /** Buttons hidden by the matrix, by company type: [label, action, 'see' | 'do'] (keep in step with the pages that use useCan) */
-export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'factor' | 'receiver', [string, string, 'see' | 'do'][]> = {
+export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'broker' | 'factor' | 'receiver', [string, string, 'see' | 'do'][]> = {
   carrier: [
     ['Browse Jobs (dashboard)',                  'loads.board',  'see'],
     ['Place Bid (load board)',                   'loads.bid',    'do'],
@@ -63,6 +63,13 @@ export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'factor' | 'recei
     ['Team: Invite, change role, remove',        'team.manage',  'do'],
   ],
   shipper: [
+    ['New Shipment (dashboard, My Shipments)',   'loads.post',   'do'],
+    ['New job (My Jobs, Contracted)',            'loads.post',   'do'],
+    ['Edit draft (job page)',                    'loads.post',   'do'],
+    ['Accept and Decline offers',                'loads.decide', 'do'],
+    ['Team: Invite, change role, remove',        'team.manage',  'do'],
+  ],
+  broker: [
     ['New Shipment (dashboard, My Shipments)',   'loads.post',   'do'],
     ['New job (My Jobs, Contracted)',            'loads.post',   'do'],
     ['Edit draft (job page)',                    'loads.post',   'do'],
@@ -81,7 +88,8 @@ export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'factor' | 'recei
 
 /** Whether a menu link should show for these permissions */
 export function canOpen(p: Permissions | null | undefined, href: string): boolean {
-  const rule = PAGE_PERMISSION[href];
+  // Broker pages are the shipper pages under /broker
+  const rule = PAGE_PERMISSION[href] ?? PAGE_PERMISSION[href.replace(/^\/broker(?=\/|$)/, '/shipper')];
   if (!rule) return true;
   return rule[1] === 'do' ? canDo(p, rule[0]) : canSee(p, rule[0]);
 }

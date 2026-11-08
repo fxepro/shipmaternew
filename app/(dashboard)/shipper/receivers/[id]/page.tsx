@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,6 +12,7 @@ import { useCan } from '@/components/layout/PermissionsContext';
 
 /** Shipper — one receiver or broker: details, locations, contacts and their load updates */
 export default function ShipperReceiverPage() {
+  const to = usePortal();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
@@ -18,7 +20,7 @@ export default function ShipperReceiverPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/shipper/receivers" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+      <Link href={to('/shipper/receivers')} className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
         <ArrowLeft size={14} /> Receivers
       </Link>
       <OrgProfile
@@ -30,7 +32,7 @@ export default function ShipperReceiverPage() {
             await partnerApi.remove(Number(id));
             qc.invalidateQueries({ queryKey: ['partners'] });
             toast.success('Removed from your list.');
-            router.push('/shipper/receivers');
+            router.push(to('/shipper/receivers'));
           }}>Remove from my list</button>
         )}
       />

@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -16,6 +17,7 @@ import { parseDay } from '@/lib/utils';
 import { RouteMap } from '@/components/RouteMap';
 import type { RouteMapStop } from '@/components/RouteMap';
 import { OfferPanel } from '@/components/jobs/OfferPanel';
+import { MatchesPanel } from '@/components/entities/MatchesPanel';
 import { RatingForm } from '@/components/jobs/RatingForm';
 import { useCan } from '@/components/layout/PermissionsContext';
 
@@ -171,6 +173,7 @@ function fmt(n: number | string | null | undefined) {
 }
 
 export function JobView({ job, role, backHref, backLabel, currentUserId, onStopUpdated, onJobUpdated }: JobViewProps) {
+  const to = usePortal();
   const [pendingStop,   setPendingStop]   = useState<number | null>(null);
   const can = useCan();
   const [showOfferPanel, setShowOfferPanel] = useState(false);
@@ -357,7 +360,7 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
         {/* Edit button — draft + shipper only */}
         {role === 'shipper' && job.status === 'draft' && can.do('loads.post') && (
           <Link
-            href={`/shipper/jobs/contracted/new?edit=${job.id}`}
+            href={to(`/shipper/jobs/contracted/new?edit=${job.id}`)}
             className="flex items-center gap-1.5 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-4 py-2 text-sm font-semibold text-[var(--color-text)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)] transition-colors"
           >
             <Pencil size={13} /> Edit draft
@@ -648,6 +651,16 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
             </SectionCard>
           )}
 
+          {/* A broker handles this load: who the freight is for and who books it */}
+          {job.broker_id && (
+            <SectionCard icon={Package} title="Shipper and broker">
+              <div className="space-y-3">
+                <InfoRow label="Shipper" value={job.shipper?.name ?? job.shipper_name ?? '—'} />
+                <InfoRow label="Broker" value={job.broker?.name ?? '—'} />
+              </div>
+            </SectionCard>
+          )}
+
           {/* Offer Terms (open jobs — visible to both shipper and carrier) */}
           {!isContracted && job.quote_requirements && (() => {
             const qr = job.quote_requirements;
@@ -741,6 +754,11 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
                 )}
               </div>
             </SectionCard>
+          )}
+
+          {/* Carriers that fit (shipper · open jobs without a carrier) */}
+          {role === 'shipper' && !isContracted && !job.carrier_id && ['draft', 'posted'].includes(job.status) && (
+            <MatchesPanel jobId={job.id} />
           )}
 
           {/* Offers (shipper · open jobs only) */}

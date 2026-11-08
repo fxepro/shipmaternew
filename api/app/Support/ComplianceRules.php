@@ -22,12 +22,13 @@ class ComplianceRules
         $file   = fn ($path) => $path ? \App\Models\ShipperDocument::fileUrl($path) : null;
         $stored = \App\Models\OrgComplianceItem::where('org_id', $o->id)->get()->keyBy('key');
         // An item kept as a file in org_compliance_items
-        $up = function (string $section, string $key, string $label, bool $required, ?string $valueLabel = null, bool $expires = false) use ($stored, $file) {
+        $up = function (string $section, string $key, string $label, bool $required, ?string $valueLabel = null, bool $expires = false, bool $valueOnly = false) use ($stored, $file) {
             $row  = $stored->get($key);
+            $has  = $row?->file_path || ($valueOnly && filled($row?->value));
             $item = self::item($section, $key, $label, $required,
-                $row?->file_path ? ($row->value ?: ($row->file_name ?: 'On file')) : null,
+                $has ? ($row->value ?: ($row->file_name ?: 'On file')) : null,
                 $row?->file_path ? (bool) $row->verified_at : null, $row?->expires_at, $file($row?->file_path));
-            return array_merge($item, ['upload' => ['value_label' => $valueLabel, 'expires' => $expires], 'value_raw' => $row?->value]);
+            return array_merge($item, ['upload' => ['value_label' => $valueLabel, 'expires' => $expires, 'value_only' => $valueOnly], 'value_raw' => $row?->value]);
         };
 
         $items = match ($o->type) {
@@ -45,10 +46,17 @@ class ComplianceRules
                     null, $o->carrier_cargo_expiry_date),
                 self::item('Cargo insurance', 'cargo_coverage', 'Coverage', false, self::money($o->carrier_cargo_coverage_amount)),
             ],
+            // To post loads: EIN, W-9, an authorized signer (address, payment method and terms are checked elsewhere).
+            // Special freight: only when a load needs it; posting such a load asks for what is missing.
             'shipper' => [
                 self::item('Business', 'ein', 'EIN', true, $o->tax_id, (bool) $o->shipper_ein_verified_at),
+                $up('Business', 'w9', 'W-9', true),
+                $up('Business', 'authorized_signer', 'Authorized signer', true, 'Name and title', false, true),
                 self::item('Insurance', 'coi', 'Certificate of insurance', false, $o->shipper_coi_url ? 'On file' : null, null, $o->shipper_coi_expiry, $file($o->shipper_coi_url)),
                 self::item('Special freight', 'hazmat_reg', 'HazMat registration (PHMSA)', false, $o->shipper_hazmat_reg_url ? 'On file' : null, null, $o->shipper_hazmat_reg_expiry, $file($o->shipper_hazmat_reg_url)),
+                $up('Special freight', 'hazmat_training', 'Hazmat training certificate (49 CFR 172.704)', false, null, true),
+                $up('Special freight', 'emergency_phone', '24-hour hazmat emergency phone', false, 'Phone number', false, true),
+                $up('Special freight', 'ttb_atf_permit', 'TTB or ATF permit (alcohol, tobacco, firearms)', false, 'Permit #', true),
                 self::item('Special freight', 'hipaa_baa', 'HIPAA BAA', false, $o->shipper_hipaa_baa_url ? 'On file' : null, null, $o->shipper_hipaa_baa_expiry, $file($o->shipper_hipaa_baa_url)),
                 self::item('Government', 'sam_gov', 'SAM.gov #', false, $o->sam_gov_number),
             ],

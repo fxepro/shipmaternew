@@ -649,7 +649,8 @@ class DatabaseSeeder extends Seeder
         $this->command->table(
             ['Role', 'Email', 'Password'],
             [
-                ['Shipper',    'alex@demo.com',   'password'],
+                ['Broker',     'alex@demo.com',   'password'],
+                ['Shipper',    'riley@demo.com',  'password'],
                 ['Carrier 1',  'jordan@demo.com', 'password'],
                 ['Carrier 2',  'casey@demo.com',  'password'],
                 ['Receiver',   'sam@demo.com',    'password'],
@@ -775,6 +776,8 @@ class DatabaseSeeder extends Seeder
         $this->call(FactoringDemoSeeder::class);
         $this->call(PaymentsDemoSeeder::class);
         $this->call(RoleDemoSeeder::class);
+        // Morgan Freight is a broker; Front Range Foods is a shipper
+        $this->call(BrokerDemoSeeder::class);
 
         // Demo logins have verified emails (sign-up requires it)
         User::where('email', 'like', '%@demo.com')->whereNull('email_verified_at')->update(['email_verified_at' => now()]);

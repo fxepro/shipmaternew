@@ -55,7 +55,7 @@ class FactoringController extends Controller
             match ($org->type) {
                 'carrier' => $q->where('carrier_id', $org->id),
                 'factor'  => $q->where('factor_id', $org->id),
-                'shipper' => $q->whereIn('status', ['accepted', 'funded'])->where(fn ($w) => $this->whereShipperLoads($w, $org)),
+                'shipper', 'broker' => $q->whereIn('status', ['accepted', 'funded'])->where(fn ($w) => $this->whereShipperLoads($w, $org)),
                 default   => abort(403),
             };
         }
@@ -262,8 +262,8 @@ class FactoringController extends Controller
     public function acknowledge(Request $request, FactoredLoad $load): JsonResponse
     {
         [$user, $org] = $this->ctx($request);
-        abort_unless($org?->type === 'shipper' && $load->routesToFactor(), 403);
-        abort_unless((int) $load->loadRecord()?->shipper_id === (int) $org->id, 403);
+        abort_unless(in_array($org?->type, ['shipper', 'broker'], true) && $load->routesToFactor(), 403);
+        abort_unless((int) $load->loadRecord()?->posterId() === (int) $org->id, 403);
 
         if (!$load->shipper_acknowledged_at) {
             $load->update(['shipper_acknowledged_at' => now(), 'shipper_acknowledged_by' => $user->id]);
@@ -308,7 +308,7 @@ class FactoringController extends Controller
 
     private function whereShipperLoads($w, Organization $org): void
     {
-        $w->where('load_type', 'freight_job')->whereIn('load_id', FreightJob::where('shipper_id', $org->id)->select('id'));
+        $w->where('load_type', 'freight_job')->whereIn('load_id', FreightJob::postedBy($org->id)->select('id'));
     }
 
     private function amount(string $type, $record): ?float

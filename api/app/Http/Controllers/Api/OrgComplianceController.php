@@ -59,20 +59,21 @@ class OrgComplianceController extends Controller
         abort_unless($item && $item['upload'], 422, 'This item is not uploaded for this type of company.');
 
         $data = $request->validate([
-            'document' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
-            'value'    => ['nullable', 'string', 'max:255'],
+            // Value-only items (authorized signer, emergency phone) may have no file
+            'document' => [empty($item['upload']['value_only']) ? 'required' : 'nullable', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'value'    => [empty($item['upload']['value_only']) ? 'nullable' : 'required_without:document', 'nullable', 'string', 'max:255'],
             'expires'  => [$item['upload']['expires'] ? 'nullable' : 'prohibited', 'date'],
         ]);
 
         $file = $request->file('document');
         $disk = (!empty(config('filesystems.disks.r2.key')) && !empty(config('filesystems.disks.r2.bucket'))) ? 'r2' : 'public';
-        $path = $file->storeAs("compliance/org-{$org->id}", time() . "_{$key}." . $file->getClientOriginalExtension(), $disk);
+        $path = $file?->storeAs("compliance/org-{$org->id}", time() . "_{$key}." . $file->getClientOriginalExtension(), $disk);
 
         // A new file needs to be verified again
         OrgComplianceItem::updateOrCreate(['org_id' => $org->id, 'key' => $key], [
             'value'       => $data['value'] ?? null,
             'file_path'   => $path,
-            'file_name'   => $file->getClientOriginalName(),
+            'file_name'   => $file?->getClientOriginalName(),
             'expires_at'  => $data['expires'] ?? null,
             'verified_at' => null,
             'verified_by' => null,

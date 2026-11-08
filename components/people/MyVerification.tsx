@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { myChecksApi, kycApi } from '@/lib/api';
 import { CheckChip, PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
 import { BackgroundCheckPanel } from '@/components/background/BackgroundCheckPanel';
+import { ProProfileCard } from '@/components/entities/ProProfileCard';
 
 interface ChecklistItem { key: string; label: string; required: boolean; state: string; detail: string | null }
 interface Credential {
@@ -149,6 +150,8 @@ export function MyVerification() {
       {showIdentity && <IdentitySection identity={data.identity} isCarrier={data.company_type === 'carrier' || data.company_type === 'factor'} onSaved={refresh} />}
 
       <CredentialsSection credentials={data.credentials} types={data.credential_types} onSaved={refresh} />
+      {/* Carrier owners keep it under Profile, Me, Professional profile */}
+      {data.company_type !== 'factor' && !(data.company_type === 'carrier' && data.role === 'owner') && <ProProfileCard />}
     </div>
   );
 }

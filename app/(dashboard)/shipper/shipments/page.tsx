@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Package, Plus } from 'lucide-react';
@@ -18,6 +19,7 @@ const STATUS_FILTERS: { label: string; value: ShipmentStatus | 'all' }[] = [
 ];
 
 export default function ShipperShipmentsPage() {
+  const to = usePortal();
   const can = useCan();
   const [filter, setFilter]           = useState<ShipmentStatus | 'all'>('all');
   const [selectedId, setSelectedId]   = useState<number | null>(null);
@@ -41,7 +43,7 @@ export default function ShipperShipmentsPage() {
             <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">All shipments you have dispatched</p>
           </div>
           {can.do('loads.post') && <Link
-            href="/shipper/shipments/new"
+            href={to('/shipper/shipments/new')}
             className="flex items-center gap-1.5 rounded-lg bg-[var(--color-teal)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-teal-light)] transition-colors shadow-sm"
           >
             <Plus size={14} /> New Shipment

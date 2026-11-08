@@ -466,7 +466,7 @@ class LoadPayments
     {
         /** @var FreightJob $load */
         $pickup = $load->stops()->where('stop_type', 'pickup')->whereNotNull('scheduled_date')->min('scheduled_date');
-        return ['amount_cents' => (int) $load->payment_amount_cents, 'shipper_id' => $load->shipper_id, 'carrier_id' => $load->carrier_id, 'pickup_date' => $pickup];
+        return ['amount_cents' => (int) $load->payment_amount_cents, 'shipper_id' => method_exists($load, 'posterId') ? $load->posterId() : $load->shipper_id, 'carrier_id' => $load->carrier_id, 'pickup_date' => $pickup];
     }
 
     /** The company of a given type a user owns or belongs to */

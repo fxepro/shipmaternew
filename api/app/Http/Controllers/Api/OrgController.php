@@ -78,10 +78,15 @@ class OrgController extends Controller
         $org = $request->user()->currentOrg;
         abort_if(!$org, 404);
 
-        $members = OrgMember::where('org_id', $org->id)
-            ->with('user.personVerification')
-            ->get()
-            ->map(function ($m) use ($org) {
+        $memberRows = OrgMember::where('org_id', $org->id)->with('user.personVerification')->get();
+        $userIds = $memberRows->pluck('user_id');
+        $endorsements = \App\Support\Endorsements::forUsers($userIds);
+        $creds = \App\Models\PersonCredential::whereIn('user_id', $userIds)->whereIn('type', ['cdl', 'dot_medical'])
+            ->orderByDesc('updated_at')->get()->groupBy(fn ($c) => $c->user_id . ':' . $c->type)->map->first();
+        $members = $memberRows
+            ->map(function ($m) use ($org, $endorsements, $creds) {
+                $cdl = $creds[$m->user_id . ':cdl'] ?? null;
+                $med = $creds[$m->user_id . ':dot_medical'] ?? null;
                 $role      = $m->user_id === $org->owner_id ? 'owner' : $m->role;
                 $checklist = PersonChecks::checklist($m->user, ['org' => $org, 'type' => $org->type, 'role' => $role]);
                 return [
@@ -98,6 +103,14 @@ class OrgController extends Controller
                     'person_status'     => $checklist['approval_required'] ? ($m->user->personVerification?->status ?? 'incomplete') : 'not_required',
                     'required_met'      => $checklist['required_met'],
                     'required_total'    => $checklist['required_total'],
+                    // Driving: anyone with a CDL drives, the owner-operator included
+                    'drives'            => $m->role === 'driver' || (bool) $cdl?->number,
+                    'cdl'               => $cdl?->number ? [
+                        'class' => $cdl->class, 'state' => $cdl->issuing_state, 'expires' => $cdl->expires_at?->toDateString(),
+                        'verified' => (bool) $cdl->verified_at,
+                    ] : null,
+                    'endorsements'      => $endorsements[$m->user_id] ?? [],
+                    'medical_expires'   => $med?->expires_at?->toDateString(),
                 ];
             });
 

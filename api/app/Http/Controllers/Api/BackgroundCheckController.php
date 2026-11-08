@@ -77,7 +77,7 @@ class BackgroundCheckController extends Controller
     /** {carrier} is the carrier company (organizations.id) */
     private function contractedCarrier(Request $request, int $carrier): \App\Models\Organization
     {
-        abort_unless($request->user()->isShipper(), 403);
+        abort_unless($request->user()->postsLoads(), 403);
         $org = \App\Models\Organization::where('type', 'carrier')->find($carrier);
         abort_unless($org, 404, 'This carrier has no company on Shipmater.');
         abort_unless(BackgroundChecks::shipperHasContract($request->user(), $org), 403, 'Background check results are shared only with shippers that have an active contract with this carrier.');

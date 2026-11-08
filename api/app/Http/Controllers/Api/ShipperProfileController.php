@@ -95,7 +95,7 @@ class ShipperProfileController extends Controller
 
     private function shipper(User $user): ?Organization
     {
-        return PersonChecks::companyOf($user, 'shipper');
+        return PersonChecks::companyOf($user, ['shipper', 'broker']);
     }
 
     private function shape(User $user): array
@@ -200,7 +200,7 @@ class ShipperProfileController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isShipper(), 403);
+        abort_unless($request->user()->postsLoads(), 403);
 
         return response()->json(['data' => $this->shape($request->user())]);
     }
@@ -210,7 +210,7 @@ class ShipperProfileController extends Controller
     public function update(Request $request): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user->isShipper(), 403);
+        abort_unless($user->postsLoads(), 403);
 
         $validated = $request->validate([
             // The person

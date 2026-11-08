@@ -283,7 +283,8 @@ export const freightJobApi = {
   get:         (id: number)                       => api.get(`/api/v1/shipper/freight-jobs/${id}`),
   optimise:    (id: number)                       => api.post(`/api/v1/shipper/freight-jobs/${id}/optimise`),
   saveBilling: (id: number, data: Record<string, unknown>) => api.patch(`/api/v1/shipper/freight-jobs/${id}/billing`, data),
-  post:        (id: number)                       => api.post(`/api/v1/shipper/freight-jobs/${id}/post`),
+  // The shipper declaration goes with the post: commodity, weight, sanitary instructions, declaration: true
+  post:        (id: number, body: Record<string, unknown> = {}) => api.post(`/api/v1/shipper/freight-jobs/${id}/post`, body),
   /** PDF docs — must use blob + Bearer (plain <a> links return JSON 401). */
   rateConfirmation: (id: number) =>
     api.get(`/api/v1/jobs/${id}/rate-confirmation`, { responseType: 'blob', headers: { Accept: 'application/pdf' } }),

@@ -138,7 +138,7 @@ class PaymentsController extends Controller
     {
         [$view, $org] = $this->view($request);
         abort_unless($view === 'carrier' && $fee->carrier_id === $org->id, 403);
-        abort_unless($request->user()->canDo($request->user()->currentOrg?->type === 'shipper' ? 'money.pay' : 'money.payments'), 403, "Your role can't do this. Ask your company's owner if you need it.");
+        abort_unless($request->user()->canDo(in_array($request->user()->currentOrg?->type, ['shipper', 'broker'], true) ? 'money.pay' : 'money.payments'), 403, "Your role can't do this. Ask your company's owner if you need it.");
         abort_unless($fee->status === 'failed', 422, 'This fee is not due.');
 
         $fee = $this->payments->collectFee($fee);
@@ -154,7 +154,7 @@ class PaymentsController extends Controller
         if ($user->role === 'admin') return ['admin', null];
 
         $org = $user->currentOrg;
-        abort_unless($org && in_array($org->type, ['shipper', 'carrier', 'factor'], true), 403);
+        abort_unless($org && in_array($org->type, ['shipper', 'broker', 'carrier', 'factor'], true), 403);
         return [$org->type, $org];
     }
 

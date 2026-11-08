@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import { use } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle } from 'lucide-react';
@@ -7,6 +8,7 @@ import { freightJobApi, authApi } from '@/lib/api';
 import { JobView } from '@/components/jobs/JobView';
 
 export default function ShipperContractedJobPage({ params }: { params: Promise<{ id: string }> }) {
+  const to = usePortal();
   const { id } = use(params);
   const jobId  = Number(id);
   const qc     = useQueryClient();
@@ -47,7 +49,7 @@ export default function ShipperContractedJobPage({ params }: { params: Promise<{
     <JobView
       job={job}
       role="shipper"
-      backHref="/shipper/jobs/contracted"
+      backHref={to('/shipper/jobs/contracted')}
       backLabel="Contracted Jobs"
       currentUserId={currentUserId}
       onStopUpdated={() => qc.invalidateQueries({ queryKey: ['shipper-job', jobId] })}

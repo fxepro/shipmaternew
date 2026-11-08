@@ -1,5 +1,6 @@
 'use client';
 
+import { usePortal } from '@/lib/portal';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -74,6 +75,7 @@ function jobRate(job: any): string {
 }
 
 export default function ContractedJobsPage() {
+  const to = usePortal();
   const can = useCan();
   const router = useRouter();
   const [filter, setFilter] = useState<Status>('all');
@@ -108,7 +110,7 @@ export default function ContractedJobsPage() {
           </p>
         </div>
         {can.do('loads.post') && <Link
-          href="/shipper/jobs/contracted/new"
+          href={to('/shipper/jobs/contracted/new')}
           className="flex items-center gap-1.5 rounded-lg bg-[var(--color-teal)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-teal-light)] transition-colors shadow-sm"
         >
           <Plus size={14} /> New job
@@ -154,7 +156,7 @@ export default function ContractedJobsPage() {
                 <tr
                   key={job.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/shipper/jobs/contracted/${job.id}`)}
+                  onClick={() => router.push(to(`/shipper/jobs/contracted/${job.id}`))}
                 >
                   <td className="font-medium">
                     <div>{job.title || `Job #${job.id}`}</div>
@@ -189,7 +191,7 @@ export default function ContractedJobsPage() {
                       type="button"
                       onClick={e => {
                         e.stopPropagation();
-                        router.push(`/shipper/jobs/contracted/${job.id}`);
+                        router.push(to(`/shipper/jobs/contracted/${job.id}`));
                       }}
                       className="link text-xs"
                     >

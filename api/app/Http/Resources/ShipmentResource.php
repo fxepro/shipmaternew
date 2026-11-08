@@ -33,6 +33,8 @@ class ShipmentResource extends JsonResource
             'id'               => $job->id,
             'reference_number' => $job->reference_number,
             'shipper_id'       => $job->shipper_id,
+            'broker_id'        => $job->broker_id,
+            'shipper_name'     => $job->shipper_name,
             'carrier_id'       => $job->carrier_id,
             'status'           => $job->displayStatus(),
             'job_status'       => $job->status,
@@ -95,6 +97,7 @@ class ShipmentResource extends JsonResource
 
             // Shipper and carrier are companies; people are the load_people rows
             'shipper' => $this->when($job->relationLoaded('shipper') && $job->shipper, fn () => $company($job->shipper)),
+            'broker'  => $this->when($job->relationLoaded('broker') && $job->broker, fn () => $company($job->broker)),
             'carrier' => $this->when($job->relationLoaded('carrier') && $job->carrier, fn () => $company($job->carrier) + [
                 'carrier_profile' => [
                     'company_name'     => $job->carrier->name,

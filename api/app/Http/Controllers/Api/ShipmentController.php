@@ -20,7 +20,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
  */
 class ShipmentController extends Controller
 {
-    private const WITH = ['stops', 'shipper', 'carrier', 'people.user', 'latestPing'];
+    private const WITH = ['stops', 'shipper', 'broker', 'carrier', 'people.user', 'latestPing'];
 
     // GET /api/v1/shipments   ?status=pending|assigned|in_transit|delivered|cancelled|disputed  ?include_drafts=1
     public function index(Request $request): AnonymousResourceCollection
@@ -98,6 +98,7 @@ class ShipmentController extends Controller
             return $user->onlyAssignedLoads() ? $q->forPerson($user->id) : $q;
         }
 
-        return FreightJob::where('shipper_id', $user->current_org_id);
+        // Shippers also see loads a broker handles for them; brokers see the loads they posted
+        return FreightJob::shipperSide($user->current_org_id);
     }
 }

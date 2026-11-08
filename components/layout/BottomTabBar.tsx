@@ -14,6 +14,12 @@ const TABS: Record<UserRole, { label: string; href: string; icon: React.ElementT
     { label: 'Offers',    href: '/shipper/jobs/offers', icon: Radio         },
     { label: 'Account',   href: '/shipper/payments',  icon: User            },
   ],
+  broker: [
+    { label: 'Home',      href: '/broker',             icon: LayoutDashboard },
+    { label: 'Shipments', href: '/broker/shipments',   icon: Package         },
+    { label: 'Offers',    href: '/broker/jobs/offers', icon: Radio           },
+    { label: 'Account',   href: '/broker/payments',    icon: User            },
+  ],
   carrier: [
     { label: 'Home',    href: '/carrier',         icon: LayoutDashboard },
     { label: 'Jobs',    href: '/carrier/jobs',    icon: Package         },

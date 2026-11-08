@@ -10,6 +10,7 @@
  *      → on save, contract is created and visible in /shipper/contracts
  */
 
+import { usePortal } from '@/lib/portal';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -83,6 +84,7 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function OfferDetailPanel({ offer, onClose, onUpdated }: Props) {
+  const to = usePortal();
   const job = offer.job;
   const can = useCan();
 
@@ -234,7 +236,7 @@ export function OfferDetailPanel({ offer, onClose, onUpdated }: Props) {
                       </span>
                     )}
                   </div>
-                  <Link href={`/shipper/jobs/${offer.freight_job_id}`}
+                  <Link href={to(`/shipper/jobs/${offer.freight_job_id}`)}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-teal)] hover:underline mt-0.5">
                     View job <ExternalLink size={10} />
                   </Link>
@@ -425,7 +427,7 @@ export function OfferDetailPanel({ offer, onClose, onUpdated }: Props) {
                   </p>
                 </div>
               </div>
-              <Link href="/shipper/contracts" onClick={onClose}
+              <Link href={to('/shipper/contracts')} onClick={onClose}
                 className="flex items-center justify-center gap-2 rounded-xl bg-[var(--color-teal)] px-6 py-3 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] transition-colors">
                 View in Contracts <ChevronRight size={14} />
               </Link>

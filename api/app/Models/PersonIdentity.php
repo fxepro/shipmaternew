@@ -15,7 +15,7 @@ class PersonIdentity extends Model
         'user_id',
         'legal_first_name', 'legal_middle_name', 'legal_last_name', 'suffix', 'date_of_birth',
         'street', 'unit', 'city', 'state', 'zip', 'country', 'phone',
-        'id_type', 'id_number', 'id_number_last4', 'id_issuing_state', 'id_issuing_country', 'id_issue_date', 'id_expiry_date',
+        'id_type', 'id_is_cdl', 'id_number', 'id_number_last4', 'id_issuing_state', 'id_issuing_country', 'id_issue_date', 'id_expiry_date',
         'id_front_path', 'id_back_path', 'selfie_path', 'ssn_last4',
         'photo_url', 'phone_country_code', 'phone_e164', 'whatsapp', 'whatsapp_country_code', 'national_id_type', 'national_id_number',
         'status', 'verification_method', 'provider_reference', 'failure_reason', 'submitted_at', 'verified_at', 'verified_by',
@@ -32,6 +32,7 @@ class PersonIdentity extends Model
             'date_of_birth'  => 'date',
             'id_issue_date'  => 'date',
             'id_expiry_date' => 'date',
+            'id_is_cdl'      => 'boolean',
             'submitted_at'   => 'datetime',
             'verified_at'    => 'datetime',
         ];
