@@ -78,7 +78,6 @@ class AdminCompanyController extends Controller
                     'mc_number'               => $carrier ? $o->carrier_mc_number : null,
                     'ein'                     => $carrier ? null : $o->tax_id,
                     'verification_status'     => $o->verification_status,
-                    'background_check_status' => $o->background_check_status,
                     'status'                  => $o->status,
                     'city'                    => $o->city,
                     'state'                   => $o->state,
@@ -137,10 +136,6 @@ class AdminCompanyController extends Controller
                     'notes'                => $org->verification_notes,
                     'updated_at'           => $org->verification_updated_at?->toISOString(),
                     'updated_by'           => $org->verification_updated_by ? DB::table('users')->where('id', $org->verification_updated_by)->value('name') : null,
-                    'background_status'    => $org->background_check_status,
-                    'background_reference' => $org->background_check_reference,
-                    'background_notes'     => $org->background_check_notes,
-                    'background_checked_at'=> $org->background_checked_at?->toISOString(),
                 ],
                 'documents' => ($isCarrier
                     ? DB::table('carrier_documents')->where('carrier_id', $org->id)->orderByDesc('created_at')
@@ -190,22 +185,28 @@ class AdminCompanyController extends Controller
         ]);
     }
 
-    // POST /api/v1/admin/companies/{org}/review   { action: approve|reject, notes? }
+    // POST /api/v1/admin/companies/{org}/review   { action: approve|reject, notes?, override? }
+    // override: approve although required checks have not passed (a provider is down or a result is wrong);
+    // the reason is required and kept on the company. The fallback, not the normal path.
     public function review(Request $request, Organization $org): JsonResponse
     {
         abort_unless($request->user()->isPlatformAdmin(), 403);
 
         $data = $request->validate([
             'action' => ['required', 'in:approve,reject'],
-            'notes'  => ['nullable', 'string', 'max:1000'],
+            'notes'    => ['nullable', 'string', 'max:1000'],
+            'override' => ['sometimes', 'boolean'],
         ]);
+        $override = $data['action'] === 'approve' && !empty($data['override']);
+        if ($override && blank($data['notes'] ?? null)) {
+            return response()->json(['error' => 'Say why you are approving without every required check passed.', 'code' => 'override_reason'], 422);
+        }
 
         // Every check the policy (Admin Console, Compliance) marks required must have passed
-        if ($data['action'] === 'approve') {
+        if ($data['action'] === 'approve' && !$override) {
             $blocking = $this->blockingChecks($org);
             if ($blocking) {
-                $code = count($blocking) === 1 && $blocking[0]['key'] === 'background' ? 'background_not_clear'
-                    : (count($blocking) === 1 && $blocking[0]['key'] === 'owner_approved' ? 'owner_not_approved' : 'checks_not_passed');
+                $code = count($blocking) === 1 && in_array($blocking[0]['key'], ['owner_identity', 'owner_background'], true) ? 'owner_not_approved' : 'checks_not_passed';
                 return response()->json([
                     'error'    => 'These required checks have not passed yet: ' . implode(', ', array_column($blocking, 'label')) . '.',
                     'code'     => $code,
@@ -214,7 +215,8 @@ class AdminCompanyController extends Controller
             }
         }
 
-        $this->setDecision($org, $data['action'] === 'approve', $data['notes'] ?? null, $request->user()->id);
+        $notes = $override ? 'Approved by override: ' . $data['notes'] . ' (not passed: ' . implode(', ', array_column($this->blockingChecks($org), 'label')) . ')' : ($data['notes'] ?? null);
+        $this->setDecision($org, $data['action'] === 'approve', $notes, $request->user()->id);
         return response()->json(['message' => "Company {$org->verification_status}.", 'status' => $org->verification_status]);
     }
 
@@ -254,29 +256,6 @@ class AdminCompanyController extends Controller
         ] : []));
     }
 
-    // POST /api/v1/admin/companies/{org}/background   { result, reference?, notes? }
-    // Records the outcome of a company background check run outside the platform.
-    public function recordBackground(Request $request, Organization $org): JsonResponse
-    {
-        abort_unless($request->user()->isPlatformAdmin(), 403);
-
-        $data = $request->validate([
-            'result'    => ['required', 'in:pending,clear,consider,failed'],
-            'reference' => ['nullable', 'string', 'max:255'],
-            'notes'     => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        $org->update([
-            'background_check_status'    => $data['result'],
-            'background_check_reference' => $data['reference'] ?? null,
-            'background_check_notes'     => $data['notes'] ?? null,
-            'background_checked_at'      => now(),
-        ]);
-
-        self::autoApprove($org->fresh());
-        return response()->json(['message' => 'Background check recorded.', 'status' => $org->background_check_status]);
-    }
-
     /**
      * Everything checked before a shipper or carrier is approved, with its state:
      * passed, pending (waiting on someone), missing (not provided), failed or expired.
@@ -290,58 +269,49 @@ class AdminCompanyController extends Controller
         };
         $date = fn ($d) => $d ? \Illuminate\Support\Carbon::parse($d)->toFormattedDateString() : null;
         $type = $o->type;
-        $bg = $o->background_check_status ?? 'not_started';
-        $bgState = in_array($bg, self::BACKGROUND_PASSED, true) ? 'passed' : (in_array($bg, ['failed', 'consider'], true) ? 'failed' : ($bg === 'pending' ? 'pending' : 'missing'));
         $owner = $o->owner;
+        $extra = collect(\App\Services\VerificationPolicy::extraChecks($type))->keyBy(0);
+        $has = fn ($k) => $extra->has($k);
+        $person = fn ($key) => $owner ? collect(\App\Services\PersonChecks::checklist($owner, ['org' => $o, 'type' => $type, 'role' => 'owner'])['items'] ?? [])->firstWhere('key', $key) : null;
 
         if ($owner) {
             $add('owner_email', 'Account', 'Owner email verified', true, $owner->email_verified_at ? 'passed' : 'pending',
                 $owner->email_verified_at ? $date($owner->email_verified_at) : 'Waiting for the owner to enter the code');
         }
-
-        // Business details everyone but carriers and receivers gives
-        if (in_array($type, ['shipper', 'factor', 'broker'], true)) {
-            $add('address', 'Business', 'Registered address', true, $o->street && $o->city && $o->state && $o->zip ? 'passed' : 'missing',
-                collect([$o->street, $o->city, $o->state, $o->zip])->filter()->implode(', ') ?: null);
-        }
-        if ($type === 'shipper') {
+        if ($has('phone_verified')) {
             $add('phone_verified', 'Business', 'Business phone verified', false, $o->shipper_phone_verified_at ? 'passed' : ($o->phone ? 'pending' : 'missing'),
                 $o->shipper_phone_verified_at ? $date($o->shipper_phone_verified_at) : ($o->phone ?: 'No phone'));
-            $add('submitted', 'Business', 'Submitted for review', false, $o->verification_submitted_at ? 'passed' : 'pending',
-                $o->verification_submitted_at ? $date($o->verification_submitted_at) : 'Not submitted yet');
         }
 
-        // Compliance items for this type (same list as the Compliance tab)
+        // Compliance items for this type (same list as the company's Compliance tab)
         foreach (\App\Support\ComplianceRules::items($o, false) as $i) {
             $add($i['key'], $i['section'], $i['label'], $i['required'], $i['state'], $i['detail'] ?? $i['value']);
         }
 
-        if (in_array($type, ['carrier', 'shipper'], true)) {
-            $docs = $isCarrier ? DB::table('carrier_documents')->where('carrier_id', $o->id) : DB::table('shipper_documents')->where('shipper_id', $o->id);
-            $total = (clone $docs)->count(); $verified = (clone $docs)->whereNotNull('verified_at')->count();
-            $add('documents', 'Documents', $isCarrier ? 'Documents reviewed' : 'Business documents', false, $total === 0 ? 'missing' : ($verified === $total ? 'passed' : 'pending'), "{$verified} of {$total} verified");
+        // The owner as a person: identity (Stripe Identity) and, for carriers, the background check (Checkr)
+        foreach (['owner_identity' => 'identity', 'owner_background' => 'background'] as $key => $personKey) {
+            if (!$has($key)) continue;
+            $p = $person($personKey);
+            $state = ($p['state'] ?? 'missing') === 'met' ? 'passed' : ($p['state'] ?? 'missing');
+            $add($key, 'People', $extra[$key][1], true, $state, $p['detail'] ?? ($owner ? null : 'No owner'));
         }
 
         if ($isCarrier) {
-            $ownerStatus = $owner?->personVerification?->status ?? 'incomplete';
-            $add('owner_approved', 'People', 'Owner approved (identity and background)', true,
-                $ownerStatus === 'approved' ? 'passed' : ($ownerStatus === 'rejected' ? 'failed' : 'pending'), ucfirst(str_replace('_', ' ', $ownerStatus)));
             $drivers = $o->orgMembers->filter(fn ($m) => $m->role === 'driver' && $m->user);
             $okDrivers = $drivers->filter(fn ($m) => $m->user->personVerification?->status === 'approved')->count();
             $add('drivers_approved', 'People', 'Drivers approved', false, $drivers->isEmpty() ? 'missing' : ($okDrivers === $drivers->count() ? 'passed' : 'pending'),
                 $drivers->isEmpty() ? 'No drivers yet' : "{$okDrivers} of {$drivers->count()} approved");
-            $add('vehicles', 'Fleet', 'Vehicles on file', false, DB::table('carrier_vehicles')->where('carrier_id', $o->id)->exists() ? 'passed' : 'missing');
-        }
-
-        // Receivers have no background check
-        if ($type !== 'receiver') {
-            $add('background', 'Background', 'Company background check', true, $bgState, ucfirst(str_replace('_', ' ', $bg)));
-        }
-
-        if ($isCarrier) {
+            // Vehicles: each VIN decoded by NHTSA vPIC
+            $vehicles = DB::table('carrier_vehicles')->where('carrier_id', $o->id)->get(['vin', 'vin_status']);
+            $valid = $vehicles->where('vin_status', 'valid')->count();
+            $invalid = $vehicles->where('vin_status', 'invalid')->count();
+            $add('vehicles', 'Fleet', 'Vehicles (VIN checked)', false,
+                $vehicles->isEmpty() ? 'missing' : ($invalid ? 'failed' : ($valid === $vehicles->count() ? 'passed' : 'pending')),
+                $vehicles->isEmpty() ? 'No vehicles yet' : "{$valid} of {$vehicles->count()} VINs valid" . ($invalid ? ", {$invalid} invalid" : ''));
             $payout = $o->stripe_connect_status ?? ($o->stripe_connect_id ? 'reviewing' : 'not_connected');
             $add('payouts', 'Money', 'Payouts set up', true, in_array($payout, ['active', 'verified'], true) ? 'passed' : ($payout === 'not_connected' ? 'missing' : 'pending'), ucfirst(str_replace('_', ' ', $payout)));
-        } elseif ($type === 'shipper') {
+        }
+        if ($has('payment_method')) {
             $methods = DB::table('payment_methods')->where('org_id', $o->id)->whereNotNull('stripe_pm_id')->count();
             $add('payment_method', 'Money', 'Payment method on file', true, $methods ? 'passed' : 'missing', $methods ? "{$methods} on file" : null);
             $active = DB::table('shipper_subscriptions')->where('org_id', $o->id)->where('status', 'active')->exists();

@@ -30,6 +30,9 @@ class UserResource extends JsonResource
                 'status'            => $org->status,
                 'plan'              => $org->plan,
                 'logo_url'          => $org->logo_url,
+                // Company header on the Company page: approval and member since
+                'verification_status' => $org->verification_status,
+                'created_at'        => $org->created_at?->toIso8601String(),
                 'is_platform_tenant'=> (bool) $org->is_platform_tenant,
             ] : null,
             'org_role' => $role = $this->orgRole(),

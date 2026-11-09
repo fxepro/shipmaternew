@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, verificationApi, ratingApi, payoutsApi } from '@/lib/api';
 import { toast } from 'sonner';
@@ -15,6 +15,9 @@ import { certificationApi, serviceTypeApi } from '@/lib/api';
 import { ProProfileCard } from '@/components/entities/ProProfileCard';
 import { DataCard, SectionHeader, Pill, fmtDate, expiryPill, type DataRow } from '@/components/profile/DataCard';
 import { DriversSection } from '@/components/profile/DriversSection';
+import { CompanyCompliance } from '@/components/compliance/CompanyCompliance';
+import { TeamManager } from '@/components/team/TeamManager';
+import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
 import { PROFILE_SECTIONS, groupOf, toSection, type ProfileSection, type ProfileGroup } from '@/lib/profile-sections';
 import { FinancialTab as FinancialTabComponent } from './components/tabs/FinancialTab';
 import { BusinessTab } from './components/tabs/BusinessTab';
@@ -61,6 +64,9 @@ interface Vehicle {
   model: string;
   type: string;
   vin: string;
+  /** NHTSA vPIC decode of the VIN (demo/compliance-checks.html) */
+  vin_status?: 'valid' | 'invalid' | 'error' | null;
+  vin_decoded?: { make: string | null; model: string | null; year: string | null; error: string | null } | null;
   license_plate: string;
   license_plate_state: string;
   gvwr: string;
@@ -100,7 +106,7 @@ function RequiredMark() {
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.07em] text-[var(--color-text-muted)]">
+    <p className="mb-1.5 text-[13px] font-semibold uppercase tracking-[0.07em] text-[var(--color-text-muted)]">
       {children}
       {required && <RequiredMark />}
     </p>
@@ -120,7 +126,7 @@ function DialCodeSelect({
       <select
         value={current.code}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full appearance-none rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3 py-2.5 pr-8 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
+        className="w-full appearance-none rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3 py-2.5 pr-8 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
         aria-label="Country calling code"
       >
         {COUNTRIES.map((c) => (
@@ -148,17 +154,17 @@ function ValidationBanner({
       <div className="flex items-start gap-3">
         <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-amber-900">
+          <p className="text-base font-semibold text-amber-900">
             {issues.length} required field{issues.length === 1 ? '' : 's'} need attention
           </p>
-          <p className="text-xs text-amber-800 mt-0.5">
+          <p className="text-[13px] text-amber-800 mt-0.5">
             Fields marked with <span className="text-red-500 font-bold">*</span> are required. Fix missing or invalid values below.
           </p>
         </div>
       </div>
       <ul className="space-y-1.5 pl-7">
         {issues.map((issue) => (
-          <li key={issue.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-900">
+          <li key={issue.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-amber-900">
             <span className="font-semibold">{issue.message}</span>
             <button
               type="button"
@@ -199,14 +205,14 @@ function Field({
           ${readOnly ? 'bg-[var(--color-cream)] cursor-default text-[var(--color-text-muted)]' : ''}
         `}
       />
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-      {hint && !error && <p className="text-xs text-[var(--color-text-faint)] mt-1">{hint}</p>}
+      {error && <p className="mt-1 text-[13px] text-red-600">{error}</p>}
+      {hint && !error && <p className="text-[13px] text-[var(--color-text-faint)] mt-1">{hint}</p>}
     </div>
   );
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-semibold text-[var(--color-text)] mb-4">{children}</p>;
+  return <p className="text-base font-semibold text-[var(--color-text)] mb-4">{children}</p>;
 }
 
 function Divider() {
@@ -248,13 +254,13 @@ function UploadBox({ label, hint, required, docType, vehicleId }: {
     <div>
       <div className="flex items-center gap-2 mb-1.5">
         <Label>{label}</Label>
-        {required && <span className="text-xs font-medium text-red-500 -mt-1.5">Required</span>}
+        {required && <span className="text-[13px] font-medium text-red-500 -mt-1.5">Required</span>}
       </div>
       {uploaded ? (
         <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-[var(--color-teal)] bg-[var(--color-teal-pale)]">
           <CheckCircle size={16} className="text-[var(--color-teal)]" />
-          <span className="text-sm text-[var(--color-text)] flex-1 truncate">{uploaded}</span>
-          <button onClick={() => setUploaded('')} className="text-xs text-[var(--color-text-faint)] hover:text-[var(--color-danger)]">Replace</button>
+          <span className="text-base text-[var(--color-text)] flex-1 truncate">{uploaded}</span>
+          <button onClick={() => setUploaded('')} className="text-[13px] text-[var(--color-text-faint)] hover:text-[var(--color-danger)]">Replace</button>
         </div>
       ) : (
         <label className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-dashed cursor-pointer transition-colors ${
@@ -265,7 +271,7 @@ function UploadBox({ label, hint, required, docType, vehicleId }: {
           <input type="file" accept=".pdf,image/*" className="hidden" disabled={uploading} onChange={handleFile} />
         </label>
       )}
-      {hint && <p className="text-xs text-[var(--color-text-faint)] mt-1">{hint}</p>}
+      {hint && <p className="text-[13px] text-[var(--color-text-faint)] mt-1">{hint}</p>}
     </div>
   );
 }
@@ -274,7 +280,7 @@ function SaveBar({ saved, onSave, isPending }: { saved: boolean; onSave: () => v
   return (
     <div className="flex items-center justify-end pt-4 border-t border-[var(--color-cream-dark)]">
       <button onClick={onSave} disabled={isPending}
-        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all disabled:opacity-60 ${
+        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-base font-semibold transition-all disabled:opacity-60 ${
           saved
             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
             : 'bg-[var(--color-teal)] text-white hover:bg-[var(--color-teal-light)] shadow-sm'
@@ -321,13 +327,13 @@ function ReviewsTab({ orgId, rating, totalRatings }: { orgId: number; rating: nu
     <div className="space-y-6">
       {/* Summary */}
       <div>
-        <p className="text-sm font-semibold text-[var(--color-text)] mb-1">Your Reviews</p>
+        <p className="text-base font-semibold text-[var(--color-text)] mb-1">Your Reviews</p>
         {rating != null && totalRatings > 0 ? (
           <div className="flex items-center gap-3">
             <span className="text-3xl font-bold text-[var(--color-slate)]">{Number(rating).toFixed(1)}</span>
             <div>
               <StarDisplay value={rating} />
-              <p className="text-xs text-[var(--color-text-faint)] mt-0.5">{totalRatings} review{totalRatings !== 1 ? 's' : ''}</p>
+              <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">{totalRatings} review{totalRatings !== 1 ? 's' : ''}</p>
             </div>
           </div>
         ) : (
@@ -346,7 +352,7 @@ function ReviewsTab({ orgId, rating, totalRatings }: { orgId: number; rating: nu
         <div className="text-center py-10 rounded-xl border-2 border-dashed border-[var(--color-cream-dark)]">
           <Star size={28} className="mx-auto text-[var(--color-text-faint)] mb-2" />
           <p className="text-sm text-[var(--color-text-muted)]">No public reviews yet</p>
-          <p className="text-xs text-[var(--color-text-faint)] mt-1">Reviews appear here once shippers submit them after completed jobs.</p>
+          <p className="text-[13px] text-[var(--color-text-faint)] mt-1">Reviews appear here once shippers submit them after completed jobs.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -354,24 +360,24 @@ function ReviewsTab({ orgId, rating, totalRatings }: { orgId: number; rating: nu
             <div key={r.id} className="rounded-xl border border-[var(--color-cream-dark)] p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-[var(--color-text)]">
+                  <p className="text-base font-semibold text-[var(--color-text)]">
                     {typeof r.rater_org === 'string' ? r.rater_org : (r.rater_org?.name ?? 'Shipper')}
                   </p>
-                  <p className="text-xs text-[var(--color-text-faint)] capitalize">{r.rater_type}</p>
+                  <p className="text-[13px] text-[var(--color-text-faint)] capitalize">{r.rater_type}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <StarDisplay value={r.overall} />
-                  <p className="text-xs text-[var(--color-text-faint)] mt-0.5">
+                  <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
                     {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </p>
                 </div>
               </div>
-              <div className="flex gap-4 text-xs text-[var(--color-text-muted)]">
+              <div className="flex gap-4 text-[13px] text-[var(--color-text-muted)]">
                 <span>Communication: <strong className="text-[var(--color-text)]">{r.communication}/5</strong></span>
                 <span>Reliability: <strong className="text-[var(--color-text)]">{r.reliability}/5</strong></span>
               </div>
               {r.comment && (
-                <p className="text-sm text-[var(--color-text)] border-t border-[var(--color-cream-dark)] pt-2 mt-1">
+                <p className="text-base text-[var(--color-text)] border-t border-[var(--color-cream-dark)] pt-2 mt-1">
                   {r.comment}
                 </p>
               )}
@@ -384,7 +390,7 @@ function ReviewsTab({ orgId, rating, totalRatings }: { orgId: number; rating: nu
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-3 py-1.5 rounded-lg border border-[var(--color-cream-dark)] text-sm disabled:opacity-40 hover:border-[var(--color-teal)] transition-colors"
+                className="px-3 py-1.5 rounded-lg border border-[var(--color-cream-dark)] text-base disabled:opacity-40 hover:border-[var(--color-teal)] transition-colors"
               >
                 Previous
               </button>
@@ -392,7 +398,7 @@ function ReviewsTab({ orgId, rating, totalRatings }: { orgId: number; rating: nu
               <button
                 onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
                 disabled={page === lastPage}
-                className="px-3 py-1.5 rounded-lg border border-[var(--color-cream-dark)] text-sm disabled:opacity-40 hover:border-[var(--color-teal)] transition-colors"
+                className="px-3 py-1.5 rounded-lg border border-[var(--color-cream-dark)] text-base disabled:opacity-40 hover:border-[var(--color-teal)] transition-colors"
               >
                 Next
               </button>
@@ -410,9 +416,17 @@ export default function CarrierProfilePage() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [section, setSectionState] = useState<ProfileSection>('identity');
+  // Profile (/carrier/profile) is the person; Company (/carrier/company) is the company. Same component, picked by the URL.
+  const companyPage = (usePathname() ?? '').endsWith('/company');
+  const pageGroup: ProfileGroup = companyPage ? 'company' : 'me';
+  const pagePath = companyPage ? '/carrier/company' : '/carrier/profile';
+  const [section, setSectionState] = useState<ProfileSection>(PROFILE_SECTIONS[pageGroup][0].id);
   const [editing, setEditing] = useState(false);
-  const setSection = (s: ProfileSection, edit = false) => { setSectionState(s); setEditing(edit); };
+  /** A section on the other page opens that page */
+  const setSection = (s: ProfileSection, edit = false) => {
+    if (groupOf(s) !== pageGroup) { router.replace(`/carrier/${groupOf(s) === 'me' ? 'profile' : 'company'}?tab=${s}`); return; }
+    setSectionState(s); setEditing(edit);
+  };
   /** Old tab ids (banners, links) open the matching section, in edit mode when it has one */
   const goTo = (id: string) => {
     const s = toSection(id);
@@ -448,9 +462,12 @@ export default function CarrierProfilePage() {
     // Deep-link: ?tab=financial (or any valid tab)
     // Old tab ids still work (?tab=financial opens Payouts). Stripe returns with ?tab=financial&stripe=..., so the Stripe result is handled first
     const tabSection = toSection(tabParam);
+    // Stripe payout returns belong to Company
+    if (stripeResult && !companyPage) { router.replace(`/carrier/company?${searchParams.toString()}`); return; }
     if (tabSection && !stripeResult && !identityResult) {
+      if (groupOf(tabSection) !== pageGroup) { setSection(tabSection); return; }
       setSection(tabSection);
-      router.replace('/carrier/profile');
+      router.replace(pagePath);
       return;
     }
 
@@ -464,18 +481,19 @@ export default function CarrierProfilePage() {
         else if (status === 'reviewing') toast('Stripe is checking your details. This page updates when it finishes.');
         else toast('Stripe still needs a few things. See Payouts below.');
       }).catch(() => qc.invalidateQueries({ queryKey: ['payout-setup'] }));
-      router.replace('/carrier/profile');
+      router.replace(pagePath);
     } else if (stripeResult === 'refresh') {
       setSection('payouts');
       toast('Stripe setup was not finished. Continue whenever you are ready.');
-      router.replace('/carrier/profile');
+      router.replace(pagePath);
     }
 
     if (identityResult === 'success') {
-      setSection('identity');
+      if (companyPage) { router.replace(`/carrier/profile?${searchParams.toString()}`); return; }
+      setSection('checks');
       qc.invalidateQueries({ queryKey: ['carrier-profile'] });
       toast.success('Identity submitted — verification typically takes a few minutes.');
-      router.replace('/carrier/profile');
+      router.replace(pagePath);
     }
   }, [searchParams]); // eslint-disable-line
 
@@ -755,23 +773,16 @@ export default function CarrierProfilePage() {
   });
 
 
-  const initials = (() => {
-    const parts = profile.name.trim().split(/\s+/);
-    return parts.length > 1
-      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-      : parts[0][0].toUpperCase();
-  })();
-
   return (
     <div className="w-[75%] min-w-[560px] space-y-6">
 
       {/* Page heading */}
       <div>
-        <h1 className="page-title">
-          Account Settings
-        </h1>
+        <h1 className="page-title">{companyPage ? 'Company' : 'Profile'}</h1>
         <p className="text-sm text-[var(--color-text-muted)] mt-1">
-          Manage your profile, verification documents, payments, and vehicles
+          {companyPage
+            ? 'Your company: business, authority and compliance, services, fleet, drivers, payouts, reviews and team'
+            : 'You: your personal details, driving credentials, verification and professional profile'}
         </p>
       </div>
 
@@ -780,53 +791,33 @@ export default function CarrierProfilePage() {
         onGoToTab={(tab) => goTo(tab)}
       />
 
-      {/* Profile card */}
-      <div className="bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-xl p-6 flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-[var(--color-slate)] flex items-center justify-center text-white text-lg font-bold shrink-0">
-          {initials}
-        </div>
-        <div className="flex-1">
-          <p className="text-lg font-semibold text-[var(--color-text)]">{profile.name}</p>
-          <p className="text-sm text-[var(--color-text-muted)]">
-            {profile.carrier_type === 'sole_proprietor' ? 'Owner-Operator' : 'Freight Company'}
-          </p>
-          <p className="text-xs text-[var(--color-text-faint)] mt-1">Member since {profile.member_since}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold text-[var(--color-text)]">{profile.completion_percentage}%</p>
-          <p className="text-xs text-[var(--color-text-faint)]">Complete</p>
-          <span className={`mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-            profile.verification_status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-          }`}>
-            {profile.verification_status === 'verified' ? 'Verified' : 'Incomplete'}
-          </span>
-        </div>
-      </div>
+      {/* Who this page is about: the person (Profile) or the company (Company) */}
+      {companyPage
+        ? <CompanyHeader name={profile.company_name} type="carrier" aside={
+            <div className="text-right">
+              <p className="text-2xl font-bold text-[var(--color-text)]">{profile.completion_percentage}%</p>
+              <p className="text-[13px] text-[var(--color-text-faint)]">Complete</p>
+              <span className={`mt-1 inline-block px-2 py-0.5 rounded-full text-[13px] font-medium ${
+                profile.verification_status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+              }`}>
+                {profile.verification_status === 'verified' ? 'Verified' : 'Incomplete'}
+              </span>
+            </div>
+        } />
+        : <PersonHeader name={profile.name} />}
 
-      {/* Me / Company, then the sections of each */}
-      <div className="space-y-3">
-        <div className="inline-flex rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-1">
-          {(['me', 'company'] as ProfileGroup[]).map(g => (
-            <button key={g} onClick={() => setSection(PROFILE_SECTIONS[g][0].id)}
-              className={`rounded-lg px-5 py-1.5 text-sm font-semibold transition-colors ${
-                groupOf(section) === g ? 'bg-[var(--color-slate)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-              }`}>
-              {g === 'me' ? 'Me' : 'Company'}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {PROFILE_SECTIONS[groupOf(section)].map(d => (
-            <button key={d.id} onClick={() => setSection(d.id)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                section === d.id
-                  ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)] text-[var(--color-teal)]'
-                  : 'border-[var(--color-cream-dark)] bg-[var(--color-white)] text-[var(--color-text-muted)] hover:border-[var(--color-teal)]'
-              }`}>
-              {d.label}
-            </button>
-          ))}
-        </div>
+      {/* This page's sections */}
+      <div className="flex flex-wrap gap-2">
+        {PROFILE_SECTIONS[pageGroup].map(d => (
+          <button key={d.id} onClick={() => setSection(d.id)}
+            className={`rounded-full border px-3.5 py-1.5 text-[length:var(--text-nav)] font-medium transition-colors ${
+              section === d.id
+                ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)] text-[var(--color-teal)]'
+                : 'border-[var(--color-cream-dark)] bg-[var(--color-white)] text-[var(--color-text-muted)] hover:border-[var(--color-teal)]'
+            }`}>
+            {d.label}
+          </button>
+        ))}
       </div>
 
       {/* Section panel */}
@@ -861,7 +852,7 @@ export default function CarrierProfilePage() {
               ['SSN (last 4)', profile.has_ssn_last_4 ? 'On file (encrypted)' : null],
               ['Identity verification', profile.identity_verified
                 ? <Pill tone="good">Verified{profile.identity_verified_at ? ` ${fmtDate(profile.identity_verified_at)}` : ''}</Pill>
-                : <button onClick={startIdentityVerification} disabled={identityLoading} className="text-sm font-medium text-[var(--color-teal)] hover:underline disabled:opacity-50">
+                : <button onClick={startIdentityVerification} disabled={identityLoading} className="text-base font-medium text-[var(--color-teal)] hover:underline disabled:opacity-50">
                     {identityLoading ? 'Opening Stripe…' : 'Not verified. Verify with Stripe'}
                   </button>],
             ]} />
@@ -897,6 +888,10 @@ export default function CarrierProfilePage() {
         {section === 'authority' && !editing && (
           <div className="space-y-4">
             <AuthoritiesPanel items={authorities} mode="own" onChange={() => refetchAuthorities()} />
+            <div className="space-y-2">
+              <SectionTitle>Compliance</SectionTitle>
+              <CompanyCompliance note="What Shipmater needs from a carrier, as set by Shipmater. Edit the authority and insurance details here to update it." />
+            </div>
             {dotResult && (
               <DataCard title="Last FMCSA lookup" rows={[
                 ['Result', <Pill key="r" tone={dotResult.allowed_to_operate ? 'good' : 'bad'}>{dotResult.allowed_to_operate ? 'Authorized to operate' : 'Not authorized to operate'}</Pill>],
@@ -919,6 +914,8 @@ export default function CarrierProfilePage() {
 
         {section === 'pro' && <ProProfileCard />}
 
+        {section === 'team' && <TeamManager type="carrier" />}
+
         {section === 'drivers' && (
           <DriversSection isOwnerOperator={profile.carrier_type === 'sole_proprietor'} onGoToDriving={() => setSection('driving', true)} />
         )}
@@ -927,8 +924,8 @@ export default function CarrierProfilePage() {
         {section === 'services' && editing && (
           <div className="space-y-4">
             <div>
-              <p className="text-sm font-semibold text-[var(--color-text)] mb-1">What do you transport?</p>
-              <p className="text-xs text-[var(--color-text-muted)] mb-4">
+              <p className="text-base font-semibold text-[var(--color-text)] mb-1">What do you transport?</p>
+              <p className="text-[13px] text-[var(--color-text-muted)] mb-4">
                 Select all that apply. This determines your required certifications, guides your profile completion, and helps shippers find and filter you.
               </p>
             </div>
@@ -948,8 +945,8 @@ export default function CarrierProfilePage() {
         {section === 'services' && editing && (
           <div className="space-y-4">
             <div>
-              <p className="text-sm font-semibold text-[var(--color-text)] mb-1">Your Certifications</p>
-              <p className="text-xs text-[var(--color-text-muted)] mb-4">
+              <p className="text-base font-semibold text-[var(--color-text)] mb-1">Your Certifications</p>
+              <p className="text-[13px] text-[var(--color-text-muted)] mb-4">
                 Select all certifications you hold. This builds trust with shippers and may be required for certain service types.
               </p>
             </div>
@@ -995,7 +992,7 @@ export default function CarrierProfilePage() {
               <div>
                 <Label>Suffix</Label>
                 <select value={personalForm.suffix} onChange={e => setPersonalForm(p => ({...p, suffix: e.target.value}))}
-                  className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                  className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                   <option value="">None</option>
                   <option>Jr.</option><option>Sr.</option>
                   <option>II</option><option>III</option><option>IV</option>
@@ -1028,7 +1025,7 @@ export default function CarrierProfilePage() {
                         placeholder="555 000 0000"
                         aria-required
                         aria-invalid={personalErrors.phone ? true : undefined}
-                        className={`w-full rounded-xl border bg-[var(--color-white)] pl-9 pr-3.5 py-2.5 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 ${
+                        className={`w-full rounded-xl border bg-[var(--color-white)] pl-9 pr-3.5 py-2.5 text-base text-[var(--color-text)] focus:outline-none focus:ring-2 ${
                           personalErrors.phone
                             ? 'border-red-400 focus:border-red-400 focus:ring-red-400/20'
                             : 'border-[var(--color-cream-dark)] focus:border-[var(--color-teal)] focus:ring-[var(--color-teal)]/20'
@@ -1036,8 +1033,8 @@ export default function CarrierProfilePage() {
                       />
                     </div>
                   </div>
-                  {personalErrors.phone && <p className="mt-1 text-xs text-red-600">{personalErrors.phone}</p>}
-                  <p className="mt-1 text-xs text-[var(--color-text-faint)]">
+                  {personalErrors.phone && <p className="mt-1 text-[13px] text-red-600">{personalErrors.phone}</p>}
+                  <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">
                     Local digits only — country code is selected separately.
                   </p>
                 </div>
@@ -1057,11 +1054,11 @@ export default function CarrierProfilePage() {
                         value={personalForm.whatsapp}
                         onChange={(e) => setPersonalForm(p => ({ ...p, whatsapp: e.target.value }))}
                         placeholder="Optional — same or different number"
-                        className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] pl-9 pr-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
+                        className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] pl-9 pr-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
                       />
                     </div>
                   </div>
-                  <p className="mt-1 text-xs text-[var(--color-text-faint)]">
+                  <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">
                     Optional contact channel. No verification required.
                   </p>
                 </div>
@@ -1076,7 +1073,7 @@ export default function CarrierProfilePage() {
 
             <div className="border-t border-[var(--color-cream-dark)] pt-6">
               <SectionTitle>Current Address</SectionTitle>
-              <p className="text-xs text-[var(--color-text-faint)] mb-4">Required for county-level background check</p>
+              <p className="text-[13px] text-[var(--color-text-faint)] mb-4">Required for county-level background check</p>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <Field
@@ -1117,7 +1114,7 @@ export default function CarrierProfilePage() {
 
             <div className="border-t border-[var(--color-cream-dark)] pt-6">
               <SectionTitle>Government-Issued ID</SectionTitle>
-              <p className="text-xs text-[var(--color-text-faint)] mb-4">Required for identity verification and background check</p>
+              <p className="text-[13px] text-[var(--color-text-faint)] mb-4">Required for identity verification and background check</p>
               <div className="flex gap-3 mb-4">
                 {(['dl', 'passport', 'cdl'] as const).map(t => (
                   <button key={t} onClick={() => setPersonalForm(p => ({...p, id_type: t}))}
@@ -1155,7 +1152,7 @@ export default function CarrierProfilePage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-xs text-[var(--color-text-faint)]">Upload your passport photo page and a selfie for identity matching.</p>
+                  <p className="text-[13px] text-[var(--color-text-faint)]">Upload your passport photo page and a selfie for identity matching.</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div /><div />
                   </div>
@@ -1204,7 +1201,7 @@ export default function CarrierProfilePage() {
             {/* ── Stripe Identity Verification ──────────────────────────── */}
             <div className="border-t border-[var(--color-cream-dark)] pt-6">
               <SectionTitle>Identity Verification</SectionTitle>
-              <p className="text-xs text-[var(--color-text-faint)] mb-4">
+              <p className="text-[13px] text-[var(--color-text-faint)] mb-4">
                 Powered by Stripe Identity. You'll be asked to photograph your ID and take a selfie. Takes about 2 minutes.
               </p>
 
@@ -1212,9 +1209,9 @@ export default function CarrierProfilePage() {
                 <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                   <CheckCircle size={18} className="text-emerald-600 shrink-0" />
                   <div>
-                    <p className="text-sm font-semibold text-emerald-800">Identity Verified</p>
+                    <p className="text-base font-semibold text-emerald-800">Identity Verified</p>
                     {profile.identity_verified_at && (
-                      <p className="text-xs text-emerald-700">
+                      <p className="text-[13px] text-emerald-700">
                         Verified {new Date(profile.identity_verified_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
                     )}
@@ -1223,7 +1220,7 @@ export default function CarrierProfilePage() {
               ) : (
                 <div className="space-y-3">
                   <div className="rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-cream)] p-4 space-y-1.5 text-sm text-[var(--color-text-muted)]">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">Stripe will verify</p>
+                    <p className="text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">Stripe will verify</p>
                     <div className="flex items-center gap-2"><CheckCircle size={13} className="text-[var(--color-teal)] shrink-0" /> Government-issued ID (driver's license or passport)</div>
                     <div className="flex items-center gap-2"><CheckCircle size={13} className="text-[var(--color-teal)] shrink-0" /> Live selfie matched against your ID photo</div>
                     <div className="flex items-center gap-2"><CheckCircle size={13} className="text-[var(--color-teal)] shrink-0" /> ID number extracted and validated</div>
@@ -1231,7 +1228,7 @@ export default function CarrierProfilePage() {
                   <button
                     onClick={startIdentityVerification}
                     disabled={identityLoading}
-                    className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-60 transition-colors"
+                    className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-2.5 text-base font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-60 transition-colors"
                   >
                     {identityLoading
                       ? <><Loader2 size={14} className="animate-spin" /> Opening Stripe…</>
@@ -1289,7 +1286,7 @@ export default function CarrierProfilePage() {
               <div>
                 <Label>CDL Class</Label>
                 <select value={dotForm.cdl_class} onChange={e => setDotForm(p => ({...p, cdl_class: e.target.value}))}
-                  className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                  className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                   <option value="A">Class A — Over 26,001 lbs</option>
                   <option value="B">Class B — Up to 26,000 lbs</option>
                   <option value="C">Class C — Specialized</option>
@@ -1317,7 +1314,7 @@ export default function CarrierProfilePage() {
                       <input type="checkbox" checked={!!dotForm[key]}
                         onChange={e => setDotForm(p => ({...p, [key]: e.target.checked}))}
                         className="w-4 h-4 rounded accent-[var(--color-teal)]" />
-                      <span className="text-sm font-medium text-[var(--color-text)]">{label}</span>
+                      <span className="text-base font-medium text-[var(--color-text)]">{label}</span>
                     </label>
                     {key === 'hazmat_endorsement' && dotForm.hazmat_endorsement && (
                       <div className="mt-3 ml-7 max-w-xs">
@@ -1329,7 +1326,7 @@ export default function CarrierProfilePage() {
               </div>
             </div>
 
-            <p className="text-xs text-[var(--color-text-faint)]">H and N together count as X (tank + hazmat). These endorsements are the ones used to match loads.</p>
+            <p className="text-[13px] text-[var(--color-text-faint)]">H and N together count as X (tank + hazmat). These endorsements are the ones used to match loads.</p>
 
             <SaveBar saved={saved} onSave={() => {
               const msg = validateCarrierCommercialForm(dotForm, (profile.required_fields ?? []).filter((f: string) => !['dot_number', 'mc_number'].includes(f)));
@@ -1346,7 +1343,7 @@ export default function CarrierProfilePage() {
             <div>
               <SectionTitle>
                 Motor carrier authority (USDOT / MC)
-                <span className="text-xs font-normal text-[var(--color-text-faint)] ml-2">— Only if operating under independent authority</span>
+                <span className="text-[13px] font-normal text-[var(--color-text-faint)] ml-2">— Only if operating under independent authority</span>
               </SectionTitle>
 
               {/* USDOT row */}
@@ -1358,12 +1355,12 @@ export default function CarrierProfilePage() {
                       value={dotForm.usdot_number}
                       onChange={e => setDotForm(p => ({...p, usdot_number: e.target.value}))}
                       placeholder="1234567"
-                      className="flex-1 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
+                      className="flex-1 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
                     />
                     <button
                       onClick={verifyDot}
                       disabled={dotVerifying || !dotForm.usdot_number.trim()}
-                      className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50 transition-colors shrink-0"
+                      className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2.5 text-base font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50 transition-colors shrink-0"
                     >
                       {dotVerifying
                         ? <><Loader2 size={13} className="animate-spin" /> Checking…</>
@@ -1373,7 +1370,7 @@ export default function CarrierProfilePage() {
                     </button>
                   </div>
                   {profile.dot_verified && !dotResult && (
-                    <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                    <p className="text-[13px] text-emerald-600 mt-1 flex items-center gap-1">
                       <CheckCircle size={11} /> DOT verified against FMCSA SAFER database
                     </p>
                   )}
@@ -1391,23 +1388,23 @@ export default function CarrierProfilePage() {
                         {dotResult.allowed_to_operate
                           ? <CheckCircle size={15} className="text-emerald-600" />
                           : <AlertCircle size={15} className="text-red-600" />}
-                        <span className={`text-sm font-semibold ${dotResult.allowed_to_operate ? 'text-emerald-800' : 'text-red-800'}`}>
+                        <span className={`text-base font-semibold ${dotResult.allowed_to_operate ? 'text-emerald-800' : 'text-red-800'}`}>
                           {dotResult.allowed_to_operate ? 'Authorized to Operate' : 'NOT Authorized to Operate'}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs text-[var(--color-text-faint)] flex items-center gap-1 justify-end">
+                        <span className="text-[13px] text-[var(--color-text-faint)] flex items-center gap-1 justify-end">
                           <ExternalLink size={10} /> FMCSA SAFER
                         </span>
                         {profile.fmcsa_checked_at && (
-                          <span className="text-xs text-[var(--color-text-faint)]">
+                          <span className="text-[13px] text-[var(--color-text-faint)]">
                             Checked {new Date(profile.fmcsa_checked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             {profile.fmcsa_expires_at && ` · expires ${new Date(profile.fmcsa_expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[13px]">
                       {dotResult.legal_name && (
                         <div><p className="text-[var(--color-text-faint)]">Legal Name</p><p className="font-medium text-[var(--color-text)]">{dotResult.legal_name}</p></div>
                       )}
@@ -1449,12 +1446,12 @@ export default function CarrierProfilePage() {
                       value={dotForm.mc_number}
                       onChange={e => setDotForm(p => ({...p, mc_number: e.target.value}))}
                       placeholder="MC-123456"
-                      className="flex-1 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
+                      className="flex-1 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none focus:ring-2 focus:ring-[var(--color-teal)]/20"
                     />
                     <button
                       onClick={verifyMc}
                       disabled={mcVerifying || !dotForm.mc_number.trim()}
-                      className="flex items-center gap-2 rounded-xl border border-[var(--color-teal)] text-[var(--color-teal)] px-4 py-2.5 text-sm font-semibold hover:bg-[var(--color-teal-pale)] disabled:opacity-50 transition-colors shrink-0"
+                      className="flex items-center gap-2 rounded-xl border border-[var(--color-teal)] text-[var(--color-teal)] px-4 py-2.5 text-base font-semibold hover:bg-[var(--color-teal-pale)] disabled:opacity-50 transition-colors shrink-0"
                     >
                       {mcVerifying
                         ? <><Loader2 size={13} className="animate-spin" /> Checking…</>
@@ -1464,7 +1461,7 @@ export default function CarrierProfilePage() {
                     </button>
                   </div>
                   {profile.mc_verified && !mcResult && (
-                    <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                    <p className="text-[13px] text-emerald-600 mt-1 flex items-center gap-1">
                       <CheckCircle size={11} /> MC verified — active operating authority
                     </p>
                   )}
@@ -1482,23 +1479,23 @@ export default function CarrierProfilePage() {
                         {mcResult.allowed_to_operate
                           ? <CheckCircle size={15} className="text-emerald-600" />
                           : <AlertCircle size={15} className="text-red-600" />}
-                        <span className={`text-sm font-semibold ${mcResult.allowed_to_operate ? 'text-emerald-800' : 'text-red-800'}`}>
+                        <span className={`text-base font-semibold ${mcResult.allowed_to_operate ? 'text-emerald-800' : 'text-red-800'}`}>
                           {mcResult.allowed_to_operate ? 'Active Operating Authority' : 'Operating Authority NOT Active'}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs text-[var(--color-text-faint)] flex items-center gap-1 justify-end">
+                        <span className="text-[13px] text-[var(--color-text-faint)] flex items-center gap-1 justify-end">
                           <ExternalLink size={10} /> FMCSA SAFER
                         </span>
                         {profile.mc_checked_at && (
-                          <span className="text-xs text-[var(--color-text-faint)]">
+                          <span className="text-[13px] text-[var(--color-text-faint)]">
                             Checked {new Date(profile.mc_checked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             {profile.mc_expires_at && ` · expires ${new Date(profile.mc_expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[13px]">
                       {mcResult.legal_name && (
                         <div><p className="text-[var(--color-text-faint)]">Legal Name</p><p className="font-medium text-[var(--color-text)]">{mcResult.legal_name}</p></div>
                       )}
@@ -1571,7 +1568,7 @@ export default function CarrierProfilePage() {
 
             {/* ── What each level covers ──────────────────────────────── */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">What is checked</p>
+              <p className="text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">What is checked</p>
               <div className="rounded-xl border border-[var(--color-cream-dark)] divide-y divide-[var(--color-cream-dark)]">
                 {[
                   { label: 'Criminal record search', detail: 'National and federal criminal records', level: 'Basic' },
@@ -1584,10 +1581,10 @@ export default function CarrierProfilePage() {
                 ].map((c) => (
                   <div key={c.label} className="flex items-center gap-4 px-4 py-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--color-text)]">{c.label}</p>
-                      <p className="text-xs text-[var(--color-text-muted)] truncate">{c.detail}</p>
+                      <p className="text-base font-medium text-[var(--color-text)]">{c.label}</p>
+                      <p className="text-[13px] text-[var(--color-text-muted)] truncate">{c.detail}</p>
                     </div>
-                    <span className={`text-xs shrink-0 ${c.level === 'Basic' ? 'text-[var(--color-text-faint)]' : 'text-[var(--color-teal)]'}`}>{c.level}</span>
+                    <span className={`text-[13px] shrink-0 ${c.level === 'Basic' ? 'text-[var(--color-text-faint)]' : 'text-[var(--color-teal)]'}`}>{c.level}</span>
                   </div>
                 ))}
               </div>
@@ -1595,7 +1592,7 @@ export default function CarrierProfilePage() {
 
             {/* ── Prerequisites ───────────────────────────────────────── */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">Required information</p>
+              <p className="text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">Required information</p>
               <div className="rounded-xl border border-[var(--color-cream-dark)] divide-y divide-[var(--color-cream-dark)]">
                 {[
                   { label: 'Legal name',                                             done: !!(profile.name) },
@@ -1610,8 +1607,8 @@ export default function CarrierProfilePage() {
                       : <Clock size={15} className="text-[var(--color-warning)] shrink-0" />}
                     <span className={`text-sm flex-1 ${item.done ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`}>{item.label}</span>
                     {item.note
-                      ? <span className="text-xs text-[var(--color-text-faint)]">{item.note}</span>
-                      : !item.done && <span className="text-xs text-[var(--color-text-faint)]">Missing</span>}
+                      ? <span className="text-[13px] text-[var(--color-text-faint)]">{item.note}</span>
+                      : !item.done && <span className="text-[13px] text-[var(--color-text-faint)]">Missing</span>}
                   </div>
                 ))}
               </div>
@@ -1621,8 +1618,8 @@ export default function CarrierProfilePage() {
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
                 <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-amber-800">Under Manual Review</p>
-                  <p className="text-xs text-amber-700 mt-0.5">One or more results require a manual review. Our team will follow up within 2 business days.</p>
+                  <p className="text-base font-semibold text-amber-800">Under Manual Review</p>
+                  <p className="text-[13px] text-amber-700 mt-0.5">One or more results require a manual review. Our team will follow up within 2 business days.</p>
                 </div>
               </div>
             )}
@@ -1631,8 +1628,8 @@ export default function CarrierProfilePage() {
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
                 <AlertCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-red-800">Background Check — Not Passed</p>
-                  <p className="text-xs text-red-700 mt-0.5">Your background check did not meet our requirements. Contact support@shipmater.com if you believe this is in error.</p>
+                  <p className="text-base font-semibold text-red-800">Background Check — Not Passed</p>
+                  <p className="text-[13px] text-red-700 mt-0.5">Your background check did not meet our requirements. Contact support@shipmater.com if you believe this is in error.</p>
                 </div>
               </div>
             )}
@@ -1662,11 +1659,11 @@ export default function CarrierProfilePage() {
                   {/* Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-[var(--color-text)] flex items-center gap-2 flex-wrap">
+                      <p className="text-base font-semibold text-[var(--color-text)] flex items-center gap-2 flex-wrap">
                         FMCSA Drug &amp; Alcohol Clearinghouse
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-200 text-yellow-800 uppercase tracking-wide">Federal Law · 49 CFR §382</span>
                       </p>
-                      <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                      <p className="text-[13px] text-[var(--color-text-muted)] mt-0.5">
                         Required for all CDL drivers. Checks federal drug &amp; alcohol violations across every prior employer.
                         Part of the Complete check; required for CDL holders at that level.
                       </p>
@@ -1691,7 +1688,7 @@ export default function CarrierProfilePage() {
                           <RefreshCw size={13} className={clearinghouseRefreshing ? 'animate-spin' : ''} />
                         </button>
                       )}
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${cfg.border} ${cfg.text} ${cfg.bg}`}>
+                      <span className={`px-2.5 py-1 rounded-full text-[13px] font-medium border ${cfg.border} ${cfg.text} ${cfg.bg}`}>
                         {isClear && <CheckCircle size={11} className="inline mr-1" />}
                         {isViolations && <AlertCircle size={11} className="inline mr-1" />}
                         {(isPendingConsent || isQuerying) && <Loader2 size={11} className="inline mr-1 animate-spin" />}
@@ -1702,11 +1699,11 @@ export default function CarrierProfilePage() {
 
                   {/* Clear result */}
                   {isClear && (
-                    <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
+                    <div className="flex items-center gap-2 text-emerald-700 text-base font-medium">
                       <CheckCircle size={15} />
                       No drug or alcohol violations found
                       {profile.clearinghouse_completed_at && (
-                        <span className="text-xs font-normal text-emerald-600 ml-1">
+                        <span className="text-[13px] font-normal text-emerald-600 ml-1">
                           · Verified {new Date(profile.clearinghouse_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       )}
@@ -1715,7 +1712,7 @@ export default function CarrierProfilePage() {
 
                   {/* Violations found */}
                   {isViolations && (
-                    <div className="rounded-lg bg-white border border-red-200 p-3 text-xs text-red-800 space-y-1">
+                    <div className="rounded-lg bg-white border border-red-200 p-3 text-[13px] text-red-800 space-y-1">
                       <p className="font-semibold">Violations found on your Clearinghouse record</p>
                       <p>Our team will review your record and contact you within 2 business days. You may dispute records directly at <a href="https://clearinghouse.fmcsa.dot.gov" target="_blank" rel="noopener noreferrer" className="underline">clearinghouse.fmcsa.dot.gov</a>.</p>
                     </div>
@@ -1723,7 +1720,7 @@ export default function CarrierProfilePage() {
 
                   {/* Awaiting consent */}
                   {isPendingConsent && (
-                    <div className="rounded-lg bg-white border border-blue-200 p-3 space-y-2 text-xs text-blue-900">
+                    <div className="rounded-lg bg-white border border-blue-200 p-3 space-y-2 text-[13px] text-blue-900">
                       <p className="font-semibold">Action required — grant consent on the FMCSA portal</p>
                       <p>You should have received an email from FMCSA. Log in at the link below, find the pending consent request from Shipmater, and approve it.</p>
                       <a
@@ -1739,7 +1736,7 @@ export default function CarrierProfilePage() {
 
                   {/* Processing */}
                   {isQuerying && (
-                    <div className="flex items-center gap-2 text-blue-700 text-sm">
+                    <div className="flex items-center gap-2 text-blue-700 text-base">
                       <Loader2 size={14} className="animate-spin" />
                       Consent received — FMCSA is processing your report. Typically 1–3 business days.
                     </div>
@@ -1747,12 +1744,12 @@ export default function CarrierProfilePage() {
 
                   {/* Error */}
                   {isError && (
-                    <p className="text-xs text-orange-800">Query encountered an error. Click &quot;Run Query&quot; below to retry.</p>
+                    <p className="text-[13px] text-orange-800">Query encountered an error. Click &quot;Run Query&quot; below to retry.</p>
                   )}
 
                   {/* How it works (when not yet run) */}
                   {chStatus === 'not_run' && (
-                    <div className="rounded-lg bg-white border border-yellow-200 p-3 space-y-1.5 text-xs text-[var(--color-text-muted)]">
+                    <div className="rounded-lg bg-white border border-yellow-200 p-3 space-y-1.5 text-[13px] text-[var(--color-text-muted)]">
                       <p className="font-semibold text-[var(--color-text)] mb-1">How it works:</p>
                       <div className="flex items-start gap-2"><span className="text-yellow-600 shrink-0">1.</span> We submit a query to FMCSA using your CDL number</div>
                       <div className="flex items-start gap-2"><span className="text-yellow-600 shrink-0">2.</span> FMCSA emails you a consent request — you approve at clearinghouse.fmcsa.dot.gov</div>
@@ -1783,7 +1780,7 @@ export default function CarrierProfilePage() {
                           setClearinghouseLoading(false);
                         }
                       }}
-                      className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[var(--color-teal-light)] disabled:opacity-40 transition-colors"
+                      className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-5 py-2.5 text-base font-semibold hover:bg-[var(--color-teal-light)] disabled:opacity-40 transition-colors"
                     >
                       {clearinghouseLoading
                         ? <><Loader2 size={13} className="animate-spin" /> Submitting…</>
@@ -1817,7 +1814,7 @@ export default function CarrierProfilePage() {
                 <div>
                   <Label>Result</Label>
                   <select value={medicalForm.drug_test_result} onChange={e => setMedicalForm(p => ({...p, drug_test_result: e.target.value}))}
-                    className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                    className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                     <option value="passed">Passed</option>
                     <option value="pending">Pending</option>
                     <option value="failed">Failed</option>
@@ -1838,7 +1835,7 @@ export default function CarrierProfilePage() {
         {/* ── INSURANCE ─────────────────────────────────────────────────── */}
         {section === 'authority' && editing && (
           <div className="space-y-6">
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900">
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-base text-blue-900">
               <strong>Minimums:</strong> $750,000 commercial auto (general freight) · $1,000,000+ (HazMat) · Cargo insurance recommended
             </div>
 
@@ -1888,11 +1885,11 @@ export default function CarrierProfilePage() {
             <div className="flex items-center justify-between">
               <div>
                 <SectionTitle>Your Fleet</SectionTitle>
-                <p className="text-xs text-[var(--color-text-faint)] -mt-3">{vehiclesData.length} vehicle{vehiclesData.length !== 1 ? 's' : ''} registered</p>
+                <p className="text-[13px] text-[var(--color-text-faint)] -mt-3">{vehiclesData.length} vehicle{vehiclesData.length !== 1 ? 's' : ''} registered</p>
               </div>
               <button
                 onClick={() => { setVehicleForm(newVehicle(vehiclesData.length === 0)); setShowAddVehicle(true); }}
-                className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-4 py-2 text-sm font-medium hover:bg-[var(--color-teal-light)]"
+                className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-4 py-2 text-base font-medium hover:bg-[var(--color-teal-light)]"
               >
                 <Plus size={15} /> Add Vehicle
               </button>
@@ -1901,7 +1898,7 @@ export default function CarrierProfilePage() {
             {vehiclesData.length === 0 && !showAddVehicle && (
               <div className="text-center py-10 rounded-lg border-2 border-dashed border-[var(--color-cream-dark)]">
                 <p className="text-sm text-[var(--color-text-muted)]">No vehicles yet</p>
-                <p className="text-xs text-[var(--color-text-faint)] mt-1">Add your first truck or trailer to start bidding on jobs</p>
+                <p className="text-[13px] text-[var(--color-text-faint)] mt-1">Add your first truck or trailer to start bidding on jobs</p>
               </div>
             )}
 
@@ -1912,12 +1909,12 @@ export default function CarrierProfilePage() {
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-[var(--color-text)]">{v.year} {v.make} {v.model}</p>
                       {v.is_primary && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-teal-pale)] text-[var(--color-teal)] text-xs font-medium">
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-teal-pale)] text-[var(--color-teal)] text-[13px] font-medium">
                           <Star size={11} fill="currentColor" /> Primary
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[var(--color-text-faint)] mt-0.5">
+                    <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
                       {v.unit_number && <>Unit {v.unit_number} · </>}
                       {v.equipment_type ? nameOf(catalog.equipment, v.equipment_type) : <span className="capitalize">{v.type?.replace('_', ' ')}</span>}
                       {' · '}{v.license_plate} {v.license_plate_state}
@@ -1929,7 +1926,7 @@ export default function CarrierProfilePage() {
                       <button
                         onClick={() => setPrimaryMutation.mutate(String(v.id))}
                         disabled={setPrimaryMutation.isPending}
-                        className="text-xs text-[var(--color-teal)] hover:underline disabled:opacity-50"
+                        className="text-[13px] text-[var(--color-teal)] hover:underline disabled:opacity-50"
                       >
                         Set primary
                       </button>
@@ -1943,7 +1940,7 @@ export default function CarrierProfilePage() {
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-3 text-xs text-[var(--color-text-muted)]">
+                <div className="grid grid-cols-4 gap-3 text-[13px] text-[var(--color-text-muted)]">
                   <div><span className="text-[var(--color-text-faint)]">GVWR</span><br />{v.gvwr ? `${Number(v.gvwr).toLocaleString()} lbs` : '—'}</div>
                   <div><span className="text-[var(--color-text-faint)]">Payload</span><br />{v.max_payload ? `${Number(v.max_payload).toLocaleString()} lbs` : '—'}</div>
                   <div><span className="text-[var(--color-text-faint)]">Cargo (L×W×H)</span><br />
@@ -1951,18 +1948,22 @@ export default function CarrierProfilePage() {
                       ? `${v.cargo_length}" × ${v.cargo_width}" × ${v.cargo_height}"`
                       : '—'}
                   </div>
-                  <div><span className="text-[var(--color-text-faint)]">VIN</span><br />{v.vin || '—'}</div>
+                  <div><span className="text-[var(--color-text-faint)]">VIN</span><br />{v.vin || '—'}
+                    {v.vin && v.vin_status === 'valid' && <span className="block text-[13px] text-emerald-700">Checked with NHTSA{v.vin_decoded?.make ? `: ${v.vin_decoded.year ?? ''} ${v.vin_decoded.make} ${v.vin_decoded.model ?? ''}`.trimEnd() : ''}</span>}
+                    {v.vin && v.vin_status === 'invalid' && <span className="block text-[13px] text-red-700">NHTSA: {v.vin_decoded?.error ?? 'not a valid VIN'}</span>}
+                    {v.vin && !v.vin_status && <span className="block text-[13px] text-[var(--color-text-faint)]">Checking with NHTSA…</span>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {v.liftgate && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">Liftgate</span>}
-                  {v.climate_controlled && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">Climate</span>}
-                  {v.enclosed && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">Enclosed</span>}
-                  {v.registration_expiry && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">Reg. exp. {v.registration_expiry}</span>}
-                  {(v.temp_min_f != null || v.temp_max_f != null) && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">{v.temp_min_f ?? '?'}° to {v.temp_max_f ?? '?'}°F</span>}
+                  {v.liftgate && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">Liftgate</span>}
+                  {v.climate_controlled && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">Climate</span>}
+                  {v.enclosed && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">Enclosed</span>}
+                  {v.registration_expiry && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">Reg. exp. {v.registration_expiry}</span>}
+                  {(v.temp_min_f != null || v.temp_max_f != null) && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">{v.temp_min_f ?? '?'}° to {v.temp_max_f ?? '?'}°F</span>}
                   {(v.capabilities ?? []).filter((k: string) => k !== 'liftgate').map((k: string) => (
-                    <span key={k} className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-xs text-[var(--color-text-faint)]">{nameOf(catalog.features, k)}</span>
+                    <span key={k} className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">{nameOf(catalog.features, k)}</span>
                   ))}
-                  {!v.equipment_type && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-xs text-amber-700">Add equipment type to be matched with loads</span>}
+                  {!v.equipment_type && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-[13px] text-amber-700">Add equipment type to be matched with loads</span>}
                 </div>
               </div>
             ))}
@@ -1983,7 +1984,7 @@ export default function CarrierProfilePage() {
                 <div>
                   <Label>Vehicle Type</Label>
                   <select value={vehicleForm.type} onChange={e => setVehicleForm(p => ({...p, type: e.target.value}))}
-                    className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                    className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                     <option value="box_truck">Box Truck</option>
                     <option value="flatbed">Flatbed</option>
                     <option value="enclosed_trailer">Enclosed Trailer</option>
@@ -2000,11 +2001,11 @@ export default function CarrierProfilePage() {
                   <div className="col-span-2">
                     <Label>Equipment</Label>
                     <select value={vehicleForm.equipment_type} onChange={e => setVehicleForm(p => ({...p, equipment_type: e.target.value}))}
-                      className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                      className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                       <option value="">Choose…</option>
                       {catalog.equipment.map(e => <option key={e.key} value={e.key}>{e.name}</option>)}
                     </select>
-                    <p className="mt-1 text-xs text-[var(--color-text-faint)]">Loads are matched to carriers by equipment.</p>
+                    <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">Loads are matched to carriers by equipment.</p>
                   </div>
                   <Field label="Unit #" value={vehicleForm.unit_number} onChange={v => setVehicleForm(p => ({...p, unit_number: v}))} placeholder="T-104" />
                 </div>
@@ -2020,7 +2021,7 @@ export default function CarrierProfilePage() {
                   <div>
                     <Label>Owned by</Label>
                     <select value={vehicleForm.owner} onChange={e => setVehicleForm(p => ({...p, owner: e.target.value as Vehicle['owner']}))}
-                      className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                      className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                       <option value="company">This company</option>
                       <option value="driver">A person in this company (owner-operator leased on)</option>
                     </select>
@@ -2029,7 +2030,7 @@ export default function CarrierProfilePage() {
                     <div>
                       <Label>Owner</Label>
                       <select value={vehicleForm.owner_user_id} onChange={e => setVehicleForm(p => ({...p, owner_user_id: e.target.value}))}
-                        className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
+                        className="w-full rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-3.5 py-2.5 text-base text-[var(--color-text)] focus:border-[var(--color-teal)] focus:outline-none">
                         <option value="">Choose…</option>
                         {members.map((m: any) => <option key={m.user_id ?? m.id} value={m.user_id ?? m.user?.id}>{m.name ?? m.user?.name}</option>)}
                       </select>
@@ -2085,7 +2086,7 @@ export default function CarrierProfilePage() {
                         <input type="checkbox" checked={vehicleForm[key]}
                           onChange={e => setVehicleForm(p => ({...p, [key]: e.target.checked}))}
                           className="w-4 h-4 rounded accent-[var(--color-teal)]" />
-                        <span className="text-sm text-[var(--color-text)]">{label}</span>
+                        <span className="text-base text-[var(--color-text)]">{label}</span>
                       </label>
                     ))}
                   </div>
@@ -2100,7 +2101,7 @@ export default function CarrierProfilePage() {
                   <input type="checkbox" checked={vehicleForm.is_primary}
                     onChange={e => setVehicleForm(p => ({...p, is_primary: e.target.checked}))}
                     className="w-4 h-4 rounded accent-[var(--color-teal)]" />
-                  <span className="text-sm font-medium text-[var(--color-text)]">Set as primary vehicle</span>
+                  <span className="text-base font-medium text-[var(--color-text)]">Set as primary vehicle</span>
                 </label>
 
                 <div className="flex gap-3 pt-2 border-t border-[var(--color-cream-dark)]">
@@ -2124,7 +2125,7 @@ export default function CarrierProfilePage() {
                       } as any);
                     }}
                     disabled={addVehicleMutation.isPending}
-                    className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[var(--color-teal-light)] disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-5 py-2.5 text-base font-semibold hover:bg-[var(--color-teal-light)] disabled:opacity-60"
                   >
                     {addVehicleMutation.isPending && <Loader2 size={13} className="animate-spin" />}
                     Save Vehicle

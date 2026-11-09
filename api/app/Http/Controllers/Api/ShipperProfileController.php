@@ -32,6 +32,8 @@ class ShipperProfileController extends Controller
         'business_phone'               => 'phone',
         'business_email'               => 'email',
         'sam_gov_number'               => 'sam_gov_number',
+        // Brokers: the broker MC number, checked with FMCSA
+        'broker_mc'                    => 'fmcsa_broker_mc',
         'biz_street'                   => 'street',
         'biz_city'                     => 'city',
         'biz_state'                    => 'state',
@@ -135,6 +137,7 @@ class ShipperProfileController extends Controller
             'business_phone'         => $org?->phone ?? '',
             'business_email'         => $org?->email ?? '',
             'sam_gov_number'         => $org?->sam_gov_number ?? '',
+            'broker_mc'              => $org?->fmcsa_broker_mc ?? '',
 
             // Registered address
             'biz_street'    => $org?->street ?? '',
@@ -242,6 +245,7 @@ class ShipperProfileController extends Controller
             'business_phone'         => ['sometimes', 'nullable', 'string', 'max:40'],
             'business_email'         => ['sometimes', 'nullable', 'email', 'max:255'],
             'sam_gov_number'         => ['sometimes', 'nullable', 'string', 'max:50'],
+            'broker_mc'              => ['sometimes', 'nullable', 'string', 'max:20'],
 
             // Registered address
             'biz_street'    => ['sometimes', 'nullable', 'string', 'max:200'],

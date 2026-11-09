@@ -75,7 +75,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       section: 'Account',
       items: [
         { label: 'Profile',      href: '/shipper/profile',      icon: User        },
-        { label: 'Verification', href: '/shipper/verification', icon: ShieldCheck },
+        { label: 'Company',      href: '/shipper/company',      icon: Building2   },
       ],
     },
     {
@@ -111,8 +111,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       section: 'Account',
       items: [
         { label: 'Profile',      href: '/carrier/profile',      icon: User        },
-        { label: 'Verification', href: '/carrier/verification', icon: ShieldCheck },
-        { label: 'Team',         href: '/carrier/team',         icon: Users       },
+        { label: 'Company',      href: '/carrier/company',      icon: Building2   },
       ],
     },
     {
@@ -133,7 +132,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       section: 'Account',
       items: [
         { label: 'Profile',      href: '/factor/profile',      icon: User        },
-        { label: 'Verification', href: '/factor/verification', icon: ShieldCheck },
+        { label: 'Company',      href: '/factor/company',      icon: Building2   },
       ],
     },
   ],
@@ -150,10 +149,10 @@ export const NAV: Record<UserRole, NavSection[]> = {
       ],
     },
     {
-      section: 'Company',
+      section: 'Account',
       items: [
-        { label: 'Locations & Contacts', href: '/receiver/company', icon: Warehouse },
-        { label: 'Team',                 href: '/receiver/team',    icon: Users     },
+        { label: 'Profile', href: '/receiver/profile', icon: User      },
+        { label: 'Company', href: '/receiver/company', icon: Building2 },
       ],
     },
   ],

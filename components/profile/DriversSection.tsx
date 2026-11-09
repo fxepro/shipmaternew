@@ -33,7 +33,7 @@ export function DriversSection({ isOwnerOperator, onGoToDriving }: { isOwnerOper
   return (
     <div className="space-y-3">
       {ownerMissing && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base text-amber-800">
           You run this company as an owner-operator. Add your CDL under{' '}
           <button onClick={onGoToDriving} className="font-semibold underline">Me, Driving credentials</button> and you&apos;ll show here as its driver.
         </div>
@@ -52,7 +52,7 @@ export function DriversSection({ isOwnerOperator, onGoToDriving }: { isOwnerOper
             ['Medical card expires', expiryPill(m.medical_expires)],
           ]} />
       ))}
-      <Link href="/carrier/team" className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-teal)] hover:underline">
+      <Link href="/carrier/company?tab=team" className="inline-flex items-center gap-1.5 text-base font-medium text-[var(--color-teal)] hover:underline">
         <UserPlus size={14} /> Invite a driver (Team page, role Driver)
       </Link>
     </div>

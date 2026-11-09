@@ -46,6 +46,8 @@ Route::get('/fees', [\App\Http\Controllers\Api\FeesController::class, 'show']);
 
 // ── Background check provider webhooks (public — each provider signs its own) ──
 Route::post('/background/webhook/{provider}', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'webhook']);
+// Business verification results (Middesk); signed by the provider
+Route::post('/kyb/webhook/{provider}', [\App\Http\Controllers\Api\ComplianceChecksController::class, 'webhook']);
 Route::post('/checkr/webhook', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'webhook']);   // older address, still set in Checkr
 // The test provider's form: a signed link, refused in production
 Route::get('/background/fake/{check}', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'fake'])->name('background.fake')->middleware('signed');
@@ -193,6 +195,7 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/org/invitations',                 [OrgController::class, 'invitations'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::post('/org/invitations',                [OrgController::class, 'invite'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::post('/org/invitations/accept',         [OrgController::class, 'acceptInvitation']);
+    Route::post('/org/invitations/{id}/resend',    [OrgController::class, 'resendInvitation'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::delete('/org/invitations/{id}',         [OrgController::class, 'cancelInvitation'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::put('/org/switch',                      [OrgController::class, 'switchOrg']);
     Route::get('/user/organizations',              [OrgController::class, 'userOrgs']);
@@ -225,6 +228,10 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
 
     // Admin: fees (Platform settings)
     Route::put('/admin/settings/fees',    [\App\Http\Controllers\Api\FeesController::class, 'update']);
+    Route::get('/admin/settings/kyb',              [\App\Http\Controllers\Api\ComplianceChecksController::class, 'settings']);
+    Route::put('/admin/settings/kyb',              [\App\Http\Controllers\Api\ComplianceChecksController::class, 'updateSettings']);
+    Route::post('/admin/settings/kyb/test',        [\App\Http\Controllers\Api\ComplianceChecksController::class, 'test']);
+    Route::post('/admin/companies/{org}/checks/run', [\App\Http\Controllers\Api\ComplianceChecksController::class, 'run']);
     Route::get('/admin/settings/background',       [\App\Http\Controllers\Api\BackgroundCheckController::class, 'settings']);
     Route::put('/admin/settings/background',       [\App\Http\Controllers\Api\BackgroundCheckController::class, 'updateSettings']);
     Route::post('/admin/settings/background/test', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'testConnection']);
@@ -314,7 +321,6 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::put('/admin/companies/{org}/categories', [\App\Http\Controllers\Api\CapabilityController::class, 'adminUpdateCategories']);
     Route::post('/admin/companies/{org}/authorities', [\App\Http\Controllers\Api\AuthorityController::class, 'adminStore']);
     Route::put('/admin/authorities/{authority}',    [\App\Http\Controllers\Api\AuthorityController::class, 'adminUpdate']);
-    Route::post('/admin/companies/{org}/background',[AdminCompanyController::class, 'recordBackground']);
     // Verification policy (Admin Console, Compliance)
     Route::get('/admin/verification-policy',                      [\App\Http\Controllers\Api\VerificationPolicyController::class, 'show']);
     Route::put('/admin/verification-policy/{type}/checks/{key}',  [\App\Http\Controllers\Api\VerificationPolicyController::class, 'updateCheck']);

@@ -98,7 +98,7 @@ export function OrgProfile({ orgId, readOnly, sections = ['details', 'locations'
             <p className="overline flex items-center gap-2"><Building2 size={14} /> Company</p>
             {canEdit && <button className="btn btn-ghost btn-sm" onClick={() => setEditDetails(true)}><Pencil size={13} /> Edit</button>}
           </div>
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-base sm:grid-cols-2">
             <Detail icon={Phone} label="Phone" value={org.phone} />
             <Detail icon={Mail} label="Email" value={org.email} />
             <Detail icon={Globe} label="Website" value={org.website} />
@@ -121,18 +121,18 @@ export function OrgProfile({ orgId, readOnly, sections = ['details', 'locations'
               {org.locations.map(l => (
                 <li key={l.id} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--color-text)]">
+                    <p className="flex flex-wrap items-center gap-2 text-base font-medium text-[var(--color-text)]">
                       {l.name}
                       {l.visibility === 'private' && <span className="badge badge-muted inline-flex items-center gap-1"><Lock size={10} /> Private</span>}
                       {l.is_default && <span className="badge badge-info">Suggested first</span>}
                     </p>
                     <p className="text-sm text-[var(--color-text-muted)]">{l.address}{l.address.includes(l.city) ? '' : `, ${l.city}${l.state ? `, ${l.state}` : ''} ${l.zip}`}</p>
-                    <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-text-faint)]">
+                    <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--color-text-faint)]">
                       {l.dock_doors != null && <span className="inline-flex items-center gap-1"><DoorOpen size={11} /> {l.dock_doors} dock door{l.dock_doors === 1 ? '' : 's'}</span>}
                       {l.appointment_required && <span className="inline-flex items-center gap-1"><CalendarClock size={11} /> Appointment required</span>}
                       {l.operating_hours && Object.keys(l.operating_hours).length > 0 && <span>Hours: {hoursSummary(l.operating_hours)}</span>}
                     </p>
-                    {l.site_instructions && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{l.site_instructions}</p>}
+                    {l.site_instructions && <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{l.site_instructions}</p>}
                   </div>
                   {canEdit && (
                     <div className="flex shrink-0 gap-1">
@@ -163,18 +163,18 @@ export function OrgProfile({ orgId, readOnly, sections = ['details', 'locations'
               {org.contacts.map(c => (
                 <li key={c.id} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--color-text)]">
+                    <p className="flex flex-wrap items-center gap-2 text-base font-medium text-[var(--color-text)]">
                       {c.name}
                       {c.is_primary && <span className="badge badge-success inline-flex items-center gap-1"><Star size={10} /> Main</span>}
                       {c.title && <span className="font-normal text-[var(--color-text-muted)]">· {c.title}</span>}
                     </p>
-                    <p className="text-xs text-[var(--color-text-faint)]">{locName(c.location_id)}</p>
+                    <p className="text-[13px] text-[var(--color-text-faint)]">{locName(c.location_id)}</p>
                     <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--color-text-muted)]">
                       {c.email && <span className="inline-flex items-center gap-1"><Mail size={12} /> {c.email}</span>}
                       {c.phone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {c.phone}</span>}
                       {c.mobile && <span className="inline-flex items-center gap-1"><Phone size={12} /> {c.mobile} (mobile)</span>}
                     </p>
-                    <p className="mt-1 text-xs text-[var(--color-text-faint)]">{notifySummary(c.notify)}</p>
+                    <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">{notifySummary(c.notify)}</p>
                   </div>
                   {canEdit && (
                     <div className="flex shrink-0 gap-1">
@@ -222,7 +222,7 @@ function Detail({ icon: Icon, label, value }: { icon: React.ElementType; label: 
   return (
     <div className="flex items-start gap-2">
       <Icon size={14} className="mt-0.5 shrink-0 text-[var(--color-text-faint)]" />
-      <div><dt className="text-xs text-[var(--color-text-faint)]">{label}</dt><dd className="text-[var(--color-text)]">{value || '—'}</dd></div>
+      <div><dt className="text-[13px] text-[var(--color-text-faint)]">{label}</dt><dd className="text-[var(--color-text)]">{value || '—'}</dd></div>
     </div>
   );
 }

@@ -13,8 +13,8 @@ export function DataRows({ rows }: { rows: DataRow[] }) {
     <dl className="divide-y divide-[var(--color-cream-dark)]">
       {rows.map(([label, value]) => (
         <div key={label} className="grid grid-cols-[minmax(120px,38%)_1fr] gap-3 px-4 py-2">
-          <dt className="text-xs font-medium text-[var(--color-text-faint)] pt-0.5">{label}</dt>
-          <dd className="min-w-0 break-words text-sm text-[var(--color-text)]">{isEmpty(value) ? <span className="text-[var(--color-text-faint)]">—</span> : value}</dd>
+          <dt className="text-[13px] font-medium text-[var(--color-text-faint)] pt-0.5">{label}</dt>
+          <dd className="min-w-0 break-words text-base text-[var(--color-text)]">{isEmpty(value) ? <span className="text-[var(--color-text-faint)]">—</span> : value}</dd>
         </div>
       ))}
     </dl>
@@ -29,8 +29,8 @@ export function DataCard({ title, subtitle, action, rows, children }: {
     <section className="overflow-hidden rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-white)]">
       <header className="flex items-center justify-between gap-3 border-b border-[var(--color-cream-dark)] bg-[var(--color-cream)]/50 px-4 py-2">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-[var(--color-text)]">{title}</p>
-          {subtitle && <p className="text-xs text-[var(--color-text-faint)]">{subtitle}</p>}
+          <p className="card-title">{title}</p>
+          {subtitle && <p className="text-sm text-[var(--color-text-faint)]">{subtitle}</p>}
         </div>
         {action}
       </header>
@@ -47,8 +47,8 @@ export function SectionHeader({ title, description, editable, editing, onToggle 
   return (
     <div className="flex items-start justify-between gap-3">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text)]">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">{description}</p>}
+        <h2 className="text-h5 text-[var(--color-text)]">{title}</h2>
+        {description && <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">{description}</p>}
       </div>
       {editable && (
         <button onClick={onToggle}

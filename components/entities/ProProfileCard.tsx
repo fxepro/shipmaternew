@@ -29,7 +29,7 @@ export function ProProfileCard() {
   if (!p || !data) return null;
 
   const set = <K extends keyof Pro>(k: K, v: Pro[K]) => setP({ ...p, [k]: v });
-  const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]';
+  const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-base focus:outline-none focus:border-[var(--color-teal)]';
   const label = 'mb-1 block text-xs font-medium text-[var(--color-text-muted)]';
   const names = (items: { key: string; name: string }[], keys: string[]) => keys.map((k) => nameOf(items, k)).join(', ') || null;
 
@@ -51,7 +51,7 @@ export function ProProfileCard() {
   if (!editing) {
     return (
       <DataCard title="Professional profile" subtitle="Yours, not your company's: it stays with you if you change companies."
-        action={<button onClick={() => setEditing(true)} className="text-sm font-medium text-[var(--color-teal)] hover:underline">Edit</button>}
+        action={<button onClick={() => setEditing(true)} className="text-base font-medium text-[var(--color-teal)] hover:underline">Edit</button>}
         rows={[
           ['Headline', data.headline],
           ['What you do', names(catalog.pro_roles, data.roles)],
@@ -87,12 +87,12 @@ export function ProProfileCard() {
         </div>
         <div><span className={label}>Equipment you have run</span><ChipPicker items={catalog.equipment} value={p.equipment_experience} onChange={(v) => set('equipment_experience', v)} /></div>
         <div><span className={label}>Haul types</span><ChipPicker items={catalog.haul_types} value={p.haul_types} onChange={(v) => set('haul_types', v)} /></div>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-[var(--color-text)]">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-base text-[var(--color-text)]">
           <label className="flex items-center gap-2"><input type="checkbox" checked={p.team_ok} onChange={(e) => set('team_ok', e.target.checked)} className="h-4 w-4 accent-[var(--color-teal)]" /> Open to team driving</label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={p.open_to_work} onChange={(e) => set('open_to_work', e.target.checked)} className="h-4 w-4 accent-[var(--color-teal)]" /> Open to work</label>
           {p.open_to_work && (
-            <label className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">Available from
-              <input type="date" value={p.available_from ?? ''} onChange={(e) => set('available_from', e.target.value || null)} className="rounded-lg border border-[var(--color-cream-dark)] px-2 py-1 text-sm" />
+            <label className="flex items-center gap-2 text-[13px] text-[var(--color-text-muted)]">Available from
+              <input type="date" value={p.available_from ?? ''} onChange={(e) => set('available_from', e.target.value || null)} className="rounded-lg border border-[var(--color-cream-dark)] px-2 py-1 text-base" />
             </label>
           )}
           <label className="flex items-center gap-2"><input type="checkbox" checked={p.visibility === 'platform'} onChange={(e) => set('visibility', e.target.checked ? 'platform' : 'private')} className="h-4 w-4 accent-[var(--color-teal)]" /> Visible to companies on Shipmater</label>

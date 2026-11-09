@@ -48,6 +48,17 @@ return [
         'env'       => env('PLAID_ENV', 'sandbox'),
     ],
 
+    // Business verification (KYB), demo/compliance-checks.html
+    'middesk' => [
+        'test_key'       => env('MIDDESK_TEST_KEY', ''),
+        'live_key'       => env('MIDDESK_LIVE_KEY', ''),
+        'webhook_secret' => env('MIDDESK_WEBHOOK_SECRET', ''),
+    ],
+
+    'sam_gov' => [
+        'key' => env('SAM_GOV_API_KEY', ''),
+    ],
+
     'fmcsa' => [
         'key' => env('FMCSA_API_KEY'),
     ],

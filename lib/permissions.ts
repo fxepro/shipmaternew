@@ -39,8 +39,6 @@ export const PAGE_PERMISSION: Record<string, [string, 'see' | 'do']> = {
   // Receiver
   '/receiver/shipments':             ['loads.view', 'see'],
   '/receiver/tracking':              ['loads.view', 'see'],
-  '/receiver/company':               ['locations.manage', 'see'],
-  '/receiver/team':                  ['team.manage', 'do'],
   '/shipper/payments':               ['money.payments', 'see'],
   '/shipper/factoring':              ['money.payments', 'see'],
   // Carrier

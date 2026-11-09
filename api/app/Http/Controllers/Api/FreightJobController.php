@@ -430,12 +430,13 @@ class FreightJobController extends Controller
         abort_if($tempControlled && blank($data['sanitary_instructions'] ?? $job->sanitary_instructions), 422,
             'Temperature-controlled loads need written temperature and sanitation instructions for the carrier.');
 
-        // Hazmat posted by a shipper: its PHMSA registration, hazmat training and a 24-hour emergency phone
+        // Hazmat posted by a shipper: its PHMSA registration, hazmat training and a 24-hour emergency phone,
+        // as set in Admin, Compliance (an item switched off there is not asked for)
         $poster = Organization::find($job->posterId());
         if ($job->hazmat && $poster?->type === 'shipper') {
-            $items = collect(\App\Support\ComplianceRules::items($poster, false))->keyBy('key');
+            $items = collect(\App\Support\ComplianceRules::items($poster))->keyBy('key');
             $missing = collect(['hazmat_reg', 'hazmat_training', 'emergency_phone'])
-                ->filter(fn ($k) => in_array($items[$k]['state'] ?? 'missing', ['missing', 'expired'], true))
+                ->filter(fn ($k) => $items->has($k) && in_array($items[$k]['state'], ['missing', 'expired'], true))
                 ->map(fn ($k) => $items[$k]['label'] ?? $k)->values();
             abort_if($missing->isNotEmpty(), 422, 'Hazmat loads need these on your company profile first: ' . $missing->implode(', ') . '.');
         }

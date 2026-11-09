@@ -31,7 +31,7 @@ export function AuthoritiesPanel({ items, mode, orgId, onChange }: {
 }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ kind: 'broker', dot_number: '', mc_number: '' });
-  const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[var(--color-teal)]';
+  const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-1.5 text-base focus:outline-none focus:border-[var(--color-teal)]';
   const err = (e: any, m: string) => toast.error(e?.response?.data?.message ?? m);
 
   const add = async () => {
@@ -57,7 +57,7 @@ export function AuthoritiesPanel({ items, mode, orgId, onChange }: {
         <DataCard key={a.id} title={AUTHORITY_KIND[a.kind]} subtitle={a.is_primary && items.filter((i) => i.kind === a.kind).length > 1 ? 'Primary' : undefined}
           action={mode === 'admin' ? (
             <select value={a.status} onChange={(e) => update(a, { status: e.target.value })} aria-label="Authority status"
-              className="rounded-lg border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-2 py-1 text-xs">
+              className="rounded-lg border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-2 py-1 text-[13px]">
               {['pending', 'active', 'inactive', 'revoked'].map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           ) : undefined}
@@ -101,7 +101,7 @@ export function AuthoritiesPanel({ items, mode, orgId, onChange }: {
           </div>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-teal)] hover:underline">
+        <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-base font-medium text-[var(--color-teal)] hover:underline">
           <Plus size={14} /> Add another authority (e.g. broker)
         </button>
       )}

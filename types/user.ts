@@ -14,6 +14,9 @@ export interface Org {
   plan: OrgPlan;
   logo_url?: string;
   is_platform_tenant?: boolean;
+  /** Company approval (pending, approved, rejected, restricted ...) */
+  verification_status?: string | null;
+  created_at?: string | null;
 }
 
 /** Admin-only view of an org (includes Stripe settings). */

@@ -61,7 +61,7 @@ const inputCls = 'w-full rounded-xl border border-[var(--color-cream-dark)] bg-[
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.07em] text-[var(--color-text-muted)]">
+    <p className="mb-1.5 text-[13px] font-semibold uppercase tracking-[0.07em] text-[var(--color-text-muted)]">
       {children}{required && <span className="text-red-500 font-bold" aria-hidden="true"> *</span>}
     </p>
   );
@@ -76,7 +76,7 @@ function Input({ label, value, onChange, required, placeholder, type = 'text', h
       <Label required={required}>{label}</Label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} inputMode={inputMode}
         maxLength={maxLength} aria-required={required || undefined} className={inputCls} />
-      {hint && <p className="mt-1 text-xs text-[var(--color-text-faint)]">{hint}</p>}
+      {hint && <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">{hint}</p>}
     </div>
   );
 }
@@ -85,8 +85,8 @@ function Section({ title, children, note }: { title: string; children: React.Rea
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm font-semibold text-[var(--color-text)]">{title}</p>
-        {note && <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">{note}</p>}
+        <p className="text-base font-semibold text-[var(--color-text)]">{title}</p>
+        {note && <p className="mt-0.5 text-[13px] text-[var(--color-text-faint)]">{note}</p>}
       </div>
       {children}
     </div>
@@ -96,7 +96,7 @@ function Section({ title, children, note }: { title: string; children: React.Rea
 function SaveButton({ pending, label }: { pending: boolean; label: string }) {
   return (
     <div className="flex justify-end border-t border-[var(--color-cream-dark)] pt-4">
-      <button type="submit" disabled={pending} className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-light)] disabled:opacity-60">
+      <button type="submit" disabled={pending} className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-2.5 text-base font-semibold text-white hover:bg-[var(--color-teal-light)] disabled:opacity-60">
         {pending && <Loader2 size={13} className="animate-spin" />} {label}
       </button>
     </div>
@@ -170,8 +170,8 @@ export function BusinessDetailsForm({ home, personName }: {
             <label key={id} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 ${structure === id ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)]' : 'border-[var(--color-cream-dark)] hover:border-[var(--color-teal)]'}`}>
               <input type="radio" name="business_structure" checked={structure === id} onChange={() => set('business_structure', id)} className="mt-0.5 accent-[var(--color-teal)]" />
               <span>
-                <span className="block text-sm font-medium text-[var(--color-text)]">{label}</span>
-                <span className="block text-xs text-[var(--color-text-faint)]">{STRUCTURE_HINT[id]}</span>
+                <span className="block text-base font-medium text-[var(--color-text)]">{label}</span>
+                <span className="block text-[13px] text-[var(--color-text-faint)]">{STRUCTURE_HINT[id]}</span>
               </span>
             </label>
           ))}
@@ -242,7 +242,7 @@ export function BusinessDetailsForm({ home, personName }: {
             </div>
           ))}
           {f.owners.length < 4 && (
-            <button type="button" onClick={() => set('owners', [...f.owners, { first_name: '', last_name: '', email: '', percent_ownership: '' }])} className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-teal)]">
+            <button type="button" onClick={() => set('owners', [...f.owners, { first_name: '', last_name: '', email: '', percent_ownership: '' }])} className="flex items-center gap-1.5 text-base font-medium text-[var(--color-teal)]">
               <Plus size={14} /> Add an owner with 25% or more
             </button>
           )}
@@ -323,13 +323,13 @@ export function BankAccountForm() {
       {data.bank && !editing && (
         <div className="flex items-center justify-between rounded-xl border border-[var(--color-cream-dark)] px-4 py-3">
           <div>
-            <p className="text-sm font-medium text-[var(--color-text)]">{data.bank.bank_name ?? 'Bank account'} •••• {data.bank.last4}</p>
-            <p className="text-xs text-[var(--color-text-faint)]">{data.bank.holder_name} · routing {data.bank.routing_number}{data.bank.pending ? ' · sent to Stripe when you set up payouts' : ''}</p>
+            <p className="text-base font-medium text-[var(--color-text)]">{data.bank.bank_name ?? 'Bank account'} •••• {data.bank.last4}</p>
+            <p className="text-[13px] text-[var(--color-text-faint)]">{data.bank.holder_name} · routing {data.bank.routing_number}{data.bank.pending ? ' · sent to Stripe when you set up payouts' : ''}</p>
           </div>
-          {!locked && <button type="button" onClick={() => setEditing(true)} className="text-sm font-medium text-[var(--color-teal)]">Change</button>}
+          {!locked && <button type="button" onClick={() => setEditing(true)} className="text-base font-medium text-[var(--color-teal)]">Change</button>}
         </div>
       )}
-      {locked && data.bank && <p className="text-xs text-[var(--color-text-faint)]">To change it now, use your Stripe payouts dashboard.</p>}
+      {locked && data.bank && <p className="text-[13px] text-[var(--color-text-faint)]">To change it now, use your Stripe payouts dashboard.</p>}
 
       {showForm && !locked && (
         <form onSubmit={submit} className="space-y-4">
@@ -349,7 +349,7 @@ export function BankAccountForm() {
           </div>
           <div className="flex items-center justify-end gap-3 border-t border-[var(--color-cream-dark)] pt-4">
             {editing && <button type="button" onClick={() => setEditing(false)} className="text-sm text-[var(--color-text-muted)]">Cancel</button>}
-            <button type="submit" disabled={pending} className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-teal-light)] disabled:opacity-60">
+            <button type="submit" disabled={pending} className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-2.5 text-base font-semibold text-white hover:bg-[var(--color-teal-light)] disabled:opacity-60">
               {pending && <Loader2 size={13} className="animate-spin" />} Save bank account
             </button>
           </div>
@@ -412,16 +412,16 @@ export function PayoutStatus({ tabs, onGoTo }: { tabs: Record<Exclude<PayoutArea
                 {!g.missing.length && <Check size={11} />}
               </span>
               <div>
-                <p className="text-sm text-[var(--color-text)]">{g.label}</p>
-                {g.missing.length > 0 && <p className="text-xs text-[var(--color-text-faint)]">Still needed: {g.missing.join(', ')}</p>}
+                <p className="text-base text-[var(--color-text)]">{g.label}</p>
+                {g.missing.length > 0 && <p className="text-[13px] text-[var(--color-text-faint)]">Still needed: {g.missing.join(', ')}</p>}
               </div>
             </div>
-            {g.missing.length > 0 && <button type="button" onClick={() => onGoTo(g.tab.id)} className="shrink-0 text-xs font-medium text-[var(--color-teal)]">Go to {g.tab.label}</button>}
+            {g.missing.length > 0 && <button type="button" onClick={() => onGoTo(g.tab.id)} className="shrink-0 text-[13px] font-medium text-[var(--color-teal)]">Go to {g.tab.label}</button>}
           </li>
         ))}
       </ul>
 
-      {s.status === 'verified' && <p className="text-sm text-[var(--color-text)]">Payouts are on. Paid loads are deposited to {data.bank ? `${data.bank.bank_name ?? 'your bank'} •••• ${data.bank.last4}` : 'your bank account'}.</p>}
+      {s.status === 'verified' && <p className="text-base text-[var(--color-text)]">Payouts are on. Paid loads are deposited to {data.bank ? `${data.bank.bank_name ?? 'your bank'} •••• ${data.bank.last4}` : 'your bank account'}.</p>}
       {s.status === 'reviewing' && <p className="text-sm text-[var(--color-text-muted)]">Stripe is checking your details{s.reviewing.length ? ` (${s.reviewing.join(', ').toLowerCase()})` : ''}. This usually takes a few minutes, and this page updates when it&apos;s done.</p>}
       {s.status === 'rejected' && <p className="text-sm text-[var(--color-text-muted)]">Stripe couldn&apos;t open this payout account. Contact Shipmater support and we&apos;ll help sort it out.</p>}
       {s.status === 'action_needed' && s.connected && (
@@ -433,7 +433,7 @@ export function PayoutStatus({ tabs, onGoTo }: { tabs: Record<Exclude<PayoutArea
 
       {showButton && (
         <div className="flex items-center justify-between gap-4 border-t border-[var(--color-cream-dark)] pt-4">
-          <p className="text-xs text-[var(--color-text-faint)]">{ready ? 'Everything is ready.' : 'Finish the items above first.'}</p>
+          <p className="text-[13px] text-[var(--color-text-faint)]">{ready ? 'Everything is ready.' : 'Finish the items above first.'}</p>
           <button type="button" onClick={open} disabled={!ready || opening}
             className="flex items-center gap-2 rounded-xl border border-[var(--color-teal)] px-4 py-2 text-sm font-medium text-[var(--color-teal)] hover:bg-[var(--color-teal-pale)] disabled:cursor-not-allowed disabled:border-[var(--color-cream-dark)] disabled:text-[var(--color-text-faint)]">
             {opening && <Loader2 size={13} className="animate-spin" />} {buttonLabel}

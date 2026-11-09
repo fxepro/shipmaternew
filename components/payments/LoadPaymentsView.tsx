@@ -97,7 +97,7 @@ export function LoadPaymentsView({ view }: { view: PaymentsView }) {
   });
 
   const s = summary.data;
-  const connectHref = view === 'factor' ? '/factor/profile?tab=finance' : '/carrier/profile?tab=financial';
+  const connectHref = view === 'factor' ? '/factor/company?tab=finance' : '/carrier/company?tab=financial';
 
   return (
     <div className="space-y-5">

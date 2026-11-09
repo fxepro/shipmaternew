@@ -8,6 +8,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CarrierVehicle extends Model
 {
+    /** A new or changed VIN is decoded by NHTSA vPIC after the response (demo/compliance-checks.html) */
+    protected static function booted(): void
+    {
+        static::saved(function (CarrierVehicle $v) {
+            if (!$v->wasRecentlyCreated && !$v->wasChanged('vin')) return;
+            $id = $v->id;
+            dispatch(function () use ($id) {
+                if ($veh = CarrierVehicle::find($id)) \App\Services\Checks\RegistryChecks::vin($veh);
+            })->afterResponse();
+        });
+    }
+
     protected $fillable = [
         'carrier_id', 'owner_org_id', 'owner_user_id', 'operating_authority_id',
         'unit_number', 'vehicle_class', 'equipment_type', 'temp_min_f', 'temp_max_f', 'trailer_length_ft', 'status',
@@ -26,6 +38,8 @@ class CarrierVehicle extends Model
             'climate_controlled'   => 'boolean',
             'enclosed'             => 'boolean',
             'is_primary'           => 'boolean',
+            'vin_decoded'          => 'array',
+            'vin_checked_at'       => 'datetime',
             'gvwr'                 => 'decimal:2',
             'max_payload'          => 'decimal:2',
             'cargo_length'         => 'decimal:2',

@@ -96,6 +96,8 @@ const inputStyle = {
 interface InviteInfo {
   email: string;
   role: string;
+  role_label?: string;
+  role_help?: string | null;
   company_name: string | null;
   company_type: 'carrier' | 'shipper' | 'broker' | 'factor' | 'receiver' | null;
   expired: boolean;
@@ -104,7 +106,7 @@ interface InviteInfo {
 
 interface Claimable { id: number; name: string; type: string; city: string | null; state: string | null }
 
-const INVITE_ROLE_LABELS: Record<string, string> = { staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer' };
+const INVITE_ROLE_LABELS: Record<string, string> = { staff: 'Staff', dispatcher: 'Dispatcher', agent: 'Agent', driver: 'Driver', viewer: 'Viewer' };
 
 export default function RegisterPage() {
   return (
@@ -234,7 +236,7 @@ function RegisterForm() {
               background: inviteUsable ? B.tealBg : B.redBg, color: inviteUsable ? B.darkSec : B.red, fontSize: 14, lineHeight: 1.5,
             }}>
               {inviteUsable ? (
-                <>You&apos;re joining <strong>{invite.company_name ?? 'a company'}</strong> as <strong>{INVITE_ROLE_LABELS[invite.role] ?? invite.role}</strong>. Create your own login below.</>
+                <>You&apos;re joining <strong>{invite.company_name ?? 'a company'}</strong> as <strong>{invite.role_label ?? INVITE_ROLE_LABELS[invite.role] ?? invite.role}</strong>{invite.role_help ? ` (${invite.role_help.toLowerCase()})` : ''}. Create your own login below.</>
               ) : invite.accepted ? 'This invitation was already used. Sign in instead.' : 'This invitation has expired. Ask for a new one.'}
             </div>
           )}

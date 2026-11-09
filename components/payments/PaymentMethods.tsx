@@ -36,10 +36,10 @@ export function PaymentMethods({ purpose }: { purpose: 'shipper' | 'carrier' }) 
     <section className="card">
       <div className="card-head card-head-tint flex items-center justify-between gap-3 px-5 py-3">
         <p className="card-title">Cards and bank accounts</p>
-        {!adding && <button onClick={() => setAdding(true)} className="btn btn-navy flex items-center gap-1.5 text-xs"><Plus size={13} /> Add</button>}
+        {!adding && <button onClick={() => setAdding(true)} className="btn btn-navy flex items-center gap-1.5 text-[13px]"><Plus size={13} /> Add</button>}
       </div>
       <div className="card-body space-y-3">
-        <p className="text-xs text-[var(--color-text-muted)]">
+        <p className="text-[13px] text-[var(--color-text-muted)]">
           {purpose === 'shipper'
             ? 'Your default method pays your loads: a card is held the day before pickup and charged at delivery; a bank account is charged at delivery.'
             : 'Shipmater charges its fee on factored loads to your default method when your factor marks a load funded.'}
@@ -47,7 +47,7 @@ export function PaymentMethods({ purpose }: { purpose: 'shipper' | 'carrier' }) 
 
         {list.isLoading && <div className="skeleton h-14 rounded-lg" />}
         {!list.isLoading && methods.length === 0 && !adding && (
-          <p className="rounded-lg border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="rounded-lg border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-base text-amber-800">
             {purpose === 'shipper' ? 'No payment method yet. Add one before accepting bids or offers.' : 'No payment method yet. Add one so factored-load fees can be paid.'}
           </p>
         )}
@@ -57,16 +57,16 @@ export function PaymentMethods({ purpose }: { purpose: 'shipper' | 'carrier' }) 
             <div className="flex items-center gap-3">
               {m.type === 'card' ? <CreditCard size={18} className="text-[var(--color-teal)]" /> : <Landmark size={18} className="text-[var(--color-teal)]" />}
               <div>
-                <p className="text-sm font-medium">{m.label}</p>
-                <p className="text-xs text-[var(--color-text-faint)]">
+                <p className="text-base font-medium">{m.label}</p>
+                <p className="text-[13px] text-[var(--color-text-faint)]">
                   {m.type === 'card' ? `Expires ${m.exp_month}/${m.exp_year}` : `${m.account_type ?? 'Bank'} account · charged at delivery`}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {m.is_default
-                ? <span className="rounded-full bg-[var(--color-teal-pale)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-teal)]">Default</span>
-                : <button onClick={() => makeDefault.mutate(m.id)} className="flex items-center gap-1 text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Star size={12} /> Make default</button>}
+                ? <span className="rounded-full bg-[var(--color-teal-pale)] px-2.5 py-0.5 text-[13px] font-semibold text-[var(--color-teal)]">Default</span>
+                : <button onClick={() => makeDefault.mutate(m.id)} className="flex items-center gap-1 text-[13px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Star size={12} /> Make default</button>}
               <button onClick={() => { if (confirm(`Remove ${m.label}?`)) remove.mutate(m.id); }} className="text-[var(--color-text-faint)] hover:text-red-600"><Trash2 size={14} /></button>
             </div>
           </div>
@@ -85,9 +85,9 @@ export function PaymentMethods({ purpose }: { purpose: 'shipper' | 'carrier' }) 
 function StripeAdd({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const setup = useQuery({ queryKey: ['setup-intent'], queryFn: () => paymentApi.setupIntent().then((r) => r.data.client_secret as string), staleTime: 0, gcTime: 0 });
 
-  if (!stripePromise) return <p className="text-sm text-red-700">Stripe is not configured (NEXT_PUBLIC_STRIPE_PK).</p>;
+  if (!stripePromise) return <p className="text-base text-red-700">Stripe is not configured (NEXT_PUBLIC_STRIPE_PK).</p>;
   if (setup.isLoading) return <div className="skeleton h-40 rounded-lg" />;
-  if (!setup.data) return <p className="text-sm text-red-700">Could not start. {errorMessage(setup.error)}</p>;
+  if (!setup.data) return <p className="text-base text-red-700">Could not start. {errorMessage(setup.error)}</p>;
 
   return (
     <Elements stripe={stripePromise} options={{ clientSecret: setup.data, appearance: { theme: 'stripe', variables: { colorPrimary: '#2A8C8A', borderRadius: '10px' } } }}>
@@ -122,8 +122,8 @@ function StripeAddForm({ onDone, onCancel }: { onDone: () => void; onCancel: () 
     <div className="space-y-3 rounded-lg border border-[var(--color-cream-dark)] p-4">
       <PaymentElement />
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-xs font-semibold">Cancel</button>
-        <button onClick={submit} disabled={!stripe || saving} className="btn btn-navy flex items-center gap-1.5 text-xs disabled:opacity-50">
+        <button onClick={onCancel} className="rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-[13px] font-semibold">Cancel</button>
+        <button onClick={submit} disabled={!stripe || saving} className="btn btn-navy flex items-center gap-1.5 text-[13px] disabled:opacity-50">
           {saving && <Loader2 size={12} className="animate-spin" />} Save
         </button>
       </div>
@@ -145,16 +145,16 @@ function FakeAdd({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
   return (
     <div className="space-y-3 rounded-lg border border-dashed border-[var(--color-cream-dark)] p-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-amber-700">Test mode: no Stripe. Ending 0002 declines.</p>
+        <p className="text-[13px] font-semibold text-amber-700">Test mode: no Stripe. Ending 0002 declines.</p>
         <button onClick={onCancel}><X size={14} /></button>
       </div>
       <div className="flex gap-2">
-        <select value={type} onChange={(e) => setType(e.target.value as 'card' | 'bank')} className="rounded-lg border border-[var(--color-cream-dark)] px-2 py-1.5 text-sm">
+        <select value={type} onChange={(e) => setType(e.target.value as 'card' | 'bank')} className="rounded-lg border border-[var(--color-cream-dark)] px-2 py-1.5 text-base">
           <option value="card">Card</option>
           <option value="bank">Bank account</option>
         </select>
-        <input value={last4} onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Last 4" className="w-24 rounded-lg border border-[var(--color-cream-dark)] px-2 py-1.5 text-sm" />
-        <button onClick={() => save.mutate()} disabled={last4.length !== 4 || save.isPending} className="btn btn-navy text-xs disabled:opacity-50">Save</button>
+        <input value={last4} onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Last 4" className="w-24 rounded-lg border border-[var(--color-cream-dark)] px-2 py-1.5 text-base" />
+        <button onClick={() => save.mutate()} disabled={last4.length !== 4 || save.isPending} className="btn btn-navy text-[13px] disabled:opacity-50">Save</button>
       </div>
     </div>
   );

@@ -133,7 +133,7 @@ class PayoutSetupController extends Controller
     public function submit(Request $request): JsonResponse
     {
         $org = $this->org($request);
-        $base = rtrim((string) config('app.frontend_url'), '/') . ($org->type === 'factor' ? '/factor/profile?tab=finance' : '/carrier/profile?tab=financial');
+        $base = rtrim((string) config('app.frontend_url'), '/') . ($org->type === 'factor' ? '/factor/company?tab=finance' : '/carrier/company?tab=financial');
 
         return response()->json(['url' => $this->onboarding->submit($org, $base . '&stripe=success', $base . '&stripe=refresh')]);
     }

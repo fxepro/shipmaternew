@@ -22,6 +22,8 @@ Artisan::command('people:refresh-checks', function () {
 
 Schedule::command('people:refresh-checks')->dailyAt('06:00');
 Schedule::command('compliance:enforce-deadlines')->dailyAt('06:15');
+// FMCSA and SAM.gov looked up again so a lapsed authority, bond or registration shows (demo/compliance-checks.html)
+Schedule::command('compliance:refresh-checks')->dailyAt('05:30');
 
 // Load payments: card holds the day before pickup, and charges before a hold expires (docs/fees-and-billing.md)
 Artisan::command('payments:run', function () {

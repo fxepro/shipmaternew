@@ -2,7 +2,7 @@ import { CheckCircle, Clock, XCircle, AlertTriangle, Minus } from 'lucide-react'
 
 /** Company roles (docs/people-types-and-checks.md) */
 export const ROLE_LABELS: Record<string, string> = {
-  owner: 'Owner', staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer',
+  owner: 'Owner', staff: 'Staff', dispatcher: 'Dispatcher', agent: 'Agent', driver: 'Driver', viewer: 'Viewer',
 };
 
 export const ROLES_BY_TYPE: Record<'carrier' | 'shipper' | 'factor', string[]> = {

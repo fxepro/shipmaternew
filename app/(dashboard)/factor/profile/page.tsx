@@ -1,19 +1,29 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Landmark, Users, Loader2, Save, ShieldCheck } from 'lucide-react';
+import { Building2, Landmark, Users, Loader2, Save, ShieldCheck, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, orgApi, payoutsApi } from '@/lib/api';
 import { TeamManager } from '@/components/team/TeamManager';
 import { ComplianceItems, type ComplianceItem } from '@/components/compliance/ComplianceItems';
 import { BusinessDetailsForm, BankAccountForm, PayoutStatus } from '@/components/payouts/PayoutSetup';
+import { MyVerification } from '@/components/people/MyVerification';
+import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
+import { PersonalDetails } from '@/components/account/PersonalDetails';
 
-type Tab = 'company' | 'finance' | 'compliance' | 'team';
+type Tab = 'personal' | 'verification' | 'company' | 'finance' | 'compliance' | 'team';
 
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'company', label: 'Company', icon: Building2 },
+/** Profile (/factor/profile): the signed-in person */
+const PROFILE_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'personal',     label: 'Personal',     icon: User        },
+  { id: 'verification', label: 'Verification', icon: ShieldCheck },
+];
+
+/** Company (/factor/company): the factoring company */
+const COMPANY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'company', label: 'Business', icon: Building2 },
   { id: 'finance', label: 'Finance', icon: Landmark  },
   { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
   { id: 'team',    label: 'Team',    icon: Users     },
@@ -40,7 +50,7 @@ function FieldCard({ title, note, fields, values, onChange }: {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {fields.map((f) => (
             <label key={f.key} className={`block ${f.wide ? 'sm:col-span-2' : ''}`}>
-              <span className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">{f.label}</span>
+              <span className="mb-1 block text-[13px] font-medium text-[var(--color-text-muted)]">{f.label}</span>
               <input type={f.type ?? 'text'} inputMode={f.inputMode} value={values[f.key] ?? ''} placeholder={f.placeholder}
                 onChange={(e) => onChange(f.key, e.target.value)} className="profile-input" />
             </label>
@@ -57,7 +67,7 @@ function SaveBar({ pending, updatedAt }: { pending: boolean; updatedAt?: string 
       <button type="submit" disabled={pending} className="btn btn-navy flex items-center gap-2 disabled:opacity-60">
         {pending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
       </button>
-      {updatedAt && <span className="text-xs text-[var(--color-text-faint)]">Last saved {new Date(updatedAt).toLocaleString()}</span>}
+      {updatedAt && <span className="text-[13px] text-[var(--color-text-faint)]">Last saved {new Date(updatedAt).toLocaleString()}</span>}
     </div>
   );
 }
@@ -176,18 +186,18 @@ function FinanceTab({ onGoTo }: { onGoTo: (tab: string) => void }) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {ACH_FIELDS.map((f) => (
               <label key={f.key} className={`block ${f.wide ? 'sm:col-span-2' : ''}`}>
-                <span className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">{f.label}</span>
+                <span className="mb-1 block text-[13px] font-medium text-[var(--color-text-muted)]">{f.label}</span>
                 <input value={form[f.key] ?? ''} placeholder={f.placeholder} inputMode={f.inputMode}
                   onChange={(e) => set(f.key, e.target.value)} className="profile-input" />
               </label>
             ))}
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">Account number</span>
+              <span className="mb-1 block text-[13px] font-medium text-[var(--color-text-muted)]">Account number</span>
               <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} inputMode="numeric" autoComplete="off"
                 placeholder={form.account_last4 ? `On file: •••• ${form.account_last4} (type to replace)` : '4–17 digits'} className="profile-input" />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">Account type</span>
+              <span className="mb-1 block text-[13px] font-medium text-[var(--color-text-muted)]">Account type</span>
               <select value={form.account_type ?? ''} onChange={(e) => set('account_type', e.target.value)} className="profile-select">
                 <option value="">Select…</option>
                 <option value="checking">Checking</option>
@@ -196,13 +206,13 @@ function FinanceTab({ onGoTo }: { onGoTo: (tab: string) => void }) {
             </label>
             {WIRE_FIELDS.map((f) => (
               <label key={f.key} className="block">
-                <span className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">{f.label}</span>
+                <span className="mb-1 block text-[13px] font-medium text-[var(--color-text-muted)]">{f.label}</span>
                 <input value={form[f.key] ?? ''} placeholder={f.placeholder} inputMode={f.inputMode}
                   onChange={(e) => set(f.key, e.target.value)} className="profile-input" />
               </label>
             ))}
           </div>
-          <p className="mt-3 text-xs text-[var(--color-text-faint)]">The account number is stored encrypted. Only the last 4 digits are shown back.</p>
+          <p className="mt-3 text-[13px] text-[var(--color-text-faint)]">The account number is stored encrypted. Only the last 4 digits are shown back.</p>
         </div>
       </section>
 
@@ -214,14 +224,14 @@ function FinanceTab({ onGoTo }: { onGoTo: (tab: string) => void }) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {REMIT_FIELDS.map((f) => (
               <label key={f.key} className="block">
-                <span className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">{f.label}</span>
+                <span className="mb-1 block text-[13px] font-medium text-[var(--color-text-muted)]">{f.label}</span>
                 <input type={f.type} value={form[f.key] ?? ''} placeholder={f.placeholder}
                   onChange={(e) => set(f.key, e.target.value)} className="profile-input" />
               </label>
             ))}
           </div>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">Payment instructions for shippers</span>
+            <span className="mb-1 block text-[13px] font-medium text-[var(--color-text-muted)]">Payment instructions for shippers</span>
             <textarea value={form.instructions ?? ''} onChange={(e) => set('instructions', e.target.value)} rows={3} maxLength={2000}
               placeholder="e.g. Include the load number and carrier name in the payment memo." className="profile-input" />
           </label>
@@ -237,7 +247,7 @@ function FinanceTab({ onGoTo }: { onGoTo: (tab: string) => void }) {
     <section className="card">
       <div className="card-body">
         <PayoutStatus
-          tabs={{ person: { id: 'company', label: 'Company' }, business: { id: 'company', label: 'Company' }, bank: { id: 'finance', label: 'Finance' } }}
+          tabs={{ person: { id: 'company', label: 'Business' }, business: { id: 'company', label: 'Business' }, bank: { id: 'finance', label: 'Finance' } }}
           onGoTo={onGoTo}
         />
       </div>
@@ -265,15 +275,26 @@ function MyCompliance() {
 function Account() {
   const router = useRouter();
   const params = useSearchParams();
+  const companyPage = (usePathname() ?? '').endsWith('/company');
+  const base = companyPage ? '/factor/company' : '/factor/profile';
+  const TABS = companyPage ? COMPANY_TABS : PROFILE_TABS;
   const requested = params.get('tab') as Tab | null;
-  const tab: Tab = TABS.some((t) => t.id === requested) ? (requested as Tab) : 'company';
+  const tab: Tab = TABS.some((t) => t.id === requested) ? (requested as Tab) : TABS[0].id;
+  /** A tab that belongs on the other page (old links) opens that page */
+  const goTo = (t: string) => {
+    const onProfile = PROFILE_TABS.some((x) => x.id === t);
+    router.replace(`${onProfile ? '/factor/profile' : '/factor/company'}?tab=${t}`);
+  };
+  useEffect(() => {
+    if (requested && !TABS.some((t) => t.id === requested) && [...PROFILE_TABS, ...COMPANY_TABS].some((t) => t.id === requested)) goTo(requested);
+  }, [requested, companyPage]); // eslint-disable-line react-hooks/exhaustive-deps
   const qc = useQueryClient();
   const stripeResult = params.get('stripe');
 
   // Back from Stripe's review page: read its answer
   useEffect(() => {
     if (!stripeResult) return;
-    router.replace('/factor/profile?tab=finance');
+    router.replace('/factor/company?tab=finance');
     if (stripeResult !== 'success') { toast('Stripe setup was not finished. Continue whenever you are ready.'); return; }
     payoutsApi.refresh().then((r) => {
       qc.setQueryData(['payout-setup'], r.data.data);
@@ -285,14 +306,16 @@ function Account() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h1 className="page-title">Account Settings</h1>
-        <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">Your factoring company&apos;s details, how shippers pay you, and your team</p>
+        <h1 className="page-title">{companyPage ? 'Company' : 'Profile'}</h1>
+        <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">{companyPage ? 'Your factoring company: its details, how shippers pay you, compliance and your team' : 'You: your personal details and your own verification'}</p>
       </div>
+
+      {companyPage ? <CompanyHeader type="factor" /> : <PersonHeader />}
 
       <div className="flex gap-1 rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-1.5">
         {TABS.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => router.replace(`/factor/profile?tab=${id}`)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${
+          <button key={id} onClick={() => router.replace(`${base}?tab=${id}`)}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[length:var(--text-nav)] font-semibold transition-all ${
               tab === id ? 'bg-[var(--color-slate)] text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
             }`}>
             <Icon size={14} />{label}
@@ -300,8 +323,10 @@ function Account() {
         ))}
       </div>
 
+      {tab === 'personal' && <PersonalDetails />}
+      {tab === 'verification' && <MyVerification embedded />}
       {tab === 'company' && <CompanyTab />}
-      {tab === 'finance' && <FinanceTab onGoTo={(t) => router.replace(`/factor/profile?tab=${t}`)} />}
+      {tab === 'finance' && <FinanceTab onGoTo={goTo} />}
       {tab === 'compliance' && <MyCompliance />}
       {tab === 'team'    && <TeamManager type="factor" />}
     </div>

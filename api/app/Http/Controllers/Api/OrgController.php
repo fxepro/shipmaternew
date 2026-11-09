@@ -114,7 +114,7 @@ class OrgController extends Controller
                 ];
             });
 
-        return response()->json(['data' => $members]);
+        return response()->json(['data' => $members, 'roles' => $this->roleOptions($org)]);
     }
 
     // PUT /api/v1/org/members/{id}
@@ -129,6 +129,7 @@ class OrgController extends Controller
 
         // Cannot change owner role
         abort_if($member->user_id === $user->currentOrg->owner_id, 403, 'Cannot change org owner role.');
+        abort_if($member->user_id === $user->id, 403, 'You cannot change your own role.');
 
         $validated = $request->validate([
             'role' => ['required', Rule::in($this->assignableRoles($user->currentOrg))],
@@ -155,6 +156,13 @@ class OrgController extends Controller
 
         $member->delete();
 
+        // They can no longer act for this company: switch them to another company they belong to, or none
+        $removed = $member->user;
+        if ($removed && $removed->current_org_id === $member->org_id) {
+            $next = OrgMember::where('user_id', $removed->id)->where('status', 'active')->with('org')->first();
+            $removed->forceFill(['current_org_id' => $next?->org_id] + ($next?->org && $removed->role !== 'admin' ? ['role' => $next->org->type] : []))->save();
+        }
+
         return response()->json(['message' => 'Member removed.']);
     }
 
@@ -164,17 +172,13 @@ class OrgController extends Controller
         $org = $request->user()->currentOrg;
         abort_if(!$org, 404);
 
+        // Pending, and expired in the last 30 days so they can be resent
         $invitations = OrgInvitation::where('org_id', $org->id)
             ->whereNull('accepted_at')
-            ->where('expires_at', '>', now())
+            ->where('expires_at', '>', now()->subDays(30))
+            ->orderByDesc('created_at')
             ->get()
-            ->map(fn($i) => [
-                'id'         => $i->id,
-                'email'      => $i->email,
-                'role'       => $i->role,
-                'expires_at' => $i->expires_at->toDateString(),
-                'invite_url' => OrgInvitationNotification::url($i),
-            ]);
+            ->map(fn($i) => $this->invitationRow($i));
 
         return response()->json(['data' => $invitations]);
     }
@@ -191,10 +195,16 @@ class OrgController extends Controller
             'email' => ['required', 'email'],
             'role'  => ['required', Rule::in($this->assignableRoles($org))],
         ]);
+        $validated['email'] = strtolower(trim($validated['email']));
+
+        $isMember = OrgMember::where('org_id', $org->id)
+            ->whereHas('user', fn ($q) => $q->whereRaw('lower(email) = ?', [$validated['email']]))->exists();
+        abort_if($isMember, 422, 'This person is already on your team.');
 
         // Delete any existing pending invite for this email
         OrgInvitation::where('org_id', $org->id)
-            ->where('email', $validated['email'])
+            ->whereRaw('lower(email) = ?', [$validated['email']])
+            ->whereNull('accepted_at')
             ->delete();
 
         $invitation = OrgInvitation::create([
@@ -206,28 +216,59 @@ class OrgController extends Controller
             'expires_at' => now()->addDays(7),
         ]);
 
+        $this->sendInvitation($invitation, $org, $user->name);
+
+        return response()->json(['data' => $this->invitationRow($invitation)], 201);
+    }
+
+    // POST /api/v1/org/invitations/{id}/resend
+    // Emails the same link again and gives it another 7 days.
+    public function resendInvitation(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user->canDo('team.manage'), 403);
+
+        $invitation = OrgInvitation::where('org_id', $user->current_org_id)->where('id', $id)->whereNull('accepted_at')->firstOrFail();
+        $invitation->update(['expires_at' => now()->addDays(7), 'invited_by' => $user->id]);
+        $this->sendInvitation($invitation, $user->currentOrg, $user->name);
+
+        return response()->json(['data' => $this->invitationRow($invitation)]);
+    }
+
+    private function sendInvitation(OrgInvitation $invitation, Organization $org, string $invitedBy): void
+    {
         try {
             Notification::route('mail', $invitation->email)
-                ->notify(new OrgInvitationNotification($invitation, PersonChecks::companyName($org), $user->name));
+                ->notify(new OrgInvitationNotification($invitation, PersonChecks::companyName($org), $invitedBy));
         } catch (\Throwable $e) {
             Log::warning('Invitation email failed', ['invitation_id' => $invitation->id, 'error' => $e->getMessage()]);
         }
+    }
 
-        return response()->json([
-            'data' => [
-                'id'         => $invitation->id,
-                'email'      => $invitation->email,
-                'role'       => $invitation->role,
-                'expires_at' => $invitation->expires_at->toDateString(),
-                'invite_url' => OrgInvitationNotification::url($invitation),
-            ],
-        ], 201);
+    private function invitationRow(OrgInvitation $i): array
+    {
+        return [
+            'id'         => $i->id,
+            'email'      => $i->email,
+            'role'       => $i->role,
+            'expires_at' => $i->expires_at->toDateString(),
+            'expired'    => $i->expires_at->isPast(),
+            'invite_url' => OrgInvitationNotification::url($i),
+        ];
     }
 
     /** Roles an owner or staff member can give: carriers have dispatchers and drivers, shippers don't. */
     private function assignableRoles(?Organization $org): array
     {
         return array_values(array_diff(PersonChecks::ROLES[$org?->type] ?? ['staff', 'viewer'], ['owner']));
+    }
+
+    /** The roles a company can give, with a label and what each does (for the invite and role pickers) */
+    private function roleOptions(?Organization $org): array
+    {
+        return array_map(fn ($r) => [
+            'value' => $r, 'label' => PersonChecks::ROLE_LABELS[$r] ?? ucfirst($r), 'help' => PersonChecks::ROLE_HELP[$r] ?? '',
+        ], $this->assignableRoles($org));
     }
 
     // GET /api/v1/invitations/{token}   (public)
@@ -242,6 +283,8 @@ class OrgController extends Controller
         return response()->json(['data' => [
             'email'        => $invitation->email,
             'role'         => $invitation->role,
+            'role_label'   => PersonChecks::ROLE_LABELS[$invitation->role] ?? $invitation->role,
+            'role_help'    => PersonChecks::ROLE_HELP[$invitation->role] ?? null,
             'company_name' => PersonChecks::companyName($org),
             'company_type' => $org?->type,
             'expired'      => $invitation->expires_at->isPast(),
@@ -282,16 +325,18 @@ class OrgController extends Controller
             'This invitation was sent to a different email address.'
         );
 
-        // Upsert membership — idempotent if already a member.
-        OrgMember::firstOrCreate(
-            ['org_id' => $invitation->org_id, 'user_id' => $user->id],
-            ['role' => $invitation->role, 'status' => 'active', 'joined_at' => now()]
-        );
+        // Join, or take the invited role if already a member (never for the owner)
+        $org    = Organization::find($invitation->org_id);
+        $member = OrgMember::firstOrNew(['org_id' => $invitation->org_id, 'user_id' => $user->id]);
+        if ($org?->owner_id !== $user->id) $member->role = $invitation->role;
+        $member->status = 'active';
+        $member->joined_at ??= now();
+        $member->save();
 
         $invitation->update(['accepted_at' => now()]);
 
-        // Switch the user's active org to the one they just joined.
-        $user->update(['current_org_id' => $invitation->org_id]);
+        // Switch the user's active company to the one they just joined; their portal follows its type
+        $user->update(['current_org_id' => $invitation->org_id] + ($org && $user->role !== 'admin' ? ['role' => $org->type] : []));
         PersonChecks::refresh($user);
 
         return response()->json([

@@ -20,6 +20,23 @@ class Organization extends Model
         });
         // Profile forms still write DOT / MC / insurance on the company; mirror them onto its primary authority
         static::saved(fn (Organization $o) => \App\Services\Authorities::syncFromOrg($o));
+        // Outside checks (KYB, FMCSA broker authority, SAM.gov) run again when the details they check change,
+        // after the response so saving stays fast (demo/compliance-checks.html)
+        static::saved(function (Organization $o) {
+            if (!$o->owner_id) return;
+            $kyb = $o->wasRecentlyCreated || $o->wasChanged(['type', 'name', 'legal_name', 'tax_id', 'street', 'city', 'state', 'zip']);
+            $broker = $o->type === 'broker' && ($o->wasRecentlyCreated || $o->wasChanged(['type', 'fmcsa_broker_mc']));
+            $sam = $o->wasChanged('sam_gov_number') && $o->sam_gov_number;
+            if (!$kyb && !$broker && !$sam) return;
+            $id = $o->id;
+            dispatch(function () use ($id, $kyb, $broker, $sam) {
+                $org = Organization::find($id);
+                if (!$org) return;
+                if ($kyb) \App\Services\Checks\Kyb::run($org);
+                if ($broker) \App\Services\Checks\RegistryChecks::fmcsaBroker($org);
+                if ($sam) \App\Services\Checks\RegistryChecks::samGov($org);
+            })->afterResponse();
+        });
     }
 
     protected $fillable = [

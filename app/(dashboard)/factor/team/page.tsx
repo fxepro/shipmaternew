@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-/** Team now lives under Account → Team */
+/** Team is a tab in Company */
 export default function FactorTeamPage() {
-  redirect('/factor/profile?tab=team');
+  redirect('/factor/company?tab=team');
 }

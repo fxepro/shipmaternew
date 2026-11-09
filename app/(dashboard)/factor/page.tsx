@@ -40,7 +40,7 @@ export default function FactorDashboard() {
             <p className="text-sm font-semibold text-[var(--color-text)]">Finish your company details</p>
             <p className="text-sm text-[var(--color-text-muted)]">Carriers and shippers see your EIN, phone, email and address on NOAs.</p>
           </div>
-          <Link href="/factor/profile?tab=company" className="btn btn-navy flex items-center gap-1.5">Company details <ArrowRight size={14} /></Link>
+          <Link href="/factor/company?tab=company" className="btn btn-navy flex items-center gap-1.5">Company details <ArrowRight size={14} /></Link>
         </div>
       )}
 

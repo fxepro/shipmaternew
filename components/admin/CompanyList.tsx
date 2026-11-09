@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Building2, Truck, Landmark, PackageCheck, Handshake } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { CompanyStatusBadge, BackgroundBadge, COMPANY_STATUSES } from '@/components/admin/CompanyBadges';
+import { CompanyStatusBadge, COMPANY_STATUSES } from '@/components/admin/CompanyBadges';
 
 type OrgType = 'carrier' | 'shipper' | 'factor' | 'receiver' | 'broker';
 
@@ -20,7 +20,6 @@ interface CompanyRow {
   mc_number: string | null;
   ein: string | null;
   verification_status: string;
-  background_check_status: string;
   city: string | null;
   state: string | null;
   locations: number;
@@ -77,7 +76,7 @@ export function CompanyList({ initialType = 'all', scope = 'companies' }: { init
         <p className="mt-1 text-sm text-[var(--color-text-faint)]">
           {orgs
             ? 'Every organization on Shipmater: our customers and the third parties connected to them, such as receivers.'
-            : 'Companies signed up on Shipmater. Shippers and carriers need a clear background check before approval, and a carrier also needs its owner approved in People.'}
+            : 'Companies signed up on Shipmater. Each is approved automatically once its required compliance checks pass (Admin Console, Compliance).'}
         </p>
       </div>
 
@@ -117,7 +116,7 @@ export function CompanyList({ initialType = 'all', scope = 'companies' }: { init
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-cream-dark)] bg-[var(--color-slate)]">
-                {[orgs ? 'Organization' : 'Company', 'Type', 'Owner', reviewTab ? 'DOT / MC / EIN' : 'Locations', 'Members', 'Background', 'Status', 'Added', ''].map((h) => (
+                {[orgs ? 'Organization' : 'Company', 'Type', 'Owner', reviewTab ? 'DOT / MC / EIN' : 'Locations', 'Members', 'Status', 'Added', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-sage-light)]">{h}</th>
                 ))}
               </tr>
@@ -153,7 +152,6 @@ export function CompanyList({ initialType = 'all', scope = 'companies' }: { init
                       ) : (c.ein ?? '—')) : `${c.locations} location${c.locations === 1 ? '' : 's'} · ${c.contacts} contact${c.contacts === 1 ? '' : 's'}`}
                     </td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{c.members}</td>
-                    <td className="px-4 py-3">{reviewed ? <BackgroundBadge status={c.background_check_status} /> : <span className="text-xs text-[var(--color-text-faint)]">Not required</span>}</td>
                     <td className="px-4 py-3">
                       {reviewed ? <CompanyStatusBadge status={c.verification_status} />
                         : c.third_party ? <span className="badge badge-muted">Third party</span>

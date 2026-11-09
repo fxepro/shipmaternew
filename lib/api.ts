@@ -78,7 +78,7 @@ api.interceptors.response.use(
     // Posting a load without a subscription: say why and where to fix it
     if (typeof window !== 'undefined' && err?.response?.data?.code === 'subscription_required') {
       import('sonner').then(({ toast }) => toast.error('You need an active subscription to post loads.', {
-        action: { label: 'Subscribe', onClick: () => { window.location.href = '/shipper/profile?tab=subscription'; } },
+        action: { label: 'Subscribe', onClick: () => { window.location.href = `${window.location.pathname.startsWith('/broker') ? '/broker' : '/shipper'}/company?tab=subscription`; } },
       }));
     }
     // The role matrix refused an action (Settings, Roles & Permissions): say so once.
@@ -376,6 +376,7 @@ export const orgApi = {
   invite:            (email: string, role: string)              => api.post('/api/v1/org/invitations', { email, role }),
   acceptInvitation:  (token: string)                            => api.post('/api/v1/org/invitations/accept', { token }),
   cancelInvitation:  (id: number)                               => api.delete(`/api/v1/org/invitations/${id}`),
+  resendInvitation:  (id: number)                               => api.post(`/api/v1/org/invitations/${id}/resend`),
   switchOrg:         (orgId: number)                            => api.put('/api/v1/org/switch', { org_id: orgId }),
   myOrganizations:   ()                                         => api.get('/api/v1/user/organizations'),
   /** Public: what an invite link is for, shown before signing up or signing in */
@@ -483,6 +484,13 @@ export const backgroundApi = {
   settings:       () => api.get('/api/v1/admin/settings/background'),
   updateSettings: (data: Record<string, unknown>) => api.put('/api/v1/admin/settings/background', data),
   test:           (provider: string) => api.post('/api/v1/admin/settings/background/test', { provider }),
+};
+
+// ── Admin → Settings → Business verification (KYB: EIN, Secretary of State, address, OFAC) ──
+export const kybApi = {
+  settings:       () => api.get('/api/v1/admin/settings/kyb'),
+  updateSettings: (data: { provider: string; mode: 'test' | 'live' }) => api.put('/api/v1/admin/settings/kyb', data),
+  test:           (provider: string) => api.post('/api/v1/admin/settings/kyb/test', { provider }),
 };
 
 // ── Admin: financial reporting ─────────────────────────────────────────

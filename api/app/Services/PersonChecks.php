@@ -25,6 +25,15 @@ class PersonChecks
         'receiver' => ['owner', 'staff', 'viewer'],
     ];
 
+    /** What each role does, shown when inviting someone or changing their role */
+    public const ROLE_HELP = [
+        'staff'      => 'Manages the account, team and settings',
+        'dispatcher' => 'Finds loads, bids and assigns drivers',
+        'agent'      => 'Posts loads for customers, books carriers and manages carrier contracts',
+        'driver'     => 'Moves the freight; needs Shipmater approval',
+        'viewer'     => 'Read-only',
+    ];
+
     public const ROLE_LABELS = [
         'owner' => 'Owner', 'staff' => 'Staff', 'dispatcher' => 'Dispatcher', 'agent' => 'Agent', 'driver' => 'Driver', 'viewer' => 'Viewer',
     ];

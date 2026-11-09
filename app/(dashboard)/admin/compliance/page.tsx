@@ -9,7 +9,9 @@ import { api } from '@/lib/api';
 
 type OrgType = 'shipper' | 'carrier' | 'factor' | 'broker' | 'receiver';
 type Setting = 'required' | 'optional' | 'deferred' | 'off';
-interface Check { key: string; label: string; group: string; default: 'required' | 'optional'; setting: Setting; defer_days: number; changed: boolean }
+interface Check { key: string; label: string; group: string; default: 'required' | 'optional'; setting: Setting; defer_days: number; changed: boolean;
+  /** What it is checked against (demo/compliance-checks.html) and whether automatically or by Shipmater review */
+  check: string | null; method: 'auto' | 'review' }
 interface Promotion {
   id: number; name: string; types: OrgType[]; settings: Partial<Record<OrgType, Record<string, 'deferred' | 'off'>>>;
   starts_at: string; ends_at: string; catch_up_days: number; created_by: string | null; status: 'scheduled' | 'running' | 'ended'; joined: number;
@@ -122,6 +124,7 @@ function Compliance() {
                   <tr className="border-b border-[var(--color-cream-dark)] text-left text-[11px] uppercase tracking-[0.05em] text-[var(--color-text-faint)]">
                     <th className="px-4 py-2 font-medium">Check</th>
                     <th className="px-2 py-2 font-medium">Area</th>
+                    <th className="px-2 py-2 font-medium">Checked against</th>
                     <th className="w-48 min-w-[12rem] px-2 py-2 font-medium">Setting</th>
                     <th className="px-2 py-2 font-medium">Days to pass</th>
                     {data.active_promotion && <th className="px-2 py-2 font-medium">Open season</th>}
@@ -135,6 +138,12 @@ function Compliance() {
                       <tr key={c.key} className="border-b border-[var(--color-cream-dark)] last:border-b-0">
                         <td className={`px-4 py-2 font-medium ${c.setting === 'off' ? 'text-[var(--color-text-faint)] line-through' : 'text-[var(--color-text)]'}`}>{c.label}</td>
                         <td className="px-2 py-2 text-[var(--color-text-muted)]">{c.group}</td>
+                        <td className="px-2 py-2 text-xs text-[var(--color-text-muted)]">
+                          <span className="block">{c.check ?? '—'}</span>
+                          <span className={`mt-0.5 inline-block rounded-full px-1.5 py-px text-[10px] font-semibold ${c.method === 'auto' ? 'bg-emerald-50 text-emerald-700' : 'bg-[var(--color-teal-pale)] text-[var(--color-slate)]'}`}>
+                            {c.method === 'auto' ? 'Automatic' : 'Shipmater review'}
+                          </span>
+                        </td>
                         <td className="px-2 py-2">
                           <div className="relative w-44">
                             <select value={c.setting} disabled={setCheck.isPending} aria-label={`${c.label} setting`}

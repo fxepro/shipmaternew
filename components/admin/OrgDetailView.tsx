@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { UserStatusBadge } from '@/components/admin/UserStatusBadge';
 import { Table, display, type Row } from '@/components/admin/DetailParts';
-import { CompanyStatusBadge, BackgroundBadge, BACKGROUND_RESULTS, BACKGROUND_PASSED } from '@/components/admin/CompanyBadges';
+import { CompanyStatusBadge } from '@/components/admin/CompanyBadges';
 import { PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
 import { formatCurrency } from '@/lib/utils';
 import { OrgProfile } from '@/components/orgs/OrgProfile';
@@ -28,7 +28,6 @@ interface CompanyDetail {
   company_profile: Row | null;
   verification: {
     status: string; notes: string | null; updated_at: string | null; updated_by: string | null;
-    background_status: string; background_reference: string | null; background_notes: string | null; background_checked_at: string | null;
   };
   documents: Row[];
   members: (Row & { user_id: number; name: string; role: string; account_status: string })[];
@@ -49,6 +48,8 @@ interface CheckRow {
   key: string; group: string; label: string; required: boolean; state: 'passed' | 'pending' | 'missing' | 'failed' | 'expired'; detail: string | null;
   /** From the verification policy (Admin Console, Compliance) */
   setting?: 'required' | 'optional' | 'deferred'; due?: string | null; overdue?: boolean; promotion?: string | null;
+  /** What it is checked against (demo/compliance-checks.html) */
+  check?: string | null; method?: 'auto' | 'review';
 }
 
 type Tab = 'overview' | 'business' | 'services' | 'compliance' | 'vehicles' | 'payment' | 'subscription' | 'notifications' | 'team' | 'loads' | 'directory';
@@ -153,6 +154,7 @@ function ChecklistTable({ rows }: { rows: CheckRow[] }) {
             <tr className="border-b border-[var(--color-cream-dark)] text-left text-[11px] uppercase tracking-[0.05em] text-[var(--color-text-faint)]">
               <th className="px-4 py-1.5 font-medium">Check</th>
               <th className="px-2 py-1.5 font-medium">Area</th>
+              <th className="px-2 py-1.5 font-medium">Checked against</th>
               <th className="px-2 py-1.5 font-medium">Required</th>
               <th className="px-2 py-1.5 font-medium">Status</th>
               <th className="px-4 py-1.5 font-medium">Detail</th>
@@ -165,6 +167,7 @@ function ChecklistTable({ rows }: { rows: CheckRow[] }) {
                 <tr key={r.key ?? r.label} className="border-b border-[var(--color-cream-dark)] last:border-b-0">
                   <td className="px-4 py-1.5 font-medium text-[var(--color-text)]">{r.label}</td>
                   <td className="px-2 py-1.5 text-[var(--color-text-muted)]">{r.group}</td>
+                  <td className="px-2 py-1.5 text-xs text-[var(--color-text-muted)]">{r.check ?? '—'}{r.method === 'review' && <span className="block text-[10px] text-[var(--color-text-faint)]">Shipmater review</span>}</td>
                   <td className="px-2 py-1.5 text-[var(--color-text-muted)]">
                     {r.overdue ? <span className="font-semibold text-red-700">Overdue</span>
                       : r.setting === 'deferred' ? <span className="text-amber-700">Deferred{r.due ? ` · due ${new Date(r.due).toLocaleDateString()}` : ''}</span>
@@ -220,9 +223,7 @@ export function OrgDetailView({ id }: { id: string }) {
   const qc = useQueryClient();
   const catalog = useCatalog();
   const [notes, setNotes] = useState('');
-  const [bgResult, setBgResult] = useState('');
-  const [bgReference, setBgReference] = useState('');
-  const [bgNotes, setBgNotes] = useState('');
+  const [override, setOverride] = useState(false);
   const [tab, setTab] = useState<Tab>('overview');
 
   const { data, isLoading, isError } = useQuery({
@@ -236,18 +237,17 @@ export function OrgDetailView({ id }: { id: string }) {
   };
 
   const review = useMutation({
-    mutationFn: (action: 'approve' | 'reject') => api.post(`/api/v1/admin/companies/${id}/review`, { action, notes: notes || null }),
-    onSuccess: (_, action) => { toast.success(action === 'approve' ? 'Company approved' : 'Company rejected'); setNotes(''); refresh(); },
+    mutationFn: (action: 'approve' | 'reject') => api.post(`/api/v1/admin/companies/${id}/review`, { action, notes: notes || null, override: action === 'approve' && override }),
+    onSuccess: (_, action) => { toast.success(action === 'approve' ? 'Company approved' : 'Company rejected'); setNotes(''); setOverride(false); refresh(); },
     onError: (e: { response?: { data?: { error?: string; message?: string } } }) =>
       toast.error(e.response?.data?.error ?? e.response?.data?.message ?? 'Action failed'),
   });
 
-  const background = useMutation({
-    mutationFn: () => api.post(`/api/v1/admin/companies/${id}/background`, {
-      result: bgResult, reference: bgReference || null, notes: bgNotes || null,
-    }),
-    onSuccess: () => { toast.success('Background check recorded'); setBgResult(''); setBgReference(''); setBgNotes(''); refresh(); },
-    onError: () => toast.error('Could not record background check'),
+  // Run every outside check again now (business verification, FMCSA, SAM.gov)
+  const runChecks = useMutation({
+    mutationFn: () => api.post(`/api/v1/admin/companies/${id}/checks/run`),
+    onSuccess: () => { toast.success('Checks run again'); refresh(); },
+    onError: () => toast.error('Could not run the checks'),
   });
 
   const back = (
@@ -265,7 +265,6 @@ export function OrgDetailView({ id }: { id: string }) {
   const profile = (data.company_profile ?? {}) as Row;
   const isCarrier = c.type === 'carrier';
   const dir = (data as unknown as { directory?: { listed: boolean; listed_by: string | null; pending_claims: { id: number; as_type: string; user: { id: number; name: string; email: string } | null; created_at: string }[] } }).directory;
-  const bgPassed = BACKGROUND_PASSED.includes(v.background_status);
   const act = data.activity;
   const ownerApproved = data.members.some((m) => m.role === 'owner' && (m.person_status === 'approved' || m.person_status === 'not_required'));
   const owner = c.owner as Row | null;
@@ -376,15 +375,21 @@ export function OrgDetailView({ id }: { id: string }) {
               {v.notes && <p className="rounded-lg bg-[var(--color-cream)] px-3 py-2 text-sm text-[var(--color-text-muted)]">{v.notes}</p>}
               {blocking.length > 0 && v.status !== 'approved' && (
                 <Callout>Approval needs these required checks to pass first: <strong>{blocking.map((r) => r.label).join(', ')}</strong>.
-                  {blocking.some((r) => r.key === 'owner_approved') && <> See the <button onClick={() => setTab('team')} className="font-semibold underline">Team</button> tab for the owner.</>}
+                  {blocking.some((r) => r.key === 'owner_identity' || r.key === 'owner_background') && <> See the <button onClick={() => setTab('team')} className="font-semibold underline">Team</button> tab for the owner.</>}
                 </Callout>
               )}
+              {blocking.length > 0 && v.status !== 'approved' && (
+                <label className="flex items-start gap-2 text-xs text-[var(--color-text-muted)]">
+                  <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} className="mt-0.5" />
+                  <span>Approve anyway: a provider is down or a result is wrong. Say why below; it is kept on the record.</span>
+                </label>
+              )}
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000}
-                placeholder="Notes (optional, kept on the record)" className={inputCls} />
-              <div className="flex gap-2">
+                placeholder={override ? 'Why are you approving without every required check passed? (required)' : 'Notes (optional, kept on the record)'} className={inputCls} />
+              <div className="flex flex-wrap gap-2">
                 {v.status !== 'approved' && (
-                  <button onClick={() => review.mutate('approve')} disabled={review.isPending || blocking.length > 0}
-                    className="btn btn-navy disabled:opacity-50">Approve company</button>
+                  <button onClick={() => review.mutate('approve')} disabled={review.isPending || (blocking.length > 0 && (!override || !notes.trim()))}
+                    className="btn btn-navy disabled:opacity-50">{override ? 'Approve anyway' : 'Approve company'}</button>
                 )}
                 {v.status !== 'rejected' && (
                   <button onClick={() => review.mutate('reject')} disabled={review.isPending}
@@ -394,25 +399,11 @@ export function OrgDetailView({ id }: { id: string }) {
             </div>
           </Panel>
 
-          <Panel title="Company background check" action={<BackgroundBadge status={v.background_status} />}
-            subtitle={v.background_checked_at ? `Recorded ${new Date(v.background_checked_at).toLocaleString()}` : 'No result recorded'}>
+          <Panel title="Outside checks" subtitle="Business verification, FMCSA and SAM.gov run on their own when the company's details change, and daily for FMCSA and SAM.gov.">
             <div className="space-y-3">
-              {(v.background_reference || v.background_notes) && (
-                <div className="rounded-lg bg-[var(--color-cream)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
-                  {v.background_reference && <p>Reference: <span className="font-medium text-[var(--color-text)]">{v.background_reference}</span></p>}
-                  {v.background_notes && <p>{v.background_notes}</p>}
-                </div>
-              )}
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <select value={bgResult} onChange={(e) => setBgResult(e.target.value)} aria-label="Background result" className={inputCls}>
-                  <option value="">Record result…</option>
-                  {BACKGROUND_RESULTS.filter((r) => r.value !== 'not_started').map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-                <input value={bgReference} onChange={(e) => setBgReference(e.target.value)} placeholder="Report / reference #" className={inputCls} />
-              </div>
-              <input value={bgNotes} onChange={(e) => setBgNotes(e.target.value)} placeholder="Notes (optional)" className={inputCls} />
-              <button onClick={() => background.mutate()} disabled={!bgResult || background.isPending} className="btn btn-navy disabled:opacity-50">
-                Save result
+              <p className="text-sm text-[var(--color-text-muted)]">Each item in Verification status says what it is checked against. Results arrive by webhook or lookup and approve the company automatically when every required item passes.</p>
+              <button onClick={() => runChecks.mutate()} disabled={runChecks.isPending} className="btn btn-navy disabled:opacity-50">
+                {runChecks.isPending ? 'Running…' : 'Run checks again'}
               </button>
             </div>
           </Panel>

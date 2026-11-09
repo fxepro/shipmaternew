@@ -36,8 +36,8 @@ type ApiError = { response?: { data?: { message?: string; error?: string; errors
 const errorText = (e: ApiError, fallback: string) =>
   Object.values(e?.response?.data?.errors ?? {})[0]?.[0] ?? e?.response?.data?.error ?? e?.response?.data?.message ?? fallback;
 
-const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]';
-const labelCls = 'block text-xs font-medium text-[var(--color-text-muted)] mb-1';
+const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-base focus:outline-none focus:border-[var(--color-teal)]';
+const labelCls = 'block text-[13px] font-medium text-[var(--color-text-muted)] mb-1';
 
 const IDENTITY_TEXT_FIELDS: [string, string, string?][] = [
   ['legal_first_name', 'Legal first name'], ['legal_middle_name', 'Middle name'], ['legal_last_name', 'Legal last name'],
@@ -62,8 +62,11 @@ function Section({ title, children, aside }: { title: string; children: React.Re
   );
 }
 
-/** A person's own verification page: what their role needs, their identity record and credentials. */
-export function MyVerification() {
+/**
+ * A person's own verification: what their role needs, their identity record and credentials.
+ * embedded: shown as the Verification tab in Profile, without its own page title.
+ */
+export function MyVerification({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const params = useSearchParams();
   const { data, isLoading } = useQuery({
@@ -88,7 +91,7 @@ export function MyVerification() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="page-title">Verification</h1>
+          {!embedded && <h1 className="page-title">Verification</h1>}
           <p className="mt-1 text-sm text-[var(--color-text-faint)]">
             You&apos;re {/^[aeiou]/i.test(roleLabel) ? 'an' : 'a'} {roleLabel}{data.company ? ` at ${data.company.name}` : ''}.
           </p>
@@ -129,8 +132,8 @@ export function MyVerification() {
             {checklist.items.map((i) => (
               <li key={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                 <div>
-                  <p className="text-sm font-medium text-[var(--color-text)]">{i.label}</p>
-                  <p className="text-xs text-[var(--color-text-faint)]">
+                  <p className="text-base font-medium text-[var(--color-text)]">{i.label}</p>
+                  <p className="text-[13px] text-[var(--color-text-faint)]">
                     {i.required ? 'Required' : 'Optional — kept on file'}{i.detail ? ` · ${i.detail}` : ''}
                   </p>
                 </div>
@@ -156,7 +159,8 @@ export function MyVerification() {
   );
 }
 
-function IdentitySection({ identity, isCarrier, onSaved }: { identity: Identity | null; isCarrier: boolean; onSaved: () => void }) {
+/** The person's identity record (legal name, date of birth, home address, ID); also the Personal tab in Profile */
+export function IdentitySection({ identity, isCarrier, onSaved }: { identity: Identity | null; isCarrier: boolean; onSaved: () => void }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [startingStripe, setStartingStripe] = useState(false);
 
@@ -208,13 +212,13 @@ function IdentitySection({ identity, isCarrier, onSaved }: { identity: Identity 
         label={status === 'verified' ? 'Verified' : status === 'failed' ? 'Not verified' : ['submitted', 'pending'].includes(status) ? 'In review' : 'Not started'} />}
     >
       <div className="space-y-5">
-        {identity?.failure_reason && <p className="text-sm text-[var(--color-danger)]">{String(identity.failure_reason)}</p>}
+        {identity?.failure_reason && <p className="text-base text-[var(--color-danger)]">{String(identity.failure_reason)}</p>}
 
         {isCarrier && status !== 'verified' && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--color-cream)] px-4 py-3">
             <p className="text-sm text-[var(--color-text-muted)]">Fastest: scan your ID and take a selfie with Stripe. Your details fill in automatically.</p>
             <button onClick={startStripe} disabled={startingStripe}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--color-teal)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50">
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--color-teal)] px-3 py-2 text-base font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50">
               <ShieldCheck size={14} /> {startingStripe ? 'Opening…' : 'Verify with Stripe'}
             </button>
           </div>
@@ -250,14 +254,14 @@ function IdentitySection({ identity, isCarrier, onSaved }: { identity: Identity 
             <input value={form.ssn_last4 ?? ''} onChange={set('ssn_last4')} inputMode="numeric" maxLength={4} autoComplete="off" className={inputCls} />
           </label>
         </div>
-        <p className="text-xs text-[var(--color-text-faint)]">Your ID number is stored encrypted. We only ever show its last 4 digits, and we never store your full SSN.</p>
+        <p className="text-[13px] text-[var(--color-text-faint)]">Your ID number is stored encrypted. We only ever show its last 4 digits, and we never store your full SSN.</p>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {([['id_front', 'ID front', 'has_id_front'], ['id_back', 'ID back', 'has_id_back'], ['selfie', 'Selfie', 'has_selfie']] as const).map(([kind, label, flag]) => (
             <label key={kind} className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--color-cream-dark)] px-3 py-5 text-center hover:border-[var(--color-teal)]">
               <Upload size={16} className="text-[var(--color-text-faint)]" />
-              <span className="text-sm font-medium text-[var(--color-text)]">{label}</span>
-              <span className="text-xs text-[var(--color-text-faint)]">{identity?.[flag] ? 'Uploaded — click to replace' : 'Upload a photo'}</span>
+              <span className="text-base font-medium text-[var(--color-text)]">{label}</span>
+              <span className="text-[13px] text-[var(--color-text-faint)]">{identity?.[flag] ? 'Uploaded — click to replace' : 'Upload a photo'}</span>
               <input type="file" accept="image/*,.pdf" className="hidden" disabled={upload.isPending}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate({ kind, file: f }); e.target.value = ''; }} />
             </label>
@@ -271,7 +275,7 @@ function IdentitySection({ identity, isCarrier, onSaved }: { identity: Identity 
           </button>
           {['not_started', 'failed'].includes(status) && (
             <button onClick={() => save.mutate(true)} disabled={save.isPending}
-              className="rounded-lg bg-[var(--color-teal)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50">
+              className="rounded-lg bg-[var(--color-teal)] px-3 py-2 text-base font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50">
               Save and submit for review
             </button>
           )}
@@ -321,7 +325,7 @@ function CredentialsSection({ credentials, types, onSaved }: { credentials: Cred
       title="Licences and certifications"
       aside={editing === null && (
         <button onClick={() => { setEditing('new'); setForm(EMPTY_CRED); setFile(null); }}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)]">
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-[13px] font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)]">
           <Plus size={12} /> Add
         </button>
       )}
@@ -334,8 +338,8 @@ function CredentialsSection({ credentials, types, onSaved }: { credentials: Cred
             {credentials.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                 <div>
-                  <p className="text-sm font-medium text-[var(--color-text)]">{c.type_label}</p>
-                  <p className="text-xs text-[var(--color-text-faint)]">
+                  <p className="text-base font-medium text-[var(--color-text)]">{c.type_label}</p>
+                  <p className="text-[13px] text-[var(--color-text-faint)]">
                     {[c.number, c.class && `Class ${c.class}`, c.issuing_state, c.expires_at && `Expires ${c.expires_at}`, c.has_document && 'Document uploaded']
                       .filter(Boolean).join(' · ') || 'No details'}
                     {(c.source === 'profile' || c.source === 'carrier_profile') && ' · From your profile'}
@@ -347,7 +351,7 @@ function CredentialsSection({ credentials, types, onSaved }: { credentials: Cred
                     <button onClick={() => edit(c)} title="Edit" className="text-[var(--color-text-faint)] hover:text-[var(--color-teal)]"><Pencil size={14} /></button>
                   )}
                   {(c.source === 'profile' || c.source === 'carrier_profile') && (
-                    <Link href="/carrier/profile" className="text-xs text-[var(--color-teal)] hover:underline">Edit in profile</Link>
+                    <Link href="/carrier/profile" className="text-[13px] text-[var(--color-teal)] hover:underline">Edit in profile</Link>
                   )}
                   {!c.verified_at && c.source === 'self' && (
                     <button onClick={() => { if (confirm(`Remove ${c.type_label}?`)) remove.mutate(c.id); }} title="Remove"
@@ -362,7 +366,7 @@ function CredentialsSection({ credentials, types, onSaved }: { credentials: Cred
         {editing !== null && (
           <div className="rounded-lg border border-[var(--color-cream-dark)] p-4">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-[var(--color-text)]">{editing === 'new' ? 'Add a licence or certification' : 'Edit'}</p>
+              <p className="text-base font-semibold text-[var(--color-text)]">{editing === 'new' ? 'Add a licence or certification' : 'Edit'}</p>
               <button onClick={() => setEditing(null)} className="text-[var(--color-text-faint)] hover:text-[var(--color-text)]"><X size={16} /></button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -386,11 +390,11 @@ function CredentialsSection({ credentials, types, onSaved }: { credentials: Cred
               <label><span className={labelCls}>Issued</span><input type="date" value={form.issued_at} onChange={set('issued_at')} className={inputCls} /></label>
               <label><span className={labelCls}>Expires</span><input type="date" value={form.expires_at} onChange={set('expires_at')} className={inputCls} /></label>
               <label><span className={labelCls}>Document (photo or PDF)</span>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-base" />
               </label>
             </div>
             <button onClick={() => save.mutate()} disabled={!form.type || save.isPending}
-              className="mt-3 rounded-lg bg-[var(--color-teal)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50">
+              className="mt-3 rounded-lg bg-[var(--color-teal)] px-3 py-2 text-base font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-50">
               {save.isPending ? 'Saving…' : 'Save'}
             </button>
           </div>

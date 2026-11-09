@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Organization;
 use App\Support\ComplianceRules;
+use App\Support\ComplianceSources;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -26,37 +27,49 @@ class VerificationPolicy
     private static ?array $rows = null;
     private static ?array $promos = null;
 
-    /** Every check a type can have, in the order the verification table shows them: key, label, group, default */
+    /**
+     * Every check a type can have, in the order the verification table shows them: key, label, group, default,
+     * and what it is checked against. The list is demo/compliance-checks.html.
+     */
     public static function catalog(string $type): array
     {
         $c = [];
         $add = function (string $key, string $label, string $group, bool $required) use (&$c) {
-            $c[] = ['key' => $key, 'label' => $label, 'group' => $group, 'default' => $required ? 'required' : 'optional'];
+            $c[] = ['key' => $key, 'label' => $label, 'group' => $group, 'default' => $required ? 'required' : 'optional'] + ComplianceSources::for($key);
         };
 
-        $add('owner_email', 'Owner email verified', 'Account', true);
-        if (in_array($type, ['shipper', 'factor', 'broker'], true)) $add('address', 'Registered address', 'Business', true);
-        if ($type === 'shipper') {
-            $add('phone_verified', 'Business phone verified', 'Business', false);
-            $add('submitted', 'Submitted for review', 'Business', false);
+        foreach (self::extraChecks($type) as [$key, $label, $group, $required, $before]) {
+            if ($before) $add($key, $label, $group, $required);
         }
         foreach (ComplianceRules::items((new Organization)->forceFill(['type' => $type]), false) as $i) {
             $add($i['key'], $i['label'], $i['section'], $i['required']);
         }
-        if ($type === 'carrier') $add('documents', 'Documents reviewed', 'Documents', false);
-        if ($type === 'shipper') $add('documents', 'Business documents', 'Documents', false);
-        if ($type === 'carrier') {
-            $add('owner_approved', 'Owner approved (identity and background)', 'People', true);
-            $add('drivers_approved', 'Drivers approved', 'People', false);
-            $add('vehicles', 'Vehicles on file', 'Fleet', false);
-        }
-        if ($type !== 'receiver') $add('background', 'Company background check', 'Background', true);
-        if ($type === 'carrier') $add('payouts', 'Payouts set up', 'Money', true);
-        if ($type === 'shipper') {
-            $add('payment_method', 'Payment method on file', 'Money', true);
-            $add('subscription', 'Subscription active (needed to post loads)', 'Money', true);
+        foreach (self::extraChecks($type) as [$key, $label, $group, $required, $before]) {
+            if (!$before) $add($key, $label, $group, $required);
         }
         return $c;
+    }
+
+    /**
+     * Checks that are not compliance items: [key, label, group, required, shown before the compliance items].
+     * AdminCompanyController::approvalChecklist gives each its state.
+     */
+    public static function extraChecks(string $type): array
+    {
+        $x = [['owner_email', 'Owner email verified', 'Account', true, true]];
+        if ($type === 'shipper') $x[] = ['phone_verified', 'Business phone verified', 'Business', false, true];
+        if (in_array($type, ['carrier', 'factor'], true)) $x[] = ['owner_identity', 'Owner identity', 'People', true, false];
+        if ($type === 'carrier') {
+            $x[] = ['owner_background', 'Owner background check', 'People', true, false];
+            $x[] = ['drivers_approved', 'Drivers approved', 'People', false, false];
+            $x[] = ['vehicles', 'Vehicles (VIN checked)', 'Fleet', false, false];
+            $x[] = ['payouts', 'Payouts set up', 'Money', true, false];
+        }
+        if (in_array($type, ['shipper', 'broker'], true)) {
+            $x[] = ['payment_method', 'Payment method on file', 'Money', true, false];
+            $x[] = ['subscription', 'Subscription active (needed to post loads)', 'Money', true, false];
+        }
+        return $x;
     }
 
     /** The admin's setting for a check, before any promotion: [setting, defer_days] */
@@ -130,6 +143,7 @@ class VerificationPolicy
     {
         $e = self::effective($o, $row['key'], $row['required'] ? 'required' : 'optional');
         if (!$e) return null;
+        $row += ComplianceSources::for($row['key']);
         $passed = ($row['state'] ?? null) === 'passed';
         $row['setting']   = $e['setting'];
         $row['due']       = $e['due']?->toDateString();

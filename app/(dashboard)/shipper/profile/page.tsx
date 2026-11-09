@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { paymentApi, profileApi, orgApi, shipperVerificationApi } from '@/lib/api';
 import { TeamManager } from '@/components/team/TeamManager';
+import { useIsBrokerPortal } from '@/lib/portal';
+import { CompanyCompliance } from '@/components/compliance/CompanyCompliance';
+import { MyVerification } from '@/components/people/MyVerification';
+import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
 import { PaymentMethods } from '@/components/payments/PaymentMethods';
 import { ShipperSubscription } from '@/components/billing/ShipperSubscription';
 import { PlaidLinkButton } from '@/components/payments/PlaidLinkButton';
 import {
-  User, Building2, CreditCard, Bell, Zap,
+  User, Building2, CreditCard, Bell, Zap, ShieldCheck,
   Camera, Check, ChevronDown, Plus, Trash2,
   Mail, Phone, MapPin, Globe, Hash, Shield,
   AlertCircle, Landmark, X, Loader2, Star,
@@ -34,7 +39,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'business' | 'services' | 'compliance' | 'payment' | 'subscription' | 'notifications' | 'team';
+type Tab = 'profile' | 'verification' | 'business' | 'services' | 'compliance' | 'payment' | 'subscription' | 'notifications' | 'team';
 
 interface ShipperProfile {
   name: string; email: string; phone: string; member_since: string;
@@ -48,6 +53,8 @@ interface ShipperProfile {
   state_of_incorporation: string; year_established: string; employee_count: string;
   industry: string; website: string; business_phone: string; business_email: string;
   sam_gov_number: string; currency: string;
+  /** Brokers: broker MC #, checked with FMCSA */
+  broker_mc?: string;
   // registered address
   biz_street: string; biz_city: string; biz_state: string; biz_zip: string; biz_country: string;
   // operating address
@@ -154,7 +161,7 @@ function Field({
           }`}
         />
       </div>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-[13px] text-red-600">{error}</p>}
     </div>
   );
 }
@@ -190,17 +197,17 @@ function ValidationBanner({
       <div className="flex items-start gap-3">
         <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-amber-900">
+          <p className="text-base font-semibold text-amber-900">
             {issues.length} required field{issues.length === 1 ? '' : 's'} need attention
           </p>
-          <p className="text-xs text-amber-800 mt-0.5">
+          <p className="text-[13px] text-amber-800 mt-0.5">
             Fields marked with <span className="text-red-500 font-bold">*</span> are required. Fix missing or invalid values below.
           </p>
         </div>
       </div>
       <ul className="space-y-1.5 pl-7">
         {issues.map((issue) => (
-          <li key={issue.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-900">
+          <li key={issue.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-amber-900">
             <span className="font-semibold">{issue.message}</span>
             <button
               type="button"
@@ -222,8 +229,8 @@ function Toggle({ checked, onChange, label, sub }: {
   return (
     <div className="flex items-center justify-between gap-4 py-3 border-b border-[var(--color-cream-dark)] last:border-0">
       <div>
-        <p className="text-sm font-medium text-[var(--color-text)]">{label}</p>
-        {sub && <p className="text-xs text-[var(--color-text-faint)] mt-0.5">{sub}</p>}
+        <p className="text-base font-medium text-[var(--color-text)]">{label}</p>
+        {sub && <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">{sub}</p>}
       </div>
       <button role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none ${
@@ -241,7 +248,7 @@ function SaveBar({ saved, onSave, isPending }: { saved: boolean; onSave: () => v
   return (
     <div className="flex items-center justify-end pt-4 border-t border-[var(--color-cream-dark)]">
       <button onClick={onSave} disabled={isPending}
-        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all disabled:opacity-60 ${
+        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-base font-semibold transition-all disabled:opacity-60 ${
           saved
             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
             : 'bg-[var(--color-teal)] text-white hover:bg-[var(--color-teal-dark)] shadow-sm'
@@ -319,29 +326,8 @@ function ProfileTab({ initialData }: { initialData: ShipperProfile }) {
     saveMutation.mutate();
   };
 
-  const initials = [form.first_name[0], form.last_name[0]].filter(Boolean).join('').toUpperCase() || '?';
-
   return (
     <div className="space-y-6">
-      {/* Avatar + name */}
-      <div className="flex items-center gap-5">
-        <div className="relative">
-          <div className="h-20 w-20 rounded-2xl bg-[var(--color-slate)] flex items-center justify-center text-2xl font-bold text-white select-none">
-            {initials}
-          </div>
-          <button className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-teal)] text-white shadow-md hover:bg-[var(--color-teal-light)] transition-colors">
-            <Camera size={13} />
-          </button>
-        </div>
-        <div>
-          <p className="text-base font-semibold text-[var(--color-text)]">
-            {[form.first_name, form.last_name].filter(Boolean).join(' ') || '—'}
-          </p>
-          <p className="text-sm text-[var(--color-text-faint)]">Shipper account</p>
-          <p className="mt-1 text-xs text-[var(--color-text-faint)]">Member since {initialData.member_since}</p>
-        </div>
-      </div>
-
       {/* Legal name */}
       <ProfileSection icon={User} title="Legal name">
         <div className="grid grid-cols-2 gap-4">
@@ -391,8 +377,8 @@ function ProfileTab({ initialData }: { initialData: ShipperProfile }) {
                 />
               </div>
             </div>
-            {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
-            <p className="mt-1 text-xs text-[var(--color-text-faint)]">
+            {errors.phone && <p className="mt-1 text-[13px] text-red-600">{errors.phone}</p>}
+            <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">
               Used for SMS verification. Country code is required for international delivery.
             </p>
           </div>
@@ -419,7 +405,7 @@ function ProfileTab({ initialData }: { initialData: ShipperProfile }) {
                 />
               </div>
             </div>
-            <p className="mt-1 text-xs text-[var(--color-text-faint)]">
+            <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">
               Optional contact channel. No verification required.
             </p>
           </div>
@@ -456,7 +442,7 @@ function ProfileTab({ initialData }: { initialData: ShipperProfile }) {
           </div>
           <div>
             <Field label="Internal reference format" value={form.internal_ref_format} onChange={set('internal_ref_format')} placeholder="e.g. PO-{number} or CC-{code}" />
-            <p className="mt-1 text-xs text-[var(--color-text-faint)]">Appears on every shipment for your own record-keeping (PO number, job code, cost center)</p>
+            <p className="mt-1 text-[13px] text-[var(--color-text-faint)]">Appears on every shipment for your own record-keeping (PO number, job code, cost center)</p>
           </div>
         </div>
       </ProfileSection>
@@ -471,20 +457,20 @@ function ProfileTab({ initialData }: { initialData: ShipperProfile }) {
 function VerificationBadge({ status }: { status: 'verified' | 'review' | 'pending' }) {
   if (status === 'verified') {
     return (
-      <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+      <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[13px] font-semibold text-emerald-700">
         <Check size={11} /> Verified
       </span>
     );
   }
   if (status === 'review') {
     return (
-      <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+      <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-0.5 text-[13px] font-semibold text-amber-700">
         In review
       </span>
     );
   }
   return (
-    <span className="shrink-0 rounded-full bg-[var(--color-cream)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-text-faint)]">
+    <span className="shrink-0 rounded-full bg-[var(--color-cream)] px-2.5 py-0.5 text-[13px] font-semibold text-[var(--color-text-faint)]">
       Not verified
     </span>
   );
@@ -492,6 +478,7 @@ function VerificationBadge({ status }: { status: 'verified' | 'review' | 'pendin
 
 function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
   const qc = useQueryClient();
+  const broker = useIsBrokerPortal();
   const [form, setForm] = useState({
     company:                initialData.company,
     dba:                    initialData.dba,
@@ -508,6 +495,7 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
     business_phone:         initialData.business_phone,
     business_email:         initialData.business_email,
     sam_gov_number:         initialData.sam_gov_number,
+    broker_mc:              initialData.broker_mc ?? '',
     biz_street:             initialData.biz_street,
     biz_city:               initialData.biz_city,
     biz_state:              initialData.biz_state,
@@ -774,7 +762,8 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
           <Field label="Business phone"  value={form.business_phone}  onChange={v => set('business_phone')(v)}  icon={Phone} type="tel" placeholder="+1 (555) 000-0000" />
           <Field label="Business email"  value={form.business_email}  onChange={v => set('business_email')(v)}  icon={Mail}  type="email" placeholder="ops@company.com" />
           <Field label="Website"         value={form.website}         onChange={v => set('website')(v)}         icon={Globe} type="url" placeholder="https://company.com" />
-          <Field label="SAM.gov number"  value={form.sam_gov_number}  onChange={v => set('sam_gov_number')(v)}  placeholder="Optional — for government contracts" />
+          <Field label="SAM.gov number"  value={form.sam_gov_number}  onChange={v => set('sam_gov_number')(v)}  placeholder="UEI, optional — for government contracts" />
+          {broker && <Field label="Broker MC #" value={form.broker_mc} onChange={v => set('broker_mc')(v)} placeholder="Checked with FMCSA" />}
         </div>
       </ProfileSection>
 
@@ -804,7 +793,7 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
             <input type="checkbox" checked={form.ops_same_as_biz}
               onChange={e => set('ops_same_as_biz')(e.target.checked)}
               className="w-4 h-4 rounded accent-[var(--color-teal)]" />
-            <span className="text-xs text-[var(--color-text-muted)]">Same as registered address</span>
+            <span className="text-[13px] text-[var(--color-text-muted)]">Same as registered address</span>
           </label>
         }
       >
@@ -826,7 +815,7 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
         icon={Shield}
         title="Verification status"
         actions={
-          <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+          <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[13px] font-semibold ${
             initialData.verification_status === 'verified'
               ? 'bg-emerald-50 text-emerald-700'
               : initialData.verification_status === 'submitted'
@@ -843,10 +832,10 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
           {/* Email */}
           <div className="flex items-start justify-between gap-4 border-b border-[var(--color-cream-dark)] pb-4">
             <div>
-                <p className="text-sm font-medium text-[var(--color-text)]">
+                <p className="text-base font-medium text-[var(--color-text)]">
                   Email address <span className="text-red-500 font-bold">*</span>
                 </p>
-                <p className="text-xs text-[var(--color-text-faint)] mt-0.5">
+                <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
                   {initialData.email
                     ? <>Send a verification link to <span className="text-[var(--color-text)]">{initialData.email}</span>. Check spam.</>
                     : <>Add and save an email on the Profile tab first. <span className="text-red-500 font-bold">*</span></>}
@@ -869,7 +858,7 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
                     resendEmail.mutate();
                   }}
                   disabled={resendEmail.isPending || !initialData.email?.trim()}
-                  className="text-xs font-semibold text-[var(--color-teal)] hover:underline disabled:opacity-50"
+                  className="text-[13px] font-semibold text-[var(--color-teal)] hover:underline disabled:opacity-50"
                 >
                   {resendEmail.isPending ? 'Sending…' : 'Send verification email'}
                 </button>
@@ -881,10 +870,10 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
           <div className="border-b border-[var(--color-cream-dark)] pb-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-[var(--color-text)]">
+                <p className="text-base font-medium text-[var(--color-text)]">
                   Phone number <span className="text-red-500 font-bold">*</span>
                 </p>
-                <p className="text-xs text-[var(--color-text-faint)] mt-0.5">
+                <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
                   {initialData.phone?.trim()
                     ? <>SMS one-time code to <span className="text-[var(--color-text)]">{getCountry(initialData.phone_country_code || 'US').dialCode} {initialData.phone}</span> (Profile tab).</>
                     : 'Add and save a phone number on the Profile tab first.'}
@@ -908,7 +897,7 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
                     sendPhone.mutate();
                   }}
                   disabled={sendPhone.isPending || !initialData.phone?.trim()}
-                  className="rounded-lg bg-[var(--color-teal)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  className="rounded-lg bg-[var(--color-teal)] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
                 >
                   {sendPhone.isPending ? 'Sending…' : phoneSent ? 'Resend code' : 'Send SMS code'}
                 </button>
@@ -925,14 +914,14 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
                       type="button"
                       onClick={() => confirmPhone.mutate()}
                       disabled={confirmPhone.isPending || phoneCode.length < 4}
-                      className="rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                      className="rounded-lg border border-[var(--color-cream-dark)] px-3 py-1.5 text-[13px] font-semibold disabled:opacity-50"
                     >
                       {confirmPhone.isPending ? 'Checking…' : 'Confirm'}
                     </button>
                   </>
                 )}
                 {devCode && (
-                  <span className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
+                  <span className="text-[13px] text-amber-700 bg-amber-50 px-2 py-1 rounded">
                     Dev OTP: {devCode}
                   </span>
                 )}
@@ -944,10 +933,10 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
           <div>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-[var(--color-text)]">
+                <p className="text-base font-medium text-[var(--color-text)]">
                   Business (EIN) <span className="text-red-500 font-bold">*</span>
                 </p>
-                <p className="text-xs text-[var(--color-text-faint)] mt-0.5">
+                <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
                   Upload a W-9<span className="text-red-500 font-bold"> *</span>, save company name + tax ID, then submit for platform review.
                 </p>
               </div>
@@ -962,7 +951,7 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
                     return (
                       <label
                         key={type}
-                        className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+                        className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[13px] ${
                           existing
                             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                             : 'border-dashed border-[var(--color-cream-dark)] text-[var(--color-text-muted)]'
@@ -991,12 +980,12 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
                     type="button"
                     onClick={handleSubmitBusiness}
                     disabled={submitBusiness.isPending}
-                    className="rounded-lg bg-[var(--color-slate)] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                    className="rounded-lg bg-[var(--color-slate)] px-3.5 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
                   >
                     {submitBusiness.isPending ? 'Submitting…' : 'Submit for review'}
                   </button>
                 ) : (
-                  <p className="text-xs text-amber-700">Submitted — waiting for platform review.</p>
+                  <p className="text-[13px] text-amber-700">Submitted — waiting for platform review.</p>
                 )}
               </div>
             )}
@@ -1048,10 +1037,10 @@ function UploadDoc({ required, url, link, docType, expiry, onFileChange, onExpir
 
   return (
     <div className="space-y-3">
-      {required && <span className="text-xs font-medium text-red-500">Required</span>}
+      {required && <span className="text-[13px] font-medium text-red-500">Required</span>}
 
-      {isExpired   && <div className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠ Certificate expired — upload a new one</div>}
-      {expiresSoon && <div className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠ Expires within 30 days — consider renewing</div>}
+      {isExpired   && <div className="text-[13px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠ Certificate expired — upload a new one</div>}
+      {expiresSoon && <div className="text-[13px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠ Expires within 30 days — consider renewing</div>}
 
       <div className="grid grid-cols-2 gap-3">
         <label className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer text-sm transition-colors ${
@@ -1071,73 +1060,18 @@ function UploadDoc({ required, url, link, docType, expiry, onFileChange, onExpir
           <input type="date" value={expiry ?? ''} onChange={e => onExpiryChange(e.target.value)} className="profile-input" />
         </div>
       </div>
-      {link && <a href={link} target="_blank" rel="noreferrer" className="text-xs font-medium text-[var(--color-teal)] underline">View current file</a>}
+      {link && <a href={link} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-[var(--color-teal)] underline">View current file</a>}
     </div>
   );
 }
 
-function ComplianceTab({ initialData }: { initialData: ShipperProfile }) {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({
-    coi_url:           initialData.coi_url           ?? '',
-    coi_expiry:        initialData.coi_expiry        ?? '',
-    hipaa_baa_url:     initialData.hipaa_baa_url     ?? '',
-    hipaa_baa_expiry:  initialData.hipaa_baa_expiry  ?? '',
-    hazmat_reg_url:    initialData.hazmat_reg_url    ?? '',
-    hazmat_reg_expiry: initialData.hazmat_reg_expiry ?? '',
-  });
-  const [saved, setSaved] = useState(false);
-
-  const saveMutation = useMutation({
-    mutationFn: () => profileApi.updateShipper(form),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['shipper-profile'] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    },
-  });
-
+/** Compliance as set for shippers or brokers in Admin, Compliance (components/compliance/CompanyCompliance) */
+function ComplianceTab(_props: { initialData: ShipperProfile }) {
+  const broker = useIsBrokerPortal();
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900">
-        Compliance documents are required for specific shipment types. All documents have expiry tracking — you will be alerted 30 days before expiry.
-      </div>
-
-      <ProfileSection
-        icon={FileCheck}
-        title="Certificate of Insurance (COI)"
-        subtitle="Required by some carriers before accepting a load. Proves declared value coverage on cargo."
-      >
-        <UploadDoc
-          label="Certificate of Insurance (COI)"
-          required={false}
-          url={form.coi_url}
-          link={initialData.coi_file}
-          docType="coi"
-          expiry={form.coi_expiry}
-          onFileChange={name => setForm(f => ({ ...f, coi_url: name }))}
-          onExpiryChange={d => setForm(f => ({ ...f, coi_expiry: d }))}
-        />
-      </ProfileSection>
-      <ProfileSection
-        icon={FileCheck}
-        title="HazMat Shipper Registration (PHMSA)"
-        subtitle="Required if you ship any regulated hazardous materials. Registration is with the Pipeline and Hazardous Materials Safety Administration."
-      >
-        <UploadDoc
-          label="HazMat Shipper Registration (PHMSA)"
-          required={false}
-          url={form.hazmat_reg_url}
-          link={initialData.hazmat_reg_file}
-          docType="hazmat_reg"
-          expiry={form.hazmat_reg_expiry}
-          onFileChange={name => setForm(f => ({ ...f, hazmat_reg_url: name }))}
-          onExpiryChange={d => setForm(f => ({ ...f, hazmat_reg_expiry: d }))}
-        />
-      </ProfileSection>
-
-      <SaveBar saved={saved} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
-    </div>
+    <CompanyCompliance variant="rows" note={broker
+      ? 'What Shipmater needs from a broker: your broker authority, surety bond and W-9. Required items must be on file before you can post loads.'
+      : 'What Shipmater needs to post your loads. Special freight items are only asked for when a load needs them, for example a hazmat load.'} />
   );
 }
 
@@ -1172,7 +1106,7 @@ function NotificationsTab({ initialData }: { initialData: ShipperProfile }) {
       <ProfileSection
         icon={Mail}
         title="Email notifications"
-        actions={<span className="shrink-0 text-xs text-[var(--color-text-faint)]">{initialData.email}</span>}
+        actions={<span className="shrink-0 text-[13px] text-[var(--color-text-faint)]">{initialData.email}</span>}
       >
         <Toggle checked={!!email.carrier_assigned} onChange={setE('carrier_assigned')} label="Carrier assigned"      sub="When a carrier accepts your shipment" />
         <Toggle checked={!!email.pickup_confirmed}  onChange={setE('pickup_confirmed')}  label="Pickup confirmed"       sub="When carrier confirms pickup" />
@@ -1185,7 +1119,7 @@ function NotificationsTab({ initialData }: { initialData: ShipperProfile }) {
       <ProfileSection
         icon={Phone}
         title="SMS notifications"
-        actions={<span className="shrink-0 text-xs text-[var(--color-text-faint)]">{initialData.phone || 'No phone on file'}</span>}
+        actions={<span className="shrink-0 text-[13px] text-[var(--color-text-faint)]">{initialData.phone || 'No phone on file'}</span>}
       >
         <Toggle checked={!!sms.carrier_assigned} onChange={setS('carrier_assigned')} label="Carrier assigned"   sub="Text when a carrier accepts" />
         <Toggle checked={!!sms.pickup_confirmed}  onChange={setS('pickup_confirmed')}  label="Pickup confirmed"   sub="Text when carrier picks up" />
@@ -1231,7 +1165,7 @@ function ServicesTab({ initialData }: { initialData: ShipperProfile }) {
 // ── Tab: Team ── (shared with carriers; roles per docs/people-types-and-checks.md)
 
 function TeamTab() {
-  return <TeamManager type="shipper" />;
+  return <TeamManager type={useIsBrokerPortal() ? 'broker' : 'shipper'} />;
 }
 
 // ── Tab: Subscription (required to post loads; docs/fees-and-billing.md) ──────
@@ -1241,9 +1175,14 @@ function SubscriptionTab() {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
+// Profile is the signed-in person; Company is the company. Both pages are this component,
+// picked by the URL (/shipper/profile, /shipper/company, and the same under /broker).
 
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'profile',       label: 'Profile',       icon: User       },
+const PROFILE_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'profile',       label: 'Personal',      icon: User        },
+  { id: 'verification',  label: 'Verification',  icon: ShieldCheck },
+];
+const COMPANY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'business',      label: 'Business',      icon: Building2  },
   { id: 'services',      label: 'Services',      icon: Package    },
   { id: 'compliance',    label: 'Compliance',    icon: FileCheck  },
@@ -1254,13 +1193,27 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 ];
 
 export default function ShipperProfilePage() {
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const broker = useIsBrokerPortal();
+  const pathname = usePathname() ?? '';
+  const router = useRouter();
+  const company = pathname.endsWith('/company');
+  const base = broker ? '/broker' : '/shipper';
+  const TABS = company ? COMPANY_TABS : PROFILE_TABS;
+  const [activeTab, setActiveTabState] = useState<Tab>(TABS[0].id);
+
+  /** A tab on the other page (old links, banners, Stripe returns) opens that page */
+  const setActiveTab = (t: Tab) => {
+    if (TABS.some((x) => x.id === t)) { setActiveTabState(t); return; }
+    const other = company ? PROFILE_TABS : COMPANY_TABS;
+    if (other.some((x) => x.id === t)) router.replace(`${base}/${company ? 'profile' : 'company'}?tab=${t}`);
+  };
 
   // Open the tab named in the URL (e.g. returning from Stripe Checkout)
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab');
-    if (TABS.some((x) => x.id === t)) setActiveTab(t as Tab);
-  }, []);
+    if (t) setActiveTab(t as Tab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company]);
 
   const { data: profile, isLoading } = useQuery<ShipperProfile>({
     queryKey: ['shipper-profile'],
@@ -1281,13 +1234,17 @@ export default function ShipperProfilePage() {
   return (
     <div className="w-[75%] min-w-[560px] space-y-6">
       <div>
-        <h1 className="page-title">
-          Account Settings
-        </h1>
+        <h1 className="page-title">{company ? 'Company' : 'Profile'}</h1>
         <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">
-          Manage your profile, business, payments, subscription and notifications
+          {company
+            ? 'Your company: business details, services, compliance, payment, subscription, notifications and team'
+            : 'You: your name, contact details and your own verification'}
         </p>
       </div>
+
+      {company
+        ? <CompanyHeader name={profile?.company} type={broker ? 'broker' : 'shipper'} />
+        : <PersonHeader />}
 
       {!isLoading && profile && (
         <ValidationBanner
@@ -1299,7 +1256,7 @@ export default function ShipperProfilePage() {
       <div className="flex gap-1 rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-1.5">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[length:var(--text-nav)] font-semibold transition-all ${
               activeTab === id ? 'bg-[var(--color-slate)] text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
             }`}>
             <Icon size={14} />{label}
@@ -1316,6 +1273,7 @@ export default function ShipperProfilePage() {
       )}
 
       {!isLoading && profile && activeTab === 'profile'       && <ProfileTab       key={profile.email} initialData={profile} />}
+      {activeTab === 'verification'  && <Suspense><MyVerification embedded /></Suspense>}
       {!isLoading && profile && activeTab === 'business'      && <BusinessTab      key={`biz-${profile.email}`} initialData={profile} />}
       {!isLoading && profile && activeTab === 'services'      && <ServicesTab      key={`svc-${profile.email}`} initialData={profile} />}
       {!isLoading && profile && activeTab === 'compliance'    && <ComplianceTab    key={`cmp-${profile.email}`} initialData={profile} />}

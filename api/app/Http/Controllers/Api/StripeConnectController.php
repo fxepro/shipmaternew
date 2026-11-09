@@ -65,7 +65,7 @@ class StripeConnectController extends Controller
             $session = $stripe->identity->verificationSessions->create([
                 'type'       => 'document',
                 'options'    => $options,
-                'return_url' => config('app.frontend_url') . '/factor/verification?identity=success',
+                'return_url' => config('app.frontend_url') . '/factor/profile?tab=verification&identity=success',
                 'metadata'   => ['user_id' => (string) $user->id],
             ]);
             \App\Models\PersonIdentity::firstOrCreate(['user_id' => $user->id])
@@ -84,7 +84,7 @@ class StripeConnectController extends Controller
                     'require_matching_selfie'=> true,
                 ],
             ],
-            'return_url' => config('app.frontend_url') . '/carrier/verification?identity=success',
+            'return_url' => config('app.frontend_url') . '/carrier/profile?tab=checks&identity=success',
             'metadata'   => [
                 'user_id' => (string) $user->id,
                 'carrier' => '1',

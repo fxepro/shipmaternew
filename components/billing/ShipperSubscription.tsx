@@ -97,17 +97,17 @@ export function ShipperSubscription() {
         <div className="flex items-center gap-4 rounded-2xl border border-[var(--color-teal)] bg-[var(--color-teal-pale)] p-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-teal)] text-white"><Zap size={18} /></div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-[var(--color-slate)]">{money(current.monthly_price)} a month — {current.tier_label} in loads a year</p>
-            <p className="text-xs text-[var(--color-text-faint)]">
+            <p className="text-base font-semibold text-[var(--color-slate)]">{money(current.monthly_price)} a month — {current.tier_label} in loads a year</p>
+            <p className="text-[13px] text-[var(--color-text-faint)]">
               {current.cancel_at_period_end ? `Ends on ${date(current.current_period_end)}. No further charges.` : `Next charge on ${date(current.current_period_end)}`}
             </p>
           </div>
           {current.cancel_at_period_end
-            ? <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">Cancelling</span>
-            : <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">Active</span>}
+            ? <span className="rounded-full bg-amber-100 px-3 py-1 text-[13px] font-bold text-amber-700">Cancelling</span>
+            : <span className="rounded-full bg-emerald-100 px-3 py-1 text-[13px] font-bold text-emerald-700">Active</span>}
         </div>
       ) : (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-base text-amber-800">
           {sub?.status === 'past_due'
             ? 'Your last subscription payment failed. Update your card on the Payment tab to keep posting loads.'
             : sub?.status === 'pending'
@@ -126,18 +126,18 @@ export function ShipperSubscription() {
               <button key={t.key} type="button" onClick={() => setSelected(t.key)}
                 className={`rounded-xl border-2 p-4 text-left transition-all ${choice?.key === t.key ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)]' : 'border-[var(--color-cream-dark)] hover:border-[var(--color-teal)]/50'}`}>
                 <p className="text-lg font-bold text-[var(--color-slate)]">{money(t.monthly_price)}<span className="text-sm font-normal text-[var(--color-text-faint)]">/mo</span></p>
-                <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">{t.label} in loads a year</p>
-                {choice?.key === t.key && <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-teal)]"><Check size={11} /> Selected</span>}
+                <p className="mt-0.5 text-[13px] text-[var(--color-text-faint)]">{t.label} in loads a year</p>
+                {choice?.key === t.key && <span className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--color-teal)]"><Check size={11} /> Selected</span>}
               </button>
             ))}
           </div>
           {/* Pay with a card or bank account already saved on the Payment tab */}
           <div className="mt-5">
-            <p className="mb-2 text-sm font-semibold text-[var(--color-slate)]">Pay with</p>
+            <p className="mb-2 text-base font-semibold text-[var(--color-slate)]">Pay with</p>
             {methods.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[var(--color-cream-dark)] p-4 text-sm text-[var(--color-text-muted)]">
                 No card or bank account saved yet.{' '}
-                <a href={to('/shipper/profile?tab=payment')} className="font-semibold text-[var(--color-teal)] underline">Add one on the Payment tab</a>, then come back here.
+                <a href={to('/shipper/company?tab=payment')} className="font-semibold text-[var(--color-teal)] underline">Add one on the Payment tab</a>, then come back here.
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -148,8 +148,8 @@ export function ShipperSubscription() {
                     <button key={m.id} type="button" onClick={() => { setMethodId(m.id); setConfirming(false); }}
                       className={`flex items-center gap-3 rounded-xl border-2 px-3.5 py-3 text-left transition-all ${on ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)]' : 'border-[var(--color-cream-dark)] hover:border-[var(--color-teal)]/50'}`}>
                       <Icon size={16} className={on ? 'text-[var(--color-teal)]' : 'text-[var(--color-text-faint)]'} />
-                      <span className="flex-1 text-sm font-medium text-[var(--color-text)]">{methodLabel(m)}</span>
-                      {m.is_default && <span className="rounded-full bg-[var(--color-cream)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">Default</span>}
+                      <span className="flex-1 text-base font-medium text-[var(--color-text)]">{methodLabel(m)}</span>
+                      {m.is_default && <span className="rounded-full bg-[var(--color-cream)] px-2 py-0.5 text-[13px] font-semibold text-[var(--color-text-muted)]">Default</span>}
                     </button>
                   );
                 })}
@@ -159,17 +159,17 @@ export function ShipperSubscription() {
 
           {!confirming ? (
             <button onClick={() => setConfirming(true)} disabled={!choice || !method}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-teal)] py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[var(--color-teal-dark)] disabled:opacity-60">
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-teal)] py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-[var(--color-teal-dark)] disabled:opacity-60">
               Subscribe — {choice ? money(choice.monthly_price) : ''} a month
             </button>
           ) : choice && method && (
             <div className="mt-4 rounded-xl border border-[var(--color-teal)]/40 bg-[var(--color-teal-pale)] p-4">
-              <p className="text-sm text-[var(--color-slate)]">
+              <p className="text-base text-[var(--color-slate)]">
                 <strong>{money(choice.monthly_price)}</strong> will be charged to <strong>{methodLabel(method)}</strong> today, then every month until you cancel.
               </p>
               <div className="mt-3 flex gap-2">
                 <button onClick={() => subscribe.mutate({ tier: choice, method })} disabled={subscribe.isPending}
-                  className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-60">
+                  className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2 text-base font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-60">
                   {subscribe.isPending && <Loader2 size={14} className="animate-spin" />}
                   Confirm and pay {money(choice.monthly_price)}
                 </button>
@@ -178,7 +178,7 @@ export function ShipperSubscription() {
               </div>
             </div>
           )}
-          <p className="mt-2 text-xs text-[var(--color-text-faint)]">Billed monthly to the payment method you choose; cancel any time.</p>
+          <p className="mt-2 text-[13px] text-[var(--color-text-faint)]">Billed monthly to the payment method you choose; cancel any time.</p>
         </ProfileSection>
       )}
 
@@ -195,17 +195,17 @@ export function ShipperSubscription() {
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between border-b border-[var(--color-cream-dark)] py-1 last:border-0">
                   <span className="text-sm text-[var(--color-text-faint)]">{label}</span>
-                  <span className="text-sm font-medium text-[var(--color-text)]">{value}</span>
+                  <span className="text-base font-medium text-[var(--color-text)]">{value}</span>
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-xs text-[var(--color-text-faint)]">On the tier review date we compare the load value you moved with your tier and adjust it for the next 12 months.</p>
+            <p className="mt-3 text-[13px] text-[var(--color-text-faint)]">On the tier review date we compare the load value you moved with your tier and adjust it for the next 12 months.</p>
           </ProfileSection>
           {current.cancel_at_period_end ? (
             <ProfileSection icon={CalendarDays} title="Changed your mind?"
               subtitle={`Your subscription ends on ${date(current.current_period_end)}. Keep it and you'll be charged as normal on that date.`}>
               <button onClick={() => resume.mutate()} disabled={resume.isPending}
-                className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-60">
+                className="flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-4 py-2 text-base font-semibold text-white hover:bg-[var(--color-teal-dark)] disabled:opacity-60">
                 {resume.isPending && <Loader2 size={14} className="animate-spin" />}Keep my subscription
               </button>
             </ProfileSection>
@@ -213,7 +213,7 @@ export function ShipperSubscription() {
             <ProfileSection icon={CalendarDays} title="Cancel subscription" headVariant="danger" className="border-red-100 bg-red-50/40"
               subtitle={`Stays active until ${date(current.current_period_end)}. You can’t post new loads after that.`}>
               <button onClick={() => { if (confirm('Cancel your Shipmater subscription at the end of this billing month?')) cancel.mutate(); }} disabled={cancel.isPending}
-                className="rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60">Cancel subscription</button>
+                className="rounded-xl border border-red-300 px-4 py-2 text-base font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60">Cancel subscription</button>
             </ProfileSection>
           )}
         </>

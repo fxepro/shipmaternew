@@ -1,38 +1,66 @@
 'use client';
 
 /**
- * Receiver — Company: your details, your locations (where freight arrives) and the people there,
- * with the load updates each one gets. Below: compliance (an optional certificate of insurance).
+ * Receiver — Company: business details, locations (where freight arrives) and the people there,
+ * compliance (an optional certificate of insurance) and the team. The signed-in person is in Profile.
  */
 
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, MapPin, ShieldCheck, Users } from 'lucide-react';
 import { OrgProfile } from '@/components/orgs/OrgProfile';
 import { ComplianceItems, type ComplianceItem } from '@/components/compliance/ComplianceItems';
+import { TeamManager } from '@/components/team/TeamManager';
+import { CompanyHeader } from '@/components/account/AccountHeader';
+import { AccountTabs } from '@/components/account/AccountTabs';
 import { useCan, useCurrentUser } from '@/components/layout/PermissionsContext';
 import { api } from '@/lib/api';
 
-export default function ReceiverCompanyPage() {
+type Tab = 'business' | 'locations' | 'compliance' | 'team';
+const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'business',   label: 'Business',              icon: Building2   },
+  { id: 'locations',  label: 'Locations & contacts',  icon: MapPin      },
+  { id: 'compliance', label: 'Compliance',            icon: ShieldCheck },
+  { id: 'team',       label: 'Team',                  icon: Users       },
+];
+
+function Company() {
   const user = useCurrentUser();
   const can = useCan();
   const qc = useQueryClient();
+  const router = useRouter();
+  const requested = useSearchParams().get('tab') as Tab | null;
+  const tab: Tab = TABS.some((t) => t.id === requested) ? (requested as Tab) : 'business';
   const orgId = user?.viewing_as?.id ?? user?.org?.id;
   const { data: compliance } = useQuery({
     queryKey: ['org-compliance'],
     queryFn: () => api.get('/api/v1/org/compliance').then((r) => r.data.data as ComplianceItem[]),
-    enabled: !!orgId,
+    enabled: !!orgId && tab === 'compliance',
   });
   if (!orgId) return <p className="text-sm text-[var(--color-text-muted)]">Your company isn&apos;t set up yet.</p>;
+  const readOnly = !can.do('locations.manage') && !can.do('contacts.manage');
   return (
-    <div className="space-y-6">
-      <OrgProfile orgId={orgId} readOnly={!can.do('locations.manage') && !can.do('contacts.manage')} />
-      {compliance && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-[var(--color-slate)]">Compliance</h2>
-          <ComplianceItems items={compliance}
+    <div className="max-w-4xl space-y-6">
+      <div>
+        <h1 className="page-title">Company</h1>
+        <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">Your company: its details, where freight arrives, compliance and your team</p>
+      </div>
+      <CompanyHeader type="receiver" />
+      <AccountTabs tabs={TABS} active={tab} onSelect={(id) => router.replace(`/receiver/company?tab=${id}`)} />
+
+      {tab === 'business'  && <OrgProfile orgId={orgId} hideHeader sections={['details']} readOnly={!can.do('company.profile')} />}
+      {tab === 'locations' && <OrgProfile orgId={orgId} hideHeader sections={['locations', 'contacts']} readOnly={readOnly} />}
+      {tab === 'compliance' && (compliance
+        ? <ComplianceItems items={compliance}
             uploadUrl={can.do('company.profile') ? (key) => `/api/v1/org/compliance/${key}` : undefined}
             onChange={(items) => qc.setQueryData(['org-compliance'], items)} />
-        </div>
-      )}
+        : <div className="skeleton h-32 rounded-xl" />)}
+      {tab === 'team' && <TeamManager type="receiver" />}
     </div>
   );
+}
+
+export default function ReceiverCompanyPage() {
+  return <Suspense><Company /></Suspense>;
 }

@@ -96,6 +96,26 @@ class FmcsaService
         return $this->format($carrier);
     }
 
+    // ── Operating authority ──────────────────────────────────────────────────
+    // GET /carriers/{dotNumber}/authority — common, contract and broker authority status (A = active)
+
+    public function authority(string $dotNumber): ?array
+    {
+        $dot = preg_replace('/\D/', '', $dotNumber);
+        if (!$dot) return null;
+        $response = Http::timeout(12)->accept('application/json')->get("{$this->baseUrl}/carriers/{$dot}/authority", ['webKey' => $this->key()]);
+        if (!$response->successful()) return null;
+        $rows = $response->json('content');
+        $rows = isset($rows['carrierAuthority']) ? [$rows] : (is_array($rows) ? $rows : []);
+        $a = collect($rows)->map(fn ($r) => $r['carrierAuthority'] ?? $r)->first();
+        if (!$a) return null;
+        return [
+            'broker'   => $a['brokerAuthorityStatus'] ?? null,
+            'common'   => $a['commonAuthorityStatus'] ?? null,
+            'contract' => $a['contractAuthorityStatus'] ?? null,
+        ];
+    }
+
     // ── Shared formatter ─────────────────────────────────────────────────────
 
     private function format(array $c): array
@@ -119,6 +139,9 @@ class FmcsaService
             'bipd_required'           => ($c['bipdInsuranceRequired'] ?? 'N') === 'Y',
             'cargo_insurance_on_file' => (int) ($c['cargoInsuranceOnFile'] ?? 0) > 0,
             'cargo_required'          => ($c['cargoInsuranceRequired'] ?? 'N') === 'Y',
+            // Broker financial security (BMC-84 bond / BMC-85 trust)
+            'bond_on_file'            => (int) ($c['bondInsuranceOnFile'] ?? 0) > 0,
+            'bond_required'           => ($c['bondInsuranceRequired'] ?? 'N') === 'Y',
             'total_drivers'           => (int) ($c['totalDrivers'] ?? 0),
             'total_power_units'       => (int) ($c['totalPowerUnits'] ?? 0),
             'mcs150_date'             => $c['mcs150Date'] ?? null,

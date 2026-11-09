@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Loader2, Plug, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { feesApi, adminFinanceApi, backgroundApi } from '@/lib/api';
+import { feesApi, adminFinanceApi, backgroundApi, kybApi } from '@/lib/api';
 import { Card } from '@/components/admin/DetailParts';
 
 interface Tier { key: string; label: string; max_annual_value: number | null; monthly_price: number }
@@ -122,6 +122,8 @@ export default function AdminPlatformSettingsPage() {
       )}
 
       <BackgroundCheckSettings />
+
+      <BusinessVerificationSettings />
 
       <PaymentRouting />
     </div>
@@ -254,6 +256,102 @@ function BackgroundCheckSettings() {
           </button>
         </div>
         <p className="text-xs text-[var(--color-text-faint)]">Checks already sent to a provider finish there. Switching provider affects new checks only. API keys are set on the server and never shown here.</p>
+      </div>
+    </Card>
+  );
+}
+
+interface KybProvider { key: string; name: string; test_ready: boolean; live_ready: boolean; webhook: string | null }
+interface KybSettings { provider: string; mode: 'test' | 'live'; providers: KybProvider[]; live_allowed: boolean; sam_gov_ready: boolean; fmcsa_ready: boolean }
+
+/**
+ * Which provider verifies businesses (EIN, Secretary of State, address, OFAC) for shippers, brokers and factors,
+ * in test or live mode. Results arrive by webhook (demo/compliance-checks.html). Keys stay on the server.
+ */
+function BusinessVerificationSettings() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['kyb-settings'], queryFn: () => kybApi.settings().then((r) => r.data.data as KybSettings) });
+  const [form, setForm] = useState<{ provider: string; mode: 'test' | 'live' } | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  useEffect(() => { if (data) setForm({ provider: data.provider, mode: data.mode }); }, [data]);
+
+  const save = useMutation({
+    mutationFn: () => kybApi.updateSettings(form!),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['kyb-settings'] }); toast.success('Business verification settings saved. New checks use them from now on.'); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const test = useMutation({
+    mutationFn: () => kybApi.test(form!.provider).then((r) => r.data as { ok: boolean; message: string }),
+    onSuccess: setTestResult,
+    onError: (e) => setTestResult({ ok: false, message: errorMessage(e) }),
+  });
+
+  if (!data || !form) return <div className="skeleton h-48 rounded-xl" />;
+  const current = data.providers.find((p) => p.key === form.provider);
+
+  return (
+    <Card title="Business verification">
+      <div className="space-y-4">
+        <p className="text-sm text-[var(--color-text-muted)]">
+          Checks a shipper, broker or factor&apos;s EIN with the IRS, its Secretary of State registration, its address and the OFAC sanctions list.
+          It runs on its own once the legal name, EIN and address are filled in, and again when they change.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {data.providers.map((p) => (
+            <button key={p.key} type="button" onClick={() => { setForm({ ...form, provider: p.key }); setTestResult(null); }}
+              className={`rounded-xl border p-3 text-left ${form.provider === p.key ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)]' : 'border-[var(--color-cream-dark)] hover:border-[var(--color-teal)]'}`}>
+              <p className="text-sm font-semibold">{p.name}{data.provider === p.key && <span className="ml-2 text-xs font-medium text-[var(--color-teal)]">Current</span>}</p>
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                {p.key === 'fake' ? 'Local testing only. Answers at once; never offered on the live site.'
+                  : `Test key ${p.test_ready ? 'set' : 'missing'} · Live key ${p.live_ready ? 'set' : 'missing'}`}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <span className={labelCls}>Mode</span>
+            <div className="flex gap-2">
+              {(['test', 'live'] as const).map((m) => (
+                <button key={m} type="button" disabled={m === 'live' && (!data.live_allowed || !current?.live_ready)}
+                  onClick={() => setForm({ ...form, mode: m })}
+                  className={`rounded-lg border px-3 py-1.5 text-sm disabled:opacity-40 ${form.mode === m ? 'border-[var(--color-teal)] bg-[var(--color-teal-pale)] font-semibold' : 'border-[var(--color-cream-dark)]'}`}>
+                  {m === 'test' ? 'Test' : 'Live'}
+                </button>
+              ))}
+            </div>
+            {!data.live_allowed && <p className="mt-1 text-xs text-[var(--color-text-faint)]">Live mode is turned off on this computer.</p>}
+          </div>
+          {current?.webhook && (
+            <div>
+              <span className={labelCls}>Webhook address (add it in the provider&apos;s dashboard)</span>
+              <div className="flex gap-2">
+                <input value={current.webhook} readOnly className={`${inputCls} font-mono text-xs`} />
+                <button type="button" title="Copy" className="px-2 text-[var(--color-text-faint)] hover:text-[var(--color-teal)]"
+                  onClick={() => navigator.clipboard.writeText(current.webhook!).then(() => toast.success('Copied'))}><Copy size={14} /></button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg bg-[var(--color-cream)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
+          Public registers: FMCSA key {data.fmcsa_ready ? 'set' : 'missing'} (USDOT, MC, broker authority, insurance and bond) ·
+          SAM.gov key {data.sam_gov_ready ? 'set' : 'missing'} (government registration) · NHTSA VIN decoder needs no key.
+        </div>
+
+        {testResult && <p className={`text-xs ${testResult.ok ? 'text-emerald-700' : 'text-[var(--color-danger)]'}`}>{testResult.message}</p>}
+
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className="btn btn-navy flex items-center gap-2 disabled:opacity-60">
+            {save.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save business verification settings
+          </button>
+          <button type="button" onClick={() => test.mutate()} disabled={test.isPending}
+            className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-teal)] hover:underline disabled:opacity-60">
+            {test.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plug size={13} />} Test connection
+          </button>
+        </div>
+        <p className="text-xs text-[var(--color-text-faint)]">API keys are set on the server (MIDDESK_TEST_KEY, MIDDESK_LIVE_KEY, MIDDESK_WEBHOOK_SECRET, SAM_GOV_API_KEY) and never shown here.</p>
       </div>
     </Card>
   );
