@@ -10,6 +10,8 @@ interface CountrySelectProps {
   required?: boolean;
   className?: string;
   id?: string;
+  /** Only these country codes (e.g. the countries a company can be verified in); the current value is always kept */
+  allowed?: string[];
 }
 
 export default function CountrySelect({
@@ -19,7 +21,9 @@ export default function CountrySelect({
   required = false,
   className = '',
   id = 'country',
+  allowed,
 }: CountrySelectProps) {
+  const options = allowed ? COUNTRIES.filter(c => allowed.includes(c.code) || c.code === (value || 'US')) : COUNTRIES;
   return (
     <div className={className}>
       {label && (
@@ -35,7 +39,7 @@ export default function CountrySelect({
           value={value || 'US'}
           onChange={e => onChange(e.target.value)}
         >
-          {COUNTRIES.map(c => (
+          {options.map(c => (
             <option key={c.code} value={c.code}>
               {c.flag} {c.name}
             </option>

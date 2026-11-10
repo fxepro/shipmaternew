@@ -9,6 +9,7 @@ import {
 import { freightJobApi } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { OfferDetailPanel } from '@/components/jobs/OfferDetailPanel';
+import { VsMarket } from '@/components/rates/MarketRate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -147,7 +148,7 @@ export default function ShipperOffersPage() {
               Carrier Offers
             </h1>
             <p className="text-sm text-[var(--color-text-faint)] mt-0.5">
-              All offers across your open-market jobs
+              All offers on your Marketplace loads
             </p>
           </div>
           {isFetching && !isLoading && (
@@ -298,6 +299,7 @@ export default function ShipperOffersPage() {
                       {/* Amount */}
                       <td className="px-4 py-3.5 text-sm font-bold text-[var(--color-text)]">
                         {fmt(offer.amount)}
+                        <p><VsMarket offerCents={Math.round((parseFloat(String(offer.amount)) || 0) * 100)} market={offer.job?.market_rate} /></p>
                         {(offer.rate_type === 'per_mile' || offer.rate_type === 'hourly') && offer.rate_value && (
                           <p className="text-[11px] font-normal text-[var(--color-text-faint)]">
                             {fmt(offer.rate_value)}/{offer.rate_type === 'per_mile' ? 'mi' : 'hr'}

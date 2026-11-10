@@ -71,10 +71,10 @@ export const SHIPPER_TOPICS: ManualTopic[] = [
     subtopics: [
       {
         id: 'my-shipments',
-        title: 'My Shipments',
+        title: 'Shipments',
         href: '/shipper/shipments',
         summary:
-          'Master list of your organization’s shipments—status, carrier, and tracking context. Open a row for detail, documents, and delivery outcome.',
+          'Every load, from draft to delivered, with Draft, Posted, Booked, In transit and Delivered tabs. Drafts and posted loads open the load page; booked ones open tracking, documents and delivery. Brokers see this page as Loads.',
         bullets: [
           'Filter and scan shipments by status',
           'Open a shipment for stops, carrier, and history',
@@ -112,41 +112,41 @@ export const SHIPPER_TOPICS: ManualTopic[] = [
   },
   {
     slug: 'jobs',
-    title: 'Jobs',
+    title: 'Freight',
     summary:
-      'Turn demand into work carriers can accept: post jobs, manage your postings, decide on offers, and run contracted freight against standing rates.',
+      'Get loads moving: post a load to the Marketplace or tender it to a contract carrier, decide on offers, and keep your carrier contracts.',
     bullets: [
-      'Create spot or contracted job postings',
-      'Track every job from open through complete',
-      'Accept or decline carrier offers',
-      'Run preferred freight under Network contracts',
+      'Post a load to the Marketplace (spot) or to a contract carrier',
+      'Accept or decline Marketplace offers',
+      'Tender contract freight at your agreed rates',
+      'Keep the contracts those rates come from',
     ],
     icon: Briefcase,
     subtopics: [
       {
-        id: 'create-job',
-        title: 'Create Job',
-        href: '/shipper/jobs/contracted/new',
+        id: 'rate-check',
+        title: 'Rate check',
+        href: '/shipper/rate-check',
         summary:
-          'Post new work with pickup, delivery, equipment, and terms. Prefer contracted flow when a Network contract already sets the partner and rate.',
+          'See the market range for a lane before you post: low, typical and high, worked out from road miles, a per-mile rate for the equipment, the weekly diesel price and extras such as hazmat or extra stops. Once a lane has enough completed loads on Shipmater, their rates are blended in. The same range appears in the rate step of Post a load, where you set the posted rate carriers see.',
         bullets: [
-          'Enter origin, destination, equipment, and timing',
-          'Set commercial terms for carriers to respond to',
-          'Start from a contracted agreement when one exists',
-          'Reuse saved Network addresses on the form',
+          'Enter origin, destination, equipment and extras',
+          'Use the typical figure as the posted rate, or set your own',
+          'Offers show how far above or below market they are',
+          'Recent checks are kept for your company',
         ],
       },
       {
-        id: 'my-jobs',
-        title: 'My Jobs',
-        href: '/shipper/jobs',
+        id: 'create-job',
+        title: 'Post a load',
+        href: '/shipper/jobs/contracted/new',
         summary:
-          'Inventory of jobs you posted and where each sits in its lifecycle—from open to awarded to complete.',
+          'Build a load with its pickups, drop-offs, freight and terms, then post it to the Marketplace for offers or tender it to a carrier you have a contract with.',
         bullets: [
-          'List all jobs for your organization',
-          'See lifecycle status on each posting',
-          'Open a job for detail and next actions',
-          'Find stale open work to close or retender',
+          'Enter stops, freight, equipment and timing',
+          'Marketplace: set the terms carriers make offers on',
+          'Contract carrier: pick the contract and its rate',
+          'Reuse saved locations on the form',
         ],
       },
       {
@@ -154,25 +154,25 @@ export const SHIPPER_TOPICS: ManualTopic[] = [
         title: 'Offers',
         href: '/shipper/jobs/offers',
         summary:
-          'Decision queue for inbound carrier bids and offers. Accept to award; decline to clear noise.',
+          'Offers carriers have made on your Marketplace loads. Accept one to book that carrier; decline the rest.',
         bullets: [
-          'Review incoming carrier bids and offers',
-          'Compare rate and service on each response',
-          'Accept an offer to award the job',
+          'Review offers on your Marketplace loads',
+          'Compare rate and service on each offer',
+          'Accept an offer to book the carrier',
           'Decline offers you will not take',
         ],
       },
       {
         id: 'contracted',
-        title: 'Contracted',
+        title: 'Contract freight',
         href: '/shipper/jobs/contracted',
         summary:
-          'Jobs tied to standing Network contracts and preferred rates—repeat freight without a full spot auction each time.',
+          'Loads tendered to your contract carriers at agreed rates, with no Marketplace offers. Repeat lanes without pricing each load again.',
         bullets: [
-          'Work jobs linked to preferred carrier agreements',
-          'Use contract rates (per mile, flat, hourly, etc.)',
-          'Post contracted freight faster for repeat lanes',
-          'Keep preferred partners separate from pure spot tenders',
+          'See loads tendered under carrier contracts',
+          'Use contract rates (per mile, flat, hourly)',
+          'Tender repeat lanes quickly',
+          'Keep contract freight apart from Marketplace loads',
         ],
       },
     ],
@@ -181,7 +181,7 @@ export const SHIPPER_TOPICS: ManualTopic[] = [
     slug: 'network',
     title: 'Network',
     summary:
-      'Your partners and reference data: carriers, rate agreements, and saved pickup/delivery locations that Jobs and Shipments reuse.',
+      'Reference information: the carriers and receivers you work with and your saved locations. Contracts are under Freight.',
     bullets: [
       'Find and prefer carriers',
       'Store standing rate contracts',
@@ -208,7 +208,7 @@ export const SHIPPER_TOPICS: ManualTopic[] = [
         title: 'Contracts',
         href: '/shipper/contracts',
         summary:
-          'Standing commercial agreements with preferred carriers. Source of truth for rates used when posting contracted jobs.',
+          'Standing commercial agreements with preferred carriers. Source of truth for rates used when tendering contract freight.',
         bullets: [
           'Create and maintain rate agreements',
           'Store per-mile, flat, hourly, or similar terms',
@@ -225,7 +225,7 @@ export const SHIPPER_TOPICS: ManualTopic[] = [
         bullets: [
           'Add and edit ship-from locations',
           'Store dock contacts and site details',
-          'Reuse pickups on Create Job and shipments',
+          'Reuse pickups when you post a load',
           'Retire obsolete origins so they are not selected by mistake',
         ],
       },
@@ -318,11 +318,11 @@ export const CARRIER_TOPICS: ManualTopic[] = [
     slug: 'overview',
     title: 'Overview',
     summary:
-      'Carrier home after login. See available freight signals, active work, and whether verification still blocks bidding—then jump to the right Jobs or Account page.',
+      'Carrier home after login. See available freight signals, active work, and whether verification still blocks bidding—then jump to the Marketplace, Loads or Account.',
     bullets: [
       'See available freight and active assignments at a glance',
       'Spot verification or readiness gaps early',
-      'Jump into Available, My Jobs, or Profile',
+      'Jump into the Marketplace, Loads or Profile',
     ],
     icon: LayoutDashboard,
     subtopics: [
@@ -342,53 +342,52 @@ export const CARRIER_TOPICS: ManualTopic[] = [
   },
   {
     slug: 'jobs',
-    title: 'Jobs',
+    title: 'Freight',
     summary:
-      'Find loads, run assigned work, and answer direct shipper offers. This is the haul workflow—not payouts or profile documents.',
+      'Find loads on the Marketplace, run the loads you are booked on, and follow your offers. This is the haul workflow, not payouts or profile documents.',
     bullets: [
-      'Browse open jobs you can bid on',
-      'Execute assigned jobs through delivery',
-      'Accept or decline direct shipper offers',
+      'Make offers on Marketplace loads',
+      'Run booked loads through delivery',
+      'Follow the offers you have made',
     ],
     icon: Briefcase,
     subtopics: [
       {
         id: 'available',
-        title: 'Available',
+        title: 'Marketplace',
         href: '/carrier/jobs',
         summary:
-          'Open market of jobs you can pursue once the carrier account is approved. Discovery and bidding—not execution.',
+          'Spot loads shippers and brokers have posted, open to approved carriers. Find work and make offers here; running the load happens under Loads.',
         bullets: [
-          'Browse open jobs by lane and equipment',
-          'Review timing and rate expectations',
-          'Submit bids when the account is approved',
-          'Move won work into My Jobs after award',
+          'Browse loads by lane and equipment',
+          'Review timing and rate',
+          'Make an offer once your company is approved',
+          'Loads you win move to Loads',
         ],
       },
       {
         id: 'my-jobs',
-        title: 'My Jobs',
+        title: 'Loads',
         href: '/carrier/my-jobs',
         summary:
-          'Assigned freight for your carrier org. Start, update, and deliver from here so shippers see accurate progress.',
+          'Every load your company is booked on, from Marketplace offers and contract freight, with Booked, In transit and Delivered tabs. Drivers see the loads they are on as Trips.',
         bullets: [
-          'List jobs assigned to your organization',
-          'Start and update job status through delivery',
-          'Keep location/status updates current for shipper tracking',
-          'Handle exceptions on committed hauls',
+          'See booked, in-transit and delivered loads',
+          'Assign a driver and run stops through delivery',
+          'Keep stop updates current for shipper tracking',
+          'Download rate confirmation, BOL and POD',
         ],
       },
       {
         id: 'offers',
-        title: 'Offers',
+        title: 'My offers',
         href: '/carrier/offers',
         summary:
-          'Direct proposals from shippers pointed at you. Respond quickly—accept to take the load, decline to free capacity.',
+          'Offers you have made on Marketplace loads and where each stands: waiting, accepted or declined.',
         bullets: [
-          'Review direct tenders from shippers',
-          'Accept an offer to take the assignment',
-          'Decline offers you cannot cover',
-          'Confirm accepted work appears under My Jobs',
+          'See every offer you have made',
+          'Withdraw an offer the shipper has not answered',
+          'Accepted offers appear under Loads',
         ],
       },
     ],
@@ -452,7 +451,7 @@ export const CARRIER_TOPICS: ManualTopic[] = [
           'Ten tabs: Personal through Reviews',
           'Complete Personal before Identity and the background check',
           'Service types drive Insurance and Commercial requirements',
-          'Clear verification gaps that block Available jobs',
+          'Clear verification gaps that block the Marketplace',
         ],
         guideKey: 'carrier-profile',
       },

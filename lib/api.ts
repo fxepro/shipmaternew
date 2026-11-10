@@ -311,7 +311,7 @@ export const freightJobApi = {
   declineOffer:  (jobId: number, offerId: number) =>
                    api.post(`/api/v1/shipper/freight-jobs/${jobId}/offers/${offerId}/decline`),
   // Offer terms — shipper saves quote requirements on open job
-  saveTerms:     (jobId: number, data: { quote_requirements: Record<string, unknown> }) =>
+  saveTerms:     (jobId: number, data: { quote_requirements: Record<string, unknown>; posted_rate_cents?: number | null }) =>
                    api.patch(`/api/v1/shipper/freight-jobs/${jobId}/terms`, data),
   // Carrier: all my offers across all jobs
   carrierMyOffers: (params?: Record<string, unknown>) =>
@@ -487,11 +487,27 @@ export const backgroundApi = {
 // ── Admin → Settings → Business verification (KYB: EIN, Secretary of State, address, OFAC) ──
 export const kybApi = {
   settings:       () => api.get('/api/v1/admin/settings/kyb'),
-  updateSettings: (data: { provider: string; mode: 'test' | 'live' }) => api.put('/api/v1/admin/settings/kyb', data),
+  updateSettings: (data: { provider: string; mode?: 'test' | 'live'; countries?: string[] }) => api.put('/api/v1/admin/settings/kyb', data),
   test:           (provider: string) => api.post('/api/v1/admin/settings/kyb/test', { provider }),
+  countries:      () => api.get('/api/v1/kyb/countries'),
+};
+
+// One Test / Live switch for every outside check (api/app/Support/PlatformMode.php)
+export const platformModeApi = {
+  get:  () => api.get('/api/v1/admin/settings/mode'),
+  save: (mode: 'test' | 'live') => api.put('/api/v1/admin/settings/mode', { mode }),
 };
 
 // ── Admin → Integrations: every outside service, keys set or not (never values), connection test ──
+// ── Rate check: market rate guidance (api/app/Services/Rates/RateEstimator.php) ──
+export const ratesApi = {
+  check:    (data: Record<string, unknown>) => api.post('/api/v1/rates/check', data),
+  history:  () => api.get('/api/v1/rates/checks'),
+  forJob:   (jobId: number) => api.get(`/api/v1/shipper/freight-jobs/${jobId}/market-rate`),
+  settings: () => api.get('/api/v1/admin/settings/rates'),
+  saveSettings: (data: Record<string, unknown>) => api.put('/api/v1/admin/settings/rates', data),
+};
+
 export const integrationsApi = {
   list: () => api.get('/api/v1/admin/integrations'),
   test: (key: string) => api.post(`/api/v1/admin/integrations/${key}/test`),

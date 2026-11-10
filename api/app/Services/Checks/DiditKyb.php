@@ -50,7 +50,8 @@ class DiditKyb implements KybProvider
         $vendor = "org-{$o->id}";
         $registry = $this->registry($input, $vendor);
         $aml = $this->aml($input['name'], $vendor);
-        $ein = $this->einFromDocument($o, $input, $vendor);
+        // Outside the US there is no W-9: the registration number is matched against the register instead
+        $ein = ($input['country'] ?? 'US') === 'US' ? $this->einFromDocument($o, $input, $vendor) : ['foreign' => true];
         return $this->business($registry, $aml, $ein, $input);
     }
 
@@ -72,15 +73,19 @@ class DiditKyb implements KybProvider
 
     private function registry(array $input, string $vendor): array
     {
-        foreach (array_unique([$input['state'], 'DE']) as $state) {
-            $found = $this->http()->post('/v3/kyb/search/', ['country_code' => "US-{$state}", 'name' => $input['name'], 'vendor_data' => $vendor])->throw()->json();
+        $country = $input['country'] ?? 'US';
+        // US registers are per state (US-TX), then Delaware; elsewhere one national register per ISO code
+        $codes = $country === 'US' ? array_map(fn ($s) => "US-{$s}", array_unique([$input['state'], 'DE'])) : [$country];
+        foreach ($codes as $code) {
+            $state = $country === 'US' ? substr($code, 3) : $country;
+            $found = $this->http()->post('/v3/kyb/search/', ['country_code' => $code, 'name' => $input['name'], 'vendor_data' => $vendor])->throw()->json();
             $pick = $this->bestMatch($found['kyb_registry']['companies'] ?? [], $input['name']);
             if (!$pick) continue;
             $sel = $this->http(45)->post('/v3/kyb/select/', ['kyb_response_id' => $pick['kyb_response_id'], 'vendor_data' => $vendor, 'save_api_request' => true])->throw()->json();
             $company = $sel['kyb_registry'] ?? [];
             return ['id' => $sel['request_id'] ?? null, 'company' => $company, 'resolved' => ($company['data_resolved'] ?? true) !== false, 'state' => $state];
         }
-        return ['id' => null, 'company' => null, 'resolved' => true, 'state' => $input['state']];
+        return ['id' => null, 'company' => null, 'resolved' => true, 'state' => $country === 'US' ? $input['state'] : $country];
     }
 
     /** The candidate whose name matches best, ignoring case, punctuation and the company-type ending */
@@ -138,13 +143,21 @@ class DiditKyb implements KybProvider
 
         // EIN
         if (isset($ein['previous'])) $tin = $task('tin', $back($ein['previous']), $ein['previous']['message'] ?? null);
+        elseif (!empty($ein['foreign'])) {
+            // The registration number entered, found anywhere in the register's record
+            $want = preg_replace('/[^A-Z0-9]/', '', strtoupper($input['tin']));
+            $have = preg_replace('/[^A-Z0-9]/', '', strtoupper(json_encode($c ?? [])));
+            $tin = !$c ? $task('tin', 'review', 'No registry record to compare the registration number with')
+                : ($want !== '' && str_contains($have, $want) ? $task('tin', 'success', 'Matches the registry') : $task('tin', 'review', 'Not found in the registry record'));
+        }
         elseif (!empty($ein['missing'])) $tin = $task('tin', 'review', 'Upload a W-9 so the EIN can be read from it');
         elseif (!empty($ein['error']) || ($ein['ein'] ?? '') === '') $tin = $task('tin', 'review', 'The EIN could not be read from the W-9');
         else $tin = $ein['ein'] === $input['tin'] ? $task('tin', 'success', 'Matches the W-9') : $task('tin', 'failure', 'Differs from the W-9');
 
         // Registration
         $where = $registry['state'] ? " in {$registry['state']}" : '';
-        if (!$c) $sos = $task('sos_not_found', 'failure', "Not found in the state registry{$where}");
+        $registerName = ($input['country'] ?? 'US') === 'US' ? 'state registry' : 'company register';
+        if (!$c) $sos = $task('sos_not_found', 'failure', "Not found in the {$registerName}{$where}");
         else {
             $st = strtolower((string) ($c['registry_status'] ?? ''));
             $sos = $task('sos_active', $st === 'active' ? 'success' : ($st === '' ? 'review' : 'failure'), ucfirst($st ?: 'status not given') . $where);
@@ -154,7 +167,7 @@ class DiditKyb implements KybProvider
         if (!$c) $addr = $task('address_verification', 'review', 'No registry record to compare with');
         else {
             $text = strtolower(json_encode([$c['registered_address'] ?? null, $c['addresses'] ?? []]));
-            $ok = str_contains($text, strtolower($input['zip'])) || str_contains($text, strtolower($input['city']));
+            $ok = ($input['zip'] !== '' && str_contains($text, strtolower($input['zip']))) || str_contains($text, strtolower($input['city']));
             $addr = $task('address_verification', $ok ? 'success' : 'review', $ok ? 'Matches the registry' : 'Differs from the registered address');
         }
 

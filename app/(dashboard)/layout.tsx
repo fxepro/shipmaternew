@@ -109,6 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         brandName={brandName}
         logoUrl={logoUrl}
         permissions={user.permissions}
+        orgRole={user.org_role}
       />
       <div className="flex flex-1 flex-col min-w-0">
         {viewType && <ViewAsBar type={viewType} current={viewAs} />}

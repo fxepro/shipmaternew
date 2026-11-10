@@ -50,6 +50,11 @@ return [
     ],
 
     // Business verification backup (app/Services/Checks/DiditKyb.php); one key per Didit application, sandbox or live
+    // US Energy Information Administration: weekly diesel price for the rate check fuel surcharge (free key)
+    'eia' => [
+        'key' => env('EIA_API_KEY'),
+    ],
+
     'didit' => [
         'key'            => env('DIDIT_API_KEY', ''),
         'webhook_secret' => env('DIDIT_WEBHOOK_SECRET', ''),

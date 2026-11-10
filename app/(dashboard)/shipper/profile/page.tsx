@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { paymentApi, profileApi, orgApi, shipperVerificationApi } from '@/lib/api';
+import { paymentApi, profileApi, orgApi, shipperVerificationApi, kybApi } from '@/lib/api';
 import { TeamManager } from '@/components/team/TeamManager';
 import { useIsBrokerPortal } from '@/lib/portal';
 import { CompanyCompliance } from '@/components/compliance/CompanyCompliance';
@@ -477,6 +477,8 @@ function VerificationBadge({ status }: { status: 'verified' | 'review' | 'pendin
 }
 
 function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
+  // The registered address can only be in a country where business verification runs (Admin → Platform → Verification)
+  const { data: kybCountries } = useQuery({ queryKey: ['kyb-countries'], queryFn: () => kybApi.countries().then((r) => r.data.data as string[]), staleTime: 300_000 });
   const qc = useQueryClient();
   const broker = useIsBrokerPortal();
   const [form, setForm] = useState({
@@ -774,6 +776,7 @@ function BusinessTab({ initialData }: { initialData: ShipperProfile }) {
         subtitle="Legal registration address for billing and compliance"
       >
         <AddressFields
+          countries={kybCountries}
           value={{ address: form.biz_street, city: form.biz_city, state: form.biz_state, zip: form.biz_zip, country: form.biz_country }}
           onChange={v => setForm(f => ({
             ...f,

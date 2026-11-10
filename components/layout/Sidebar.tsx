@@ -9,6 +9,7 @@ import {
   Briefcase, PlusCircle, Radio, ClipboardList, BookOpen, Warehouse, Palette,
   TrendingUp, Shield, Plus, Minus, CreditCard, Receipt, FileSignature, Plug,
   Settings, UserCog, Repeat,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { canOpen, type Permissions } from '@/lib/permissions';
@@ -37,25 +38,25 @@ export const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Shipments',
       items: [
-        { label: 'My Shipments',  href: '/shipper/shipments',     icon: Package },
-        { label: 'Route Planner', href: '/shipper/route-planner', icon: Route   },
-        { label: 'Live Tracking', href: '/shipper/tracking',      icon: MapPin  },
+        { label: 'Shipments',     href: '/shipper/shipments',     icon: Package },
+        { label: 'Live tracking', href: '/shipper/tracking',      icon: MapPin  },
+        { label: 'Route planner', href: '/shipper/route-planner', icon: Route   },
       ],
     },
     {
-      section: 'Jobs',
+      section: 'Freight',
       items: [
-        { label: 'Create Job',  href: '/shipper/jobs/contracted/new', icon: PlusCircle    },
-        { label: 'My Jobs',     href: '/shipper/jobs',              icon: ClipboardList },
-        { label: 'Offers',      href: '/shipper/jobs/offers',       icon: Radio         },
-        { label: 'Contracted',  href: '/shipper/jobs/contracted',   icon: Briefcase     },
+        { label: 'Post a load',      href: '/shipper/jobs/contracted/new', icon: PlusCircle },
+        { label: 'Rate check',       href: '/shipper/rate-check',          icon: Gauge      },
+        { label: 'Offers',           href: '/shipper/jobs/offers',         icon: Radio      },
+        { label: 'Contract freight', href: '/shipper/jobs/contracted',     icon: Briefcase  },
+        { label: 'Contracts',        href: '/shipper/contracts',           icon: FileText   },
       ],
     },
     {
       section: 'Network',
       items: [
         { label: 'Carriers',            href: '/shipper/carriers',              icon: Truck     },
-        { label: 'Contracts',           href: '/shipper/contracts',             icon: FileText  },
         { label: 'Receivers',           href: '/shipper/receivers',             icon: Building2 },
         { label: 'Locations',           href: '/shipper/locations',             icon: Warehouse },
       ],
@@ -89,11 +90,11 @@ export const NAV: Record<UserRole, NavSection[]> = {
       items: [{ label: 'Dashboard', href: '/carrier', icon: LayoutDashboard }],
     },
     {
-      section: 'Jobs',
+      section: 'Freight',
       items: [
-        { label: 'Available', href: '/carrier/jobs',    icon: Briefcase     },
-        { label: 'My Jobs',   href: '/carrier/my-jobs', icon: ClipboardList },
-        { label: 'Offers',    href: '/carrier/offers',  icon: Radio         },
+        { label: 'Marketplace', href: '/carrier/jobs',    icon: Briefcase     },
+        { label: 'Loads',       href: '/carrier/my-jobs', icon: ClipboardList },
+        { label: 'My offers',   href: '/carrier/offers',  icon: Radio         },
       ],
     },
     {
@@ -144,8 +145,8 @@ export const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Deliveries',
       items: [
-        { label: 'My Deliveries', href: '/receiver/shipments', icon: Package },
-        { label: 'Live Tracking', href: '/receiver/tracking',  icon: MapPin  },
+        { label: 'Inbound',       href: '/receiver/shipments', icon: Package },
+        { label: 'Live tracking', href: '/receiver/tracking',  icon: MapPin  },
       ],
     },
     {
@@ -164,7 +165,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Operations',
       items: [
-        { label: 'Shipments',        href: '/admin/shipments', icon: Package       },
+        { label: 'Loads',            href: '/admin/shipments', icon: Package       },
         { label: 'Disputes',         href: '/admin/disputes',  icon: AlertTriangle },
         { label: 'Users',            href: '/admin/users',     icon: Users         },
       ],
@@ -228,7 +229,13 @@ NAV.admin.push(surrogateView('shipper', 'Shipper View'), surrogateView('carrier'
 // Brokers: the shipper pages under /broker (lib/portal.ts)
 NAV.broker = NAV.shipper.map((s) => ({
   ...s,
-  items: s.items.map((i) => ({ ...i, href: i.href.replace(/^\/shipper(?=\/|$)/, '/broker') })),
+  section: s.section === 'Shipments' ? 'Loads' : s.section,
+  items: s.items.map((i) => ({
+    ...i,
+    href: i.href.replace(/^\/shipper(?=\/|$)/, '/broker'),
+    // Brokers say loads; shippers say shipments
+    label: i.href === '/shipper/shipments' ? 'Loads' : i.label,
+  })),
 }));
 
 interface SidebarProps {
@@ -241,9 +248,11 @@ interface SidebarProps {
   logoUrl?: string;
   /** Role matrix levels; pages the role can't open are hidden */
   permissions?: Permissions;
+  /** The person's role in their company; a driver's Loads page is their Trips */
+  orgRole?: string;
 }
 
-export function Sidebar({ role, isPlatformTenant, brandName, logoUrl, permissions }: SidebarProps) {
+export function Sidebar({ role, isPlatformTenant, brandName, logoUrl, permissions, orgRole }: SidebarProps) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -258,7 +267,8 @@ export function Sidebar({ role, isPlatformTenant, brandName, logoUrl, permission
     : baseSections;
   // Hide pages this person's role can't open (the API enforces it either way)
   const sections = withBranding
-    .map((s) => ({ ...s, items: s.items.filter((i) => canOpen(permissions, i.href)) }))
+    .map((s) => ({ ...s, items: s.items.filter((i) => canOpen(permissions, i.href))
+      .map((i) => (orgRole === 'driver' && i.href === '/carrier/my-jobs' ? { ...i, label: 'Trips' } : i)) }))
     .filter((s) => s.items.length > 0);
 
   const allItems = sections.flatMap((s) => s.items);

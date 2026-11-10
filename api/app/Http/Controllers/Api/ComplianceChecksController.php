@@ -48,18 +48,19 @@ class ComplianceChecksController extends Controller
         abort_unless($request->user()->isPlatformAdmin(), 403);
         $data = $request->validate([
             'provider' => ['required', 'in:' . implode(',', Kyb::PROVIDERS)],
-            'mode'     => ['required', 'in:test,live'],
+            'countries'   => ['sometimes', 'array'],
+            'countries.*' => ['string', 'size:2'],
         ]);
+        $data['countries'] = array_values(array_filter(array_map('strtoupper', $data['countries'] ?? Kyb::settings()['countries']),
+            fn ($c) => isset(\App\Support\KybCountries::ALL[$c]) && !in_array($c, \App\Support\KybCountries::BLOCKED, true)));
         if ($data['provider'] === 'fake' && app()->environment('production')) {
             return response()->json(['message' => "The test provider isn't available in production."], 422);
         }
-        if ($data['mode'] === 'live' && !Kyb::liveAllowed()) {
-            return response()->json(['message' => 'Live mode is turned off on this computer. Use it on the live site only.'], 422);
-        }
-        if ($data['mode'] === 'live' && !Kyb::provider($data['provider'])->configured('live')) {
+        // Test / Live is the platform switch (App\Support\PlatformMode)
+        if (Kyb::mode() === 'live' && !Kyb::provider($data['provider'])->configured('live')) {
             return response()->json(['message' => "Add the provider's live key to the server before switching to live mode."], 422);
         }
-        Kyb::save($data, $request->user()->id);
+        Kyb::save([...Kyb::settings(), ...$data], $request->user()->id);
         return response()->json(['data' => $this->payload()]);
     }
 
@@ -87,7 +88,8 @@ class ComplianceChecksController extends Controller
                 'live_ready' => Kyb::provider($p)->configured('live'),
                 'webhook'    => $p === 'fake' ? null : $base . $p,
             ])->values();
-        return [...Kyb::settings(), 'providers' => $providers, 'live_allowed' => Kyb::liveAllowed(),
+        return [...Kyb::settings(), 'mode' => Kyb::mode(), 'providers' => $providers, 'live_allowed' => Kyb::liveAllowed(),
+            'all_countries' => \App\Support\KybCountries::list(), 'didit_ready' => Kyb::provider('didit')->configured(Kyb::mode()),
             'sam_gov_ready' => (string) config('services.sam_gov.key') !== '', 'fmcsa_ready' => (string) config('services.fmcsa.key') !== ''];
     }
 }

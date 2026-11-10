@@ -40,7 +40,7 @@ export default function ShipperContractedJobPage({ params }: { params: Promise<{
   if (isError || !job) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
-        <AlertCircle size={16} /> Job not found or you don't have access.
+        <AlertCircle size={16} /> Load not found or you don't have access.
       </div>
     );
   }
@@ -50,7 +50,7 @@ export default function ShipperContractedJobPage({ params }: { params: Promise<{
       job={job}
       role="shipper"
       backHref={to('/shipper/jobs/contracted')}
-      backLabel="Contracted Jobs"
+      backLabel="Contract freight"
       currentUserId={currentUserId}
       onStopUpdated={() => qc.invalidateQueries({ queryKey: ['shipper-job', jobId] })}
       onJobUpdated={()  => qc.invalidateQueries({ queryKey: ['shipper-job', jobId] })}

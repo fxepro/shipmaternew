@@ -9,17 +9,18 @@ import {
 } from 'lucide-react';
 import { freightJobApi } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { useCurrentUser } from '@/components/layout/PermissionsContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type FilterTab = 'all' | 'open_market' | 'assigned' | 'in_progress' | 'completed';
+type FilterTab = 'all' | 'booked' | 'in_progress' | 'completed';
 
 // ── Status / badge helpers ─────────────────────────────────────────────────────
 
 function jobStatusLabel(job: any): string {
-  if (job.status === 'posted') return job.carrier_id ? 'Dispatched' : 'Live';
-  if (job.status === 'in_progress') return 'In Progress';
-  if (job.status === 'completed')   return 'Completed';
+  if (job.status === 'posted') return job.carrier_id ? 'Booked' : 'Posted';
+  if (job.status === 'in_progress') return 'In transit';
+  if (job.status === 'completed')   return 'Delivered';
   if (job.status === 'draft')       return 'Draft';
   return job.status;
 }
@@ -43,7 +44,8 @@ function StatusIcon({ job }: { job: any }) {
 // ── Job Card ──────────────────────────────────────────────────────────────────
 
 function JobCard({ job }: { job: any }) {
-  const isOpen      = !job.carrier_id;
+  // Won on the Marketplace, or tendered under a contract
+  const isOpen      = !job.contract_id;
   const stops       = job.stops ?? [];
   const pickup      = stops.find((s: any) => s.stop_type === 'pickup');
   const dropoff     = stops.find((s: any) => s.stop_type === 'dropoff');
@@ -62,7 +64,7 @@ function JobCard({ job }: { job: any }) {
           {/* Title + badges */}
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-[var(--color-text)] truncate">
-              {job.title || `Job #${job.id}`}
+              {job.title || `Load #${job.id}`}
             </p>
 
             {/* Type badge */}
@@ -72,7 +74,7 @@ function JobCard({ job }: { job: any }) {
                 : 'bg-purple-50 text-purple-700'
             }`}>
               {isOpen ? <Globe size={9} /> : <FileText size={9} />}
-              {isOpen ? 'Open market' : 'Contracted'}
+              {isOpen ? 'Marketplace' : 'Contract freight'}
             </span>
 
             {/* Status badge */}
@@ -119,23 +121,24 @@ function JobCard({ job }: { job: any }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const TABS: { key: FilterTab; label: string }[] = [
-  { key: 'all',          label: 'All'         },
-  { key: 'open_market',  label: 'Open Market' },
-  { key: 'assigned',     label: 'Assigned'    },
-  { key: 'in_progress',  label: 'In Progress' },
-  { key: 'completed',    label: 'Completed'   },
+  { key: 'all',          label: 'All'        },
+  { key: 'booked',       label: 'Booked'     },
+  { key: 'in_progress',  label: 'In transit' },
+  { key: 'completed',    label: 'Delivered'  },
 ];
 
 export default function CarrierMyJobsPage() {
   const [tab, setTab] = useState<FilterTab>('all');
+  // A driver sees the loads they are on as their trips
+  const driver = useCurrentUser()?.org_role === 'driver';
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['carrier-freight-jobs', tab],
+    // Only loads this carrier is booked on; open loads are on the Marketplace
     queryFn: () => freightJobApi.carrierList(
-      tab === 'all'         ? {} :
-      tab === 'open_market' ? { type: 'open_market' } :
-      tab === 'assigned'    ? { type: 'assigned' } :
-                              { status: tab }
+      tab === 'all'    ? { type: 'assigned' } :
+      tab === 'booked' ? { type: 'assigned', status: 'posted' } :
+                         { type: 'assigned', status: tab }
     ),
   });
 
@@ -153,10 +156,10 @@ export default function CarrierMyJobsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="page-title">
-            My Jobs
+            {driver ? 'Trips' : 'Loads'}
           </h1>
           <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">
-            Open market jobs and your assigned runs
+            Loads you are booked on, from Marketplace offers and contract freight
           </p>
         </div>
       </div>
@@ -185,18 +188,15 @@ export default function CarrierMyJobsPage() {
         <EmptyState
           icon={Truck}
           title={
-            tab === 'open_market' ? 'No open market jobs' :
-            tab === 'assigned'    ? 'No assigned jobs' :
-            tab === 'in_progress' ? 'No jobs in progress' :
-            tab === 'completed'   ? 'No completed jobs' :
-                                    'No jobs yet'
+            tab === 'booked'      ? 'No booked loads' :
+            tab === 'in_progress' ? 'No loads in transit' :
+            tab === 'completed'   ? 'No delivered loads' :
+                                    'No loads yet'
           }
           description={
-            tab === 'open_market'
-              ? 'Open jobs posted by shippers will appear here.'
-              : tab === 'assigned'
-              ? 'Jobs dispatched directly to you will appear here.'
-              : 'Jobs will appear here once they are active.'
+            tab === 'all'
+              ? 'Loads you win on the Marketplace and contract freight tendered to you will appear here.'
+              : 'Loads will appear here once they are active.'
           }
         />
       ) : (

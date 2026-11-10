@@ -230,7 +230,12 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     // Admin: fees (Platform settings)
     Route::put('/admin/settings/fees',    [\App\Http\Controllers\Api\FeesController::class, 'update']);
     Route::get('/admin/integrations',              [\App\Http\Controllers\Api\AdminIntegrationsController::class, 'index']);
+    Route::get('/admin/settings/rates',            [\App\Http\Controllers\Api\RateCheckController::class, 'settings']);
+    Route::put('/admin/settings/rates',            [\App\Http\Controllers\Api\RateCheckController::class, 'updateSettings']);
     Route::post('/admin/integrations/{key}/test',  [\App\Http\Controllers\Api\AdminIntegrationsController::class, 'test']);
+    Route::get('/admin/settings/mode',             [\App\Http\Controllers\Api\PlatformModeController::class, 'show']);
+    Route::put('/admin/settings/mode',             [\App\Http\Controllers\Api\PlatformModeController::class, 'update']);
+    Route::get('/kyb/countries',                   [\App\Http\Controllers\Api\PlatformModeController::class, 'countries']);
     Route::get('/admin/settings/kyb',              [\App\Http\Controllers\Api\ComplianceChecksController::class, 'settings']);
     Route::put('/admin/settings/kyb',              [\App\Http\Controllers\Api\ComplianceChecksController::class, 'updateSettings']);
     Route::post('/admin/settings/kyb/test',        [\App\Http\Controllers\Api\ComplianceChecksController::class, 'test']);
@@ -403,6 +408,10 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::patch('/shipper/freight-jobs/{job}/billing',              [FreightJobController::class, 'saveBilling'])->middleware('perm:shipper:loads.post');
     Route::patch('/shipper/freight-jobs/{job}/terms',                [FreightJobController::class, 'saveTerms'])->middleware('perm:shipper:loads.post');
     Route::patch('/shipper/freight-jobs/{job}/requirements',         [FreightJobController::class, 'saveRequirements'])->middleware('perm:shipper:loads.post');
+    // Rate check: market rate guidance (App\Services\Rates\RateEstimator)
+    Route::post('/rates/check',                                      [\App\Http\Controllers\Api\RateCheckController::class, 'check'])->middleware(['perm:shipper:loads.post', 'throttle:30,1']);
+    Route::get('/rates/checks',                                      [\App\Http\Controllers\Api\RateCheckController::class, 'history'])->middleware('perm:shipper:loads.post');
+    Route::get('/shipper/freight-jobs/{job}/market-rate',            [\App\Http\Controllers\Api\RateCheckController::class, 'forJob'])->middleware('perm:shipper:loads.post');
     Route::get('/shipper/freight-jobs/{job}/matches',                [FreightJobController::class, 'matches'])->middleware('perm:shipper:loads.view=view');
     Route::post('/shipper/freight-jobs/{job}/post',                  [FreightJobController::class, 'post'])->middleware('perm:shipper:loads.post')->middleware('company.approved');
     Route::get('/jobs/{job}/rate-confirmation',                      [FreightJobController::class, 'rateConfirmation'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');

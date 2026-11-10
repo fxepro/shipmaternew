@@ -252,7 +252,7 @@ class ShipperProfileController extends Controller
             'biz_city'      => ['sometimes', 'nullable', 'string', 'max:100'],
             'biz_state'     => ['sometimes', 'nullable', 'string', 'max:50'],
             'biz_zip'       => ['sometimes', 'nullable', 'string', 'max:20'],
-            'biz_country'   => ['sometimes', 'nullable', 'string', 'size:2'],
+            'biz_country'   => ['sometimes', 'nullable', 'string', 'size:2', fn ($a, $v, $fail) => \App\Support\KybCountries::isEnabled($v) || $fail('Companies in this country cannot be verified on Shipmater yet.')],
 
             // Operating address
             'ops_same_as_biz' => ['sometimes', 'boolean'],

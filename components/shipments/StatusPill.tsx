@@ -14,9 +14,9 @@ const STATUS_STYLES: Record<ShipmentStatus, string> = {
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
   draft:      'Draft',
-  pending:    'Open',
-  assigned:   'Assigned',
-  in_transit: 'In Transit',
+  pending:    'Posted',
+  assigned:   'Booked',
+  in_transit: 'In transit',
   delivered:  'Delivered',
   disputed:   'Disputed',
   cancelled:  'Cancelled',

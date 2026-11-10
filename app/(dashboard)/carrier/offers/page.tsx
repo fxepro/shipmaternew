@@ -120,7 +120,7 @@ export default function CarrierOffersPage() {
           My Offers
         </h1>
         <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">
-          Your submitted offers, grouped by job
+          Your offers on Marketplace loads, grouped by load
         </p>
       </div>
 
@@ -166,7 +166,7 @@ export default function CarrierOffersPage() {
           <p className="text-sm font-semibold text-[var(--color-text-muted)]">No offers</p>
           <p className="mt-1 text-xs text-[var(--color-text-faint)]">
             {filter === 'all'
-              ? 'Browse open jobs and submit your first offer.'
+              ? 'Browse the Marketplace and make your first offer.'
               : `No ${STATUS_LABEL[filter as keyof typeof STATUS_LABEL]?.toLowerCase() ?? filter} offers.`}
           </p>
           {filter === 'all' && (
@@ -187,7 +187,7 @@ export default function CarrierOffersPage() {
               <div className="flex items-start justify-between gap-4 px-5 py-4 bg-[var(--color-cream)] border-b border-[var(--color-cream-dark)]">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-[var(--color-text)] truncate">
-                    {job?.title || `Job #${jobId}`}
+                    {job?.title || `Load #${jobId}`}
                   </p>
                   <div className="mt-1 flex items-center gap-3 flex-wrap text-xs text-[var(--color-text-faint)]">
                     {job?.route_distance_miles && (

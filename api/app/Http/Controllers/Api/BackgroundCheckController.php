@@ -179,7 +179,6 @@ class BackgroundCheckController extends Controller
         abort_unless($request->user()->isPlatformAdmin(), 403);
         $data = $request->validate([
             'provider'              => ['required', 'in:' . implode(',', BackgroundChecks::PROVIDERS)],
-            'mode'                  => ['required', 'in:test,live'],
             'packages'              => ['required', 'array'],
             'packages.*.basic'      => ['nullable', 'string', 'max:100'],
             'packages.*.full'       => ['nullable', 'string', 'max:100'],
@@ -188,10 +187,8 @@ class BackgroundCheckController extends Controller
         if ($data['provider'] === 'fake' && app()->environment('production')) {
             return response()->json(['message' => 'The test provider isn\'t available in production.'], 422);
         }
-        if ($data['mode'] === 'live' && !BackgroundChecks::liveAllowed()) {
-            return response()->json(['message' => 'Live mode is turned off on this computer. Use it on the live site only.'], 422);
-        }
-        if ($data['mode'] === 'live' && !BackgroundChecks::provider($data['provider'])->configured('live')) {
+        // Test / Live is the platform switch (App\Support\PlatformMode)
+        if (BackgroundChecks::mode() === 'live' && !BackgroundChecks::provider($data['provider'])->configured('live')) {
             return response()->json(['message' => 'Add the provider\'s live key to the server before switching to live mode.'], 422);
         }
 
@@ -199,7 +196,7 @@ class BackgroundCheckController extends Controller
         foreach (BackgroundChecks::PROVIDERS as $p) {
             foreach (['basic', 'full', 'upgrade'] as $k) $packages[$p][$k] = trim((string) ($data['packages'][$p][$k] ?? ''));
         }
-        BackgroundChecks::save(['provider' => $data['provider'], 'mode' => $data['mode'], 'packages' => $packages], $request->user()->id);
+        BackgroundChecks::save(['provider' => $data['provider'], 'packages' => $packages], $request->user()->id);
 
         return response()->json(['data' => $this->settingsPayload()]);
     }

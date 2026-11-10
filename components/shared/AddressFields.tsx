@@ -21,6 +21,8 @@ interface AddressFieldsProps {
   /** Required fields — defaults to city + country */
   required?: boolean;
   className?: string;
+  /** Limit the country list to these codes */
+  countries?: string[];
 }
 
 export default function AddressFields({
@@ -29,6 +31,7 @@ export default function AddressFields({
   showStreet = true,
   required = false,
   className = '',
+  countries,
 }: AddressFieldsProps) {
   const country = getCountry(value.country || 'US');
   const subdivisions = getSubdivisions(value.country || 'US');
@@ -120,6 +123,7 @@ export default function AddressFields({
           label="Country"
           required={required}
           id="addr-country"
+          allowed={countries}
         />
       </div>
     </div>

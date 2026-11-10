@@ -426,7 +426,7 @@ export default function LiveTrackingPage() {
                           {STATUS_LABEL[j.status] ?? j.status}
                         </span>
                         {j.contract_id && (
-                          <span className="text-xs text-[var(--color-text-muted)]">Contracted</span>
+                          <span className="text-xs text-[var(--color-text-muted)]">Contract freight</span>
                         )}
                         {carrier && (
                           <span className="text-xs text-[var(--color-text-muted)] truncate max-w-[120px]">{carrier}</span>

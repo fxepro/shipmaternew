@@ -61,8 +61,8 @@ export default function ShipperDashboard() {
         {/* Header */}
         <div className="page-header">
           <h1 className="page-title">Dashboard</h1>
-          {can.do('loads.post') && <Link href={to('/shipper/shipments/new')} className="btn btn-primary">
-            <Plus size={15} /> New Shipment
+          {can.do('loads.post') && <Link href={to('/shipper/jobs/contracted/new')} className="btn btn-primary">
+            <Plus size={15} /> Post a load
           </Link>}
         </div>
 

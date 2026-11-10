@@ -33,6 +33,7 @@ export const PAGE_PERMISSION: Record<string, [string, 'see' | 'do']> = {
   '/shipper/bids':                   ['loads.view', 'see'],
   '/shipper/carriers':               ['carriers.preferred', 'see'],
   '/shipper/contracts':              ['contracts.edit', 'see'],
+  '/shipper/rate-check':             ['loads.post', 'do'],
   '/shipper/locations?type=pickup':  ['locations.manage', 'see'],
   '/shipper/locations':              ['locations.manage', 'see'],
   '/shipper/receivers':              ['locations.manage', 'see'],

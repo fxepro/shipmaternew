@@ -30,7 +30,7 @@ function LoadCard({ job }: { job: any }) {
   const dropoffs = stops.filter((s: any) => s.stop_type === 'dropoff');
   const first    = pickups[0];
   const last     = dropoffs[dropoffs.length - 1];
-  const budget   = money(job.payment_amount_cents);
+  const budget   = money(job.posted_rate_cents ?? job.payment_amount_cents); // the shipper's posted rate
 
   return (
     <Link
@@ -94,8 +94,8 @@ export default function CarrierAvailablePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="page-title">Available Loads</h1>
-        <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">Loads shippers have posted to the open market. Open one to send an offer.</p>
+        <h1 className="page-title">Marketplace</h1>
+        <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">Spot loads shippers and brokers have posted. Open one to make an offer.</p>
       </div>
 
       {isLoading ? (

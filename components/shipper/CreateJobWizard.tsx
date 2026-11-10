@@ -1,5 +1,6 @@
 'use client';
 
+import { PostedRatePicker } from '@/components/rates/MarketRate';
 import { usePortal, useIsBrokerPortal } from '@/lib/portal';
 import { ShipperCustomerPicker, type ShipperCustomer } from '@/components/shipper/ShipperCustomerPicker';
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
@@ -790,6 +791,8 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
 
   // Step 3 – Offer Terms (open jobs only)
   const [quoteTerms, setQuoteTerms] = useState<QuoteTerms>(DEFAULT_TERMS);
+  // The price a Marketplace load is posted at (dollars); carriers offer around it
+  const [postedRate, setPostedRate] = useState('');
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
@@ -1100,6 +1103,8 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
 
     setStops(pickupStops);
 
+    if (job.posted_rate_cents) setPostedRate(String(Math.round(job.posted_rate_cents / 100)));
+
     // Load offer terms if present
     if (job.quote_requirements) {
       const qr = job.quote_requirements;
@@ -1284,7 +1289,10 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
   });
 
   const termsMutation = useMutation({
-    mutationFn: () => freightJobApi.saveTerms(createdJob.id, { quote_requirements: quoteTerms as unknown as Record<string, unknown> }),
+    mutationFn: () => freightJobApi.saveTerms(createdJob.id, {
+      quote_requirements: quoteTerms as unknown as Record<string, unknown>,
+      posted_rate_cents: postedRate ? Math.round(parseFloat(postedRate) * 100) : null,
+    }),
     onSuccess: res => { setCreatedJob(res.data.data); setStep(4); },
   });
 
@@ -1340,17 +1348,17 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
       <div>
         <h1 className="page-title">
           {editJobId
-            ? 'Edit Draft Job'
+            ? 'Edit draft load'
             : isShipment
-              ? 'New Shipment'
-              : 'New Job'}
+              ? 'New contract load'
+              : 'Post a load'}
         </h1>
         <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">
           {editJobId
             ? 'Continue building your saved draft and dispatch when ready'
             : isShipment
               ? 'Dispatch to a carrier under an existing contract — no bidding. Select contract → Build → Route → Billing → Send.'
-              : 'Post to the open market for bids, or dispatch under an existing contract'}
+              : 'Post to the Marketplace for offers, or tender to a contract carrier'}
         </p>
       </div>
 
@@ -1379,9 +1387,9 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
               }`}>
                 <Package size={22} className={jobType === 'open' ? 'text-white' : 'text-[var(--color-teal)] group-hover:text-white transition-colors'} />
               </div>
-              <p className="text-base font-bold text-[var(--color-text)]">Open</p>
+              <p className="text-base font-bold text-[var(--color-text)]">Marketplace</p>
               <p className="mt-1 text-sm text-[var(--color-text-faint)] leading-snug">
-                No existing agreement. Build the manifest and set a rate.
+                Spot: any approved carrier can make an offer. Build the manifest and set a rate.
               </p>
             </button>
 
@@ -1399,9 +1407,9 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
               }`}>
                 <Briefcase size={22} className={jobType === 'contracted' ? 'text-white' : 'text-[var(--color-teal)] group-hover:text-white transition-colors'} />
               </div>
-              <p className="text-base font-bold text-[var(--color-text)]">Contracted</p>
+              <p className="text-base font-bold text-[var(--color-text)]">Contract carrier</p>
               <p className="mt-1 text-sm text-[var(--color-text-faint)] leading-snug">
-                Dispatch directly to a carrier you have an agreement with.
+                Tender directly to a carrier you have a contract with.
               </p>
             </button>
 
@@ -1591,7 +1599,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                   {jobType === 'contracted' ? <FileText size={13} className="text-white" /> : <Package size={13} className="text-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-[var(--color-text-faint)]">{isShipment ? 'Carrier contract' : 'Job type'}</p>
+                  <p className="text-xs text-[var(--color-text-faint)]">{isShipment ? 'Carrier contract' : 'Load type'}</p>
                   <p className="text-sm font-semibold text-[var(--color-text)]">
                     {jobType === 'contracted' && selectedContract
                       ? `${isShipment ? '' : 'Contracted · '}${selectedContract.carrier} — ${selectedContract.carrierCompany}`
@@ -1607,7 +1615,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
               </div>
 
               <div className="rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] p-5 space-y-4">
-                <h2 className="text-base font-semibold text-[var(--color-text)]">Job details</h2>
+                <h2 className="text-base font-semibold text-[var(--color-text)]">Load details</h2>
                 {isBroker && !createdJob && (
                   <ShipperCustomerPicker value={customer} onChange={setCustomer} inputCls={inputCls} labelCls={labelCls} />
                 )}
@@ -1669,7 +1677,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                         : to(`/shipper/jobs/${editJobId}`))
                     : setStep(0)}
                   className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
-                  <ChevronLeft size={15} /> {editJobId ? 'Back to job' : 'Prev'}
+                  <ChevronLeft size={15} /> {editJobId ? 'Back to load' : 'Prev'}
                 </button>
                 {/* In edit mode: job already exists — skip createMutation and go straight to Route */}
                 <button
@@ -1847,11 +1855,14 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                       </div>
                       <div>
                         <p className="text-sm font-bold text-[var(--color-text)]">Offer Terms</p>
-                        <p className="text-xs text-[var(--color-text-faint)]">Define what carriers must quote on for this job</p>
+                        <p className="text-xs text-[var(--color-text-faint)]">Define what carriers must quote on for this load</p>
                       </div>
                     </div>
 
                     <div className="p-5 space-y-6">
+
+                      {/* Market rate and the posted price (components/rates/MarketRate.tsx) */}
+                      {createdJob?.id && <PostedRatePicker jobId={createdJob.id} value={postedRate} onChange={setPostedRate} />}
 
                       {/* Preset grid */}
                       <div>
@@ -2118,7 +2129,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                       </div>
                     ) : (
                       <div className="px-5 py-5">
-                        <p className="text-sm text-[var(--color-text-faint)]">No contract selected (Open job).</p>
+                        <p className="text-sm text-[var(--color-text-faint)]">No contract selected (Marketplace load).</p>
                       </div>
                     )}
 
@@ -2171,9 +2182,9 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                     <div className="flex items-center gap-3">
                       <Tag size={14} className="text-[var(--color-teal)]" />
                       <div>
-                        <p className="text-xs text-[var(--color-text-faint)]">Job type</p>
+                        <p className="text-xs text-[var(--color-text-faint)]">Load type</p>
                         <p className="text-sm font-semibold text-[var(--color-text)]">
-                          Open market · {createdJob.quote_requirements?.preset
+                          Marketplace · {createdJob.quote_requirements?.preset
                             ? QUOTE_PRESETS.find(p => p.id === createdJob.quote_requirements.preset)?.label ?? createdJob.quote_requirements.preset
                             : 'Custom terms'}
                         </p>
@@ -2184,7 +2195,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                     <div className="flex items-center gap-3">
                       <Package size={14} className="text-[var(--color-teal)]" />
                       <div>
-                        <p className="text-xs text-[var(--color-text-faint)]">Job title</p>
+                        <p className="text-xs text-[var(--color-text-faint)]">Load title</p>
                         <p className="text-sm font-semibold text-[var(--color-text)]">{title}</p>
                       </div>
                     </div>
@@ -2322,7 +2333,7 @@ export function CreateJobWizard({ mode = 'job' }: { mode?: CreateJobWizardMode }
                 <div className="flex items-center justify-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-6 py-4">
                   <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
                   <div>
-                    <p className="text-sm font-bold text-emerald-800">Job dispatched</p>
+                    <p className="text-sm font-bold text-emerald-800">Load sent to the carrier</p>
                     <p className="text-xs text-emerald-600">Carrier has been notified. Redirecting…</p>
                   </div>
                 </div>

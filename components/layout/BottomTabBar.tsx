@@ -16,14 +16,14 @@ const TABS: Record<UserRole, { label: string; href: string; icon: React.ElementT
   ],
   broker: [
     { label: 'Home',      href: '/broker',             icon: LayoutDashboard },
-    { label: 'Shipments', href: '/broker/shipments',   icon: Package         },
+    { label: 'Loads',     href: '/broker/shipments',   icon: Package         },
     { label: 'Offers',    href: '/broker/jobs/offers', icon: Radio           },
     { label: 'Account',   href: '/broker/payments',    icon: User            },
   ],
   carrier: [
     { label: 'Home',    href: '/carrier',         icon: LayoutDashboard },
-    { label: 'Jobs',    href: '/carrier/jobs',    icon: Package         },
-    { label: 'My Jobs', href: '/carrier/my-jobs', icon: Radio           },
+    { label: 'Market',  href: '/carrier/jobs',    icon: Package         },
+    { label: 'Loads',   href: '/carrier/my-jobs', icon: Radio           },
     { label: 'Account', href: '/carrier/profile', icon: User            },
   ],
   factor: [
@@ -33,7 +33,7 @@ const TABS: Record<UserRole, { label: string; href: string; icon: React.ElementT
   ],
   receiver: [
     { label: 'Home',       href: '/receiver',           icon: LayoutDashboard },
-    { label: 'Deliveries', href: '/receiver/shipments', icon: Package         },
+    { label: 'Inbound',    href: '/receiver/shipments', icon: Package         },
     { label: 'Account',    href: '/receiver',           icon: User            },
   ],
   admin: [

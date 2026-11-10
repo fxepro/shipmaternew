@@ -103,10 +103,10 @@ export default function ContractedJobsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">
-            Contracted Jobs
+            Contract freight
           </h1>
           <p className="mt-0.5 text-sm text-[var(--color-text-faint)]">
-            Jobs dispatched under carrier contracts
+            Loads tendered to your contract carriers
           </p>
         </div>
         {can.do('loads.post') && <Link

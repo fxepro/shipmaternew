@@ -68,6 +68,8 @@ class Integrations
              'cost' => 'Free', 'keys' => [], 'mode' => null, 'webhook' => null, 'testable' => true],
             ['key' => 'sam_gov', 'group' => 'Public registers', 'name' => 'SAM.gov', 'used_for' => 'Government entity registration (UEI)',
              'cost' => 'Free', 'keys' => self::keys([['SAM_GOV_API_KEY', 'services.sam_gov.key']]), 'mode' => null, 'webhook' => null, 'testable' => true],
+            ['key' => 'eia', 'group' => 'Public registers', 'name' => 'EIA diesel price', 'used_for' => 'Weekly US diesel price for the fuel surcharge in rate checks',
+             'cost' => 'Free', 'keys' => self::keys([['EIA_API_KEY', 'services.eia.key']]), 'mode' => null, 'webhook' => null, 'testable' => true],
             ['key' => 'nhtsa', 'group' => 'Public registers', 'name' => 'NHTSA VIN decoder', 'used_for' => 'Checking a vehicle\'s VIN',
              'cost' => 'Free', 'keys' => [], 'mode' => null, 'webhook' => null, 'testable' => true],
 
@@ -113,6 +115,11 @@ class Integrations
                 $need(['services.sam_gov.key']);
                 $n = Http::timeout(20)->acceptJson()->get('https://api.sam.gov/entity-information/v3/entities', ['api_key' => config('services.sam_gov.key'), 'registrationStatus' => 'A', 'page' => 0, 'size' => 1])->throw()->json('totalRecords');
                 return 'Connected to SAM.gov (' . number_format((int) $n) . ' active registrations).';
+            case 'eia':
+                $need(['services.eia.key']);
+                $d = \App\Services\Rates\DieselPrice::fetch((string) config('services.eia.key'));
+                if (!$d) throw new \RuntimeException('EIA answered but returned no diesel price.');
+                return 'Connected to EIA (diesel $' . number_format($d['price'], 3) . ' a gallon, week of ' . $d['period'] . ').';
             case 'nhtsa':
                 Http::timeout(15)->get('https://vpic.nhtsa.dot.gov/api/vehicles/GetMakesForVehicleType/truck', ['format' => 'json'])->throw();
                 return 'NHTSA vPIC answered.';

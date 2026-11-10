@@ -199,6 +199,8 @@ class FreightJobOfferController extends Controller
                         'route_distance_miles' => $job->route_distance_miles,
                         'stops_count'          => $job->stops_count ?? 0,
                         'quote_requirements'   => $job->quote_requirements,
+                        'posted_rate_cents'    => $job->posted_rate_cents,
+                        'market_rate'          => $job->market_rate,
                     ] : null,
                 ]);
             }),

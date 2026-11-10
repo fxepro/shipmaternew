@@ -48,10 +48,12 @@ class ComplianceRules
             return $item;
         };
         // The four business verification (KYB) items for shippers, brokers and factors
-        $kybWaiting = \App\Services\Checks\Kyb::input($o) ? 'Waiting for the business verification result' : 'Runs once the legal name, EIN and address are filled in';
+        $kybWaiting = \App\Services\Checks\Kyb::input($o) ? 'Waiting for the business verification result' : 'Runs once the legal name, tax ID and address are filled in';
+        // Outside the US: the company's registration or tax number, its national register, and no W-9
+        $us = strtoupper($o->country ?: 'US') === 'US';
         $kybItems = fn () => [
-            $ext('Business', 'ein', 'EIN', true, $o->tax_id, $kyb?->result('tin'), $kybWaiting),
-            $ext('Business', 'kyb_registration', 'Business registration (Secretary of State)', true,
+            $ext('Business', 'ein', $us ? 'EIN' : 'Registration or tax number', true, $o->tax_id, $kyb?->result('tin'), $kybWaiting),
+            $ext('Business', 'kyb_registration', $us ? 'Business registration (Secretary of State)' : 'Business registration (company register)', true,
                 ($o->legal_name ?: $o->name) ?: null, $kyb?->result('registration'), $kybWaiting),
             $ext('Business', 'address', 'Registered address', true,
                 collect([$o->street, $o->city, $o->state, $o->zip])->filter()->count() === 4 ? collect([$o->street, $o->city, $o->state, $o->zip])->implode(', ') : null,
@@ -95,7 +97,7 @@ class ComplianceRules
             // To post loads: the business checks, W-9 and an authorized signer. Special freight: only when a load needs it.
             'shipper' => [
                 ...$kybItems(),
-                $up('Business', 'w9', 'W-9', true),
+                $up('Business', 'w9', 'W-9', $us),
                 $signer(),
                 $up('Insurance', 'coi', 'Certificate of insurance', false, null, true, false, [$o->shipper_coi_url, $o->shipper_coi_expiry]),
                 $up('Special freight', 'hazmat_reg', 'HazMat registration (PHMSA)', false, 'Registration #', true, false, [$o->shipper_hazmat_reg_url, $o->shipper_hazmat_reg_expiry]),
@@ -107,13 +109,13 @@ class ComplianceRules
             ],
             'factor' => [
                 ...$kybItems(),
-                $up('Business', 'w9', 'W-9', true),
+                $up('Business', 'w9', 'W-9', $us),
                 $up('Licensing', 'factoring_license', 'State lending or factoring licence (where required)', false, 'Licence #', true),
                 $up('Factoring', 'noa_template', 'NOA template', false),
                 self::item('Money', 'bank', 'Bank account', true, $o->bank_last4 ? trim(($o->bank_name ?? 'Bank') . ' ···' . $o->bank_last4) : null,
                     $o->bank_last4 ? in_array($o->stripe_connect_status, ['active', 'verified'], true) : null),
             ],
-            'broker' => (function () use ($o, $kybItems, $up, $ext, $checks) {
+            'broker' => (function () use ($o, $kybItems, $up, $ext, $checks, $us) {
                 $fm = $checks->get('fmcsa_broker');
                 // The bond passes from FMCSA's record; a file is only needed when FMCSA doesn't show one
                 $bond = $up('Authority', 'surety_bond', 'Surety bond or trust (BMC-84/85, $75,000)', true, 'Bond #');
@@ -130,7 +132,7 @@ class ComplianceRules
                     ...$kybItems(),
                     $ext('Authority', 'broker_mc', 'Broker authority (MC)', true, $o->fmcsa_broker_mc, $fm?->result('authority'), 'Waiting for FMCSA'),
                     $bond,
-                    $up('Business', 'w9', 'W-9', true),
+                    $up('Business', 'w9', 'W-9', $us),
                     $up('Insurance', 'contingent_cargo', 'Contingent cargo insurance', false, 'Insurer / policy #', true),
                 ];
             })(),

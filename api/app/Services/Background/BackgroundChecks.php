@@ -70,12 +70,13 @@ class BackgroundChecks
     /** Live checks are never run from a developer's computer */
     public static function liveAllowed(): bool
     {
-        return !app()->environment('local', 'testing');
+        return \App\Support\PlatformMode::liveAllowed();
     }
 
+    /** The platform-wide Test / Live switch (App\Support\PlatformMode) */
     public static function mode(): string
     {
-        return self::liveAllowed() && self::settings()['mode'] === 'live' ? 'live' : 'test';
+        return \App\Support\PlatformMode::current();
     }
 
     public static function provider(?string $name = null): Provider

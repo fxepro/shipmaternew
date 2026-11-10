@@ -321,9 +321,11 @@ class FreightJobController extends Controller
             'quote_requirements.require_max_weight'     => 'boolean',
             'quote_requirements.require_payment_terms'  => 'boolean',
             'quote_requirements.payment_terms_hint'     => 'nullable|string|max:20',
+            // The price the load is posted at on the Marketplace; carriers offer around it
+            'posted_rate_cents'                         => 'nullable|integer|min:100|max:100000000',
         ]);
 
-        $job->update(['quote_requirements' => $data['quote_requirements']]);
+        $job->update(['quote_requirements' => $data['quote_requirements']] + (array_key_exists('posted_rate_cents', $data) ? ['posted_rate_cents' => $data['posted_rate_cents']] : []));
 
         $job->load([
             'contract',

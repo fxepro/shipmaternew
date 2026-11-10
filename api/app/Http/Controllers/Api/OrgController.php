@@ -63,7 +63,7 @@ class OrgController extends Controller
             'city'     => ['sometimes', 'nullable', 'string', 'max:120'],
             'state'    => ['sometimes', 'nullable', 'string', 'max:60'],
             'zip'      => ['sometimes', 'nullable', 'string', 'max:20'],
-            'country'  => ['sometimes', 'nullable', 'string', 'size:2'],
+            'country'  => ['sometimes', 'nullable', 'string', 'size:2', fn ($a, $v, $fail) => \App\Support\KybCountries::isEnabled($v) || $fail('Companies in this country cannot be verified on Shipmater yet.')],
             'tax_id'   => ['sometimes', 'nullable', 'string', 'max:20'],
         ]);
 

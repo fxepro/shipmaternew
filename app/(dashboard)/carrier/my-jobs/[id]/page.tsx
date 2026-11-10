@@ -50,7 +50,7 @@ export default function CarrierJobPage({ params }: { params: Promise<{ id: strin
         job={job}
         role="carrier"
         backHref="/carrier/my-jobs"
-        backLabel="My Jobs"
+        backLabel="Loads"
         currentUserId={currentUserId}
         onStopUpdated={() => qc.invalidateQueries({ queryKey: ['carrier-job', jobId] })}
         onJobUpdated={()  => qc.invalidateQueries({ queryKey: ['carrier-job', jobId] })}

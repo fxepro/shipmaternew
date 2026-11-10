@@ -3,6 +3,7 @@ import { Mail, MessageSquare, ShieldCheck, Server, KeyRound } from 'lucide-react
 import { PROFILE_VERIFICATION_TOPIC } from './dev/profile-verification';
 import { COMPANIES_AND_PEOPLE_TOPIC } from './dev/companies-and-people';
 import { ROLES_AND_PERMISSIONS_TOPIC } from './dev/roles-and-permissions';
+import { PLATFORM_SETTINGS_TOPIC } from './dev/platform-settings';
 
 /**
  * Admin / Dev technical manual — platform operators only.
@@ -223,6 +224,7 @@ TWILIO_VERIFY_SID=<verify-service-sid>
       },
     ],
   },
+  PLATFORM_SETTINGS_TOPIC,
   PROFILE_VERIFICATION_TOPIC,
   COMPANIES_AND_PEOPLE_TOPIC,
   ROLES_AND_PERMISSIONS_TOPIC,

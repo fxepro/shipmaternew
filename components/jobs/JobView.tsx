@@ -308,7 +308,7 @@ export function JobView({ job, role, backHref, backLabel, currentUserId, onStopU
                 : 'bg-[var(--color-teal-pale)] text-[var(--color-teal)]'
             }`}>
               {isContracted ? <FileText size={10} /> : <Package size={10} />}
-              {isContracted ? 'Contracted' : 'Open'}
+              {isContracted ? 'Contract freight' : 'Marketplace'}
             </span>
 
             {/* Status badge */}

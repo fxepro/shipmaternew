@@ -23,7 +23,7 @@ class Kyb
     public static function settings(): array
     {
         $saved = Cache::remember('kyb_settings', 300, fn () => json_decode((string) DB::table('platform_settings')->where('key', 'kyb')->value('value'), true) ?: []);
-        return array_replace(['provider' => app()->environment('production') ? 'middesk' : 'fake', 'mode' => 'test'], $saved);
+        return array_replace(['provider' => app()->environment('production') ? 'middesk' : 'fake', 'mode' => 'test', 'countries' => ['US', 'CA', 'MX']], $saved);
     }
 
     public static function save(array $settings, ?int $userId): array
@@ -36,12 +36,13 @@ class Kyb
     /** Live checks are never run from a developer's computer */
     public static function liveAllowed(): bool
     {
-        return !app()->environment('local', 'testing');
+        return \App\Support\PlatformMode::liveAllowed();
     }
 
+    /** The platform-wide Test / Live switch (App\Support\PlatformMode) */
     public static function mode(): string
     {
-        return self::liveAllowed() && self::settings()['mode'] === 'live' ? 'live' : 'test';
+        return \App\Support\PlatformMode::current();
     }
 
     public static function provider(?string $key = null): KybProvider
@@ -55,13 +56,25 @@ class Kyb
 
     // ── Running a check ────────────────────────────────────────────────────
 
-    /** What is sent: the legal name, EIN and registered address. Null until all are filled in. */
+    /**
+     * What is sent: the legal name, tax ID and registered address. Null until all are filled in.
+     * US: a 9-digit EIN and the state. Elsewhere: the company registration or tax number; state and postcode are optional.
+     */
     public static function input(Organization $o): ?array
     {
-        $tin = preg_replace('/\D/', '', (string) $o->tax_id);
+        $country = strtoupper($o->country ?: 'US');
+        $us = $country === 'US';
+        $tin = $us ? preg_replace('/\D/', '', (string) $o->tax_id) : trim((string) $o->tax_id);
         $name = trim((string) ($o->legal_name ?: $o->name));
-        if (!in_array($o->type, self::TYPES, true) || !$name || strlen($tin) !== 9 || !$o->street || !$o->city || !$o->state || !$o->zip) return null;
-        return ['name' => $name, 'tin' => $tin, 'street' => $o->street, 'city' => $o->city, 'state' => strtoupper($o->state), 'zip' => $o->zip];
+        if (!in_array($o->type, self::TYPES, true) || !$name || !$o->street || !$o->city) return null;
+        if ($us ? (strlen($tin) !== 9 || !$o->state || !$o->zip) : $tin === '') return null;
+        return ['name' => $name, 'tin' => $tin, 'street' => $o->street, 'city' => $o->city, 'state' => strtoupper((string) $o->state), 'zip' => (string) $o->zip, 'country' => $country];
+    }
+
+    /** Outside the US the check always goes to Didit: Middesk covers US companies only */
+    public static function providerFor(Organization $o): KybProvider
+    {
+        return strtoupper($o->country ?: 'US') === 'US' ? self::provider() : new DiditKyb();
     }
 
     /** Send the company to the provider when its details are complete and changed since the last check (or $force). */
@@ -73,12 +86,13 @@ class Kyb
         $check = OrgCheck::firstOrNew(['org_id' => $o->id, 'check' => 'kyb']);
         if (!$force && $check->exists && $check->input_hash === $hash && $check->status !== 'error') return $check;
 
-        $provider = self::provider();
+        $provider = self::providerFor($o);
         $check->fill([
             'provider' => $provider->key(), 'mode' => self::mode(), 'status' => 'pending', 'results' => null, 'error' => null,
             'input_hash' => $hash, 'requested_at' => now(), 'completed_at' => null,
         ]);
         try {
+            if (!\App\Support\KybCountries::isEnabled($input['country'])) throw new \RuntimeException("Business verification isn't offered in {$input['country']} yet");
             if (!$provider->configured(self::mode())) throw new \RuntimeException("{$provider->name()} key is not set on the server");
             $business = $provider->create($o, $input, self::mode());
             $check->external_id = $business['id'] ?? null;
