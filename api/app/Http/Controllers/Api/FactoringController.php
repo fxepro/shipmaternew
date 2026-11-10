@@ -78,7 +78,8 @@ class FactoringController extends Controller
     public function factors(Request $request): JsonResponse
     {
         $this->carrier($request);
-        $q = Organization::where('type', 'factor')->where('status', 'active')->orderBy('name');
+        // Only factors Shipmater has approved can be chosen
+        $q = Organization::where('type', 'factor')->where('status', 'active')->where('verification_status', 'approved')->orderBy('name');
         if ($term = $request->string('q')->trim()->value()) $q->where('name', 'ilike', "%{$term}%");
 
         return response()->json(['data' => $q->limit(50)->get()->map(fn (Organization $o) => [
@@ -98,7 +99,9 @@ class FactoringController extends Controller
             'document'       => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'notes'          => ['nullable', 'string', 'max:1000'],
         ]);
-        abort_unless(Organization::find($data['factor_id'])?->type === 'factor', 422, 'Choose a factoring company on Shipmater.');
+        $factor = Organization::find($data['factor_id']);
+        abort_unless($factor?->type === 'factor', 422, 'Choose a factoring company on Shipmater.');
+        abort_unless(\App\Support\Approval::companyApproved($factor), 422, 'This factoring company is not approved on Shipmater yet.');
 
         // One NOA in force per carrier: a new one waits until the current one is released
         if (Noa::where('carrier_id', $org->id)->whereIn('status', ['pending_factor', 'active'])->exists()) {
@@ -240,6 +243,10 @@ class FactoringController extends Controller
             app(\App\Services\Payments\LoadPayments::class)->chargeFactoredFee($load);
         } else {
             abort_unless($load->status === 'requested', 422, 'This load is not waiting for you.');
+            // A restricted factor may still fund loads it accepted, but takes on no new ones
+            if ($data['action'] === 'accept' && !\App\Support\Approval::companyApproved($org)) {
+                return response()->json(['error' => 'Your company is restricted until its overdue compliance items are updated.', 'verification_status' => $org->verification_status, 'code' => 'company_not_approved'], 403);
+            }
             if ($data['action'] === 'accept' && !$org->stripe_connect_id) {
                 return response()->json(['error' => 'Connect your Stripe account (Profile → Finance) before accepting loads, so shippers can pay you.', 'code' => 'stripe_not_connected'], 422);
             }

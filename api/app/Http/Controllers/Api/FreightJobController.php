@@ -44,13 +44,16 @@ class FreightJobController extends Controller
         $user = $request->user();
         $uid  = $user->current_org_id;   // the carrier company
 
+        // An unapproved (or restricted) carrier sees only its own loads, not the load board
+        $board = \App\Support\Approval::blocked($user) === null;
+
         $jobs = FreightJob::with(['contract', 'stops', 'shipper:' . Organization::PUBLIC])
             // Jobs assigned to this carrier  OR  open posted jobs on the market
-            ->where(function ($q) use ($uid) {
-                $q->where('carrier_id', $uid)
-                  ->orWhere(function ($inner) {
-                      $inner->whereNull('carrier_id')->where('status', 'posted');
-                  });
+            ->where(function ($q) use ($uid, $board) {
+                $q->where('carrier_id', $uid);
+                if ($board) $q->orWhere(function ($inner) {
+                    $inner->whereNull('carrier_id')->where('status', 'posted');
+                });
             })
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->when($request->type === 'assigned',    fn($q) => $q->where('carrier_id', $uid))
@@ -108,7 +111,7 @@ class FreightJobController extends Controller
     {
         $uid = $request->user()->current_org_id;   // the carrier company
         $canView = $request->user()->isCarrierOf($job)
-            || (is_null($job->carrier_id) && $job->status === 'posted');
+            || (is_null($job->carrier_id) && $job->status === 'posted' && \App\Support\Approval::blocked($request->user()) === null);
 
         abort_if(!$canView, 403, 'You do not have access to this job.');
 
@@ -411,6 +414,10 @@ class FreightJobController extends Controller
     {
         abort_unless($request->user()->isShipperOf($job), 403);
         abort_if($job->status !== 'draft', 422, 'Job is not in draft status.');
+        // A contracted load goes only to an approved carrier
+        if ($job->carrier_id && !\App\Support\Approval::companyApproved(Organization::find($job->carrier_id))) {
+            return response()->json(['error' => 'The contracted carrier is not approved on Shipmater, so the load can\'t be sent to it yet.', 'code' => 'carrier_not_approved'], 422);
+        }
 
         // The shipper (or the broker for it) declares what is being shipped; the shipper is legally responsible for it
         $data = $request->validate([

@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'carrier.approved' => \App\Http\Middleware\RequireCarrierApproval::class,
+            'company.approved' => \App\Http\Middleware\RequireCompanyApproval::class,
             'shipper.subscribed' => \App\Http\Middleware\RequireShipperSubscription::class,
             'account.status'   => \App\Http\Middleware\EnforceAccountStatus::class,
             'perm'             => \App\Http\Middleware\RequireOrgPermission::class,

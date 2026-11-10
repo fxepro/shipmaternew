@@ -81,6 +81,12 @@ api.interceptors.response.use(
         action: { label: 'Subscribe', onClick: () => { window.location.href = `${window.location.pathname.startsWith('/broker') ? '/broker' : '/shipper'}/company?tab=subscription`; } },
       }));
     }
+    // The company (or carrier owner) isn't approved yet, or is restricted: say why once
+    if (typeof window !== 'undefined' && err?.config?.method !== 'get'
+        && ['company_not_approved', 'carrier_not_approved'].includes(err?.response?.data?.code)) {
+      const msg = err.response.data.error as string;
+      import('sonner').then(({ toast }) => toast.error(msg, { id: 'not-approved' }));
+    }
     // The role matrix refused an action (Settings, Roles & Permissions): say so once.
     // Refused reads are left to the page, so opening a page doesn't pop up a message.
     if (typeof window !== 'undefined' && err?.config?.method !== 'get'

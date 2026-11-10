@@ -216,15 +216,15 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/factoring/noas',                      [\App\Http\Controllers\Api\FactoringController::class, 'noas'])->middleware('perm:carrier:money.factoring,factor:loads.view=view,shipper:money.payments=view');
     Route::post('/factoring/noas',                     [\App\Http\Controllers\Api\FactoringController::class, 'fileNoa'])->middleware('perm:carrier:money.factoring');
     Route::get('/factoring/noas/{noa}/document',       [\App\Http\Controllers\Api\FactoringController::class, 'document'])->middleware('perm:carrier:money.factoring,factor:loads.view=view,shipper:money.payments=view');
-    Route::post('/factoring/noas/{noa}/decide',        [\App\Http\Controllers\Api\FactoringController::class, 'decideNoa'])->middleware('perm:factor:noas.decide');
-    Route::post('/factoring/noas/{noa}/release',       [\App\Http\Controllers\Api\FactoringController::class, 'release'])->middleware('perm:factor:noas.decide');
+    Route::post('/factoring/noas/{noa}/decide',        [\App\Http\Controllers\Api\FactoringController::class, 'decideNoa'])->middleware('perm:factor:noas.decide')->middleware('company.approved');
+    Route::post('/factoring/noas/{noa}/release',       [\App\Http\Controllers\Api\FactoringController::class, 'release'])->middleware('perm:factor:noas.decide')->middleware('company.approved:restricted');
     Route::post('/factoring/noas/{noa}/request-release', [\App\Http\Controllers\Api\FactoringController::class, 'requestRelease'])->middleware('perm:carrier:money.factoring');
     Route::get('/factoring/factors',                   [\App\Http\Controllers\Api\FactoringController::class, 'factors'])->middleware('perm:carrier:money.factoring');
     Route::get('/factoring/eligible-loads',            [\App\Http\Controllers\Api\FactoringController::class, 'eligibleLoads'])->middleware('perm:carrier:money.factoring');
     Route::get('/factoring/loads',                     [\App\Http\Controllers\Api\FactoringController::class, 'loads'])->middleware('perm:carrier:money.factoring,factor:loads.view=view,shipper:money.payments=view');
     Route::post('/factoring/loads',                    [\App\Http\Controllers\Api\FactoringController::class, 'factorLoad'])->middleware('perm:carrier:money.factoring');
     Route::delete('/factoring/loads/{load}',           [\App\Http\Controllers\Api\FactoringController::class, 'withdrawLoad'])->middleware('perm:carrier:money.factoring');
-    Route::post('/factoring/loads/{load}/decide',      [\App\Http\Controllers\Api\FactoringController::class, 'decideLoad'])->middleware('perm:factor:loads.decide');
+    Route::post('/factoring/loads/{load}/decide',      [\App\Http\Controllers\Api\FactoringController::class, 'decideLoad'])->middleware('perm:factor:loads.decide')->middleware('company.approved:restricted');
     Route::post('/factoring/loads/{load}/acknowledge', [\App\Http\Controllers\Api\FactoringController::class, 'acknowledge'])->middleware('perm:shipper:factoring.acknowledge');
 
     // Admin: fees (Platform settings)
@@ -404,36 +404,36 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::patch('/shipper/freight-jobs/{job}/terms',                [FreightJobController::class, 'saveTerms'])->middleware('perm:shipper:loads.post');
     Route::patch('/shipper/freight-jobs/{job}/requirements',         [FreightJobController::class, 'saveRequirements'])->middleware('perm:shipper:loads.post');
     Route::get('/shipper/freight-jobs/{job}/matches',                [FreightJobController::class, 'matches'])->middleware('perm:shipper:loads.view=view');
-    Route::post('/shipper/freight-jobs/{job}/post',                  [FreightJobController::class, 'post'])->middleware('perm:shipper:loads.post');
+    Route::post('/shipper/freight-jobs/{job}/post',                  [FreightJobController::class, 'post'])->middleware('perm:shipper:loads.post')->middleware('company.approved');
     Route::get('/jobs/{job}/rate-confirmation',                      [FreightJobController::class, 'rateConfirmation'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
     Route::get('/jobs/{job}/bol',                                    [FreightJobController::class, 'bol'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
     Route::get('/jobs/{job}/invoice',                                [FreightJobController::class, 'invoice'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
 
     // Evidence (photos) per stop — shipper or assigned carrier
     Route::get('/jobs/{job}/stops/{stop}/evidence',                  [EvidenceController::class, 'index'])->middleware('perm:carrier:loads.view=view,shipper:loads.view=view');
-    Route::post('/jobs/{job}/stops/{stop}/evidence',                 [EvidenceController::class, 'store'])->middleware('perm:carrier:trips.stops');
-    Route::post('/jobs/{job}/stops/{stop}/signature',                [EvidenceController::class, 'signature'])->middleware('perm:carrier:trips.stops');
+    Route::post('/jobs/{job}/stops/{stop}/evidence',                 [EvidenceController::class, 'store'])->middleware('perm:carrier:trips.stops')->middleware('company.approved:restricted');
+    Route::post('/jobs/{job}/stops/{stop}/signature',                [EvidenceController::class, 'signature'])->middleware('perm:carrier:trips.stops')->middleware('company.approved:restricted');
     Route::delete('/jobs/{job}/evidence/{evidence}',                 [EvidenceController::class, 'destroy'])->middleware('perm:carrier:trips.stops,shipper:loads.post');
 
     // POD — view (inline) or download
     Route::get('/jobs/{job}/stops/{stop}/pod',                       [EvidenceController::class, 'downloadPod'])->middleware('perm:carrier:trips.documents=view,shipper:loads.view=view');
-    Route::post('/jobs/{job}/stops/{stop}/pod',                      [EvidenceController::class, 'generatePod'])->middleware('perm:carrier:trips.stops');
+    Route::post('/jobs/{job}/stops/{stop}/pod',                      [EvidenceController::class, 'generatePod'])->middleware('perm:carrier:trips.stops')->middleware('company.approved:restricted');
 
     Route::get('/carrier/freight-jobs',                              [FreightJobController::class, 'carrierIndex'])->middleware('perm:carrier:loads.board=view');
     Route::get('/carrier/freight-jobs/{job}',                        [FreightJobController::class, 'carrierShow'])->middleware('perm:carrier:loads.view=view');
-    Route::patch('/carrier/freight-jobs/{job}/stops/{stop}',         [FreightJobController::class, 'updateStop'])->middleware('perm:carrier:trips.stops');
+    Route::patch('/carrier/freight-jobs/{job}/stops/{stop}',         [FreightJobController::class, 'updateStop'])->middleware('perm:carrier:trips.stops')->middleware('company.approved:restricted');
     // Carrier: my offers across all jobs
     Route::get('/carrier/my-offers',                                 [FreightJobOfferController::class, 'carrierMyOffers'])->middleware('perm:carrier:loads.board=view');
     // Carrier offers per job
     Route::get('/carrier/freight-jobs/{job}/offers/mine',            [FreightJobOfferController::class, 'mine'])->middleware('perm:carrier:loads.board=view');
-    Route::post('/carrier/freight-jobs/{job}/offers',                [FreightJobOfferController::class, 'store'])->middleware('perm:carrier:loads.bid');
-    Route::delete('/carrier/freight-jobs/{job}/offers/{offer}',      [FreightJobOfferController::class, 'withdraw'])->middleware('perm:carrier:loads.bid');
+    Route::post('/carrier/freight-jobs/{job}/offers',                [FreightJobOfferController::class, 'store'])->middleware('perm:carrier:loads.bid')->middleware('company.approved');
+    Route::delete('/carrier/freight-jobs/{job}/offers/{offer}',      [FreightJobOfferController::class, 'withdraw'])->middleware('perm:carrier:loads.bid')->middleware('company.approved');
 
     // Shipper: view + act on offers
     Route::get('/shipper/offers',                                    [FreightJobOfferController::class, 'shipperAllOffers'])->middleware('perm:shipper:loads.view=view');
     Route::get('/shipper/freight-jobs/{job}/offers',                 [FreightJobOfferController::class, 'index'])->middleware('perm:shipper:loads.view=view');
-    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/accept', [FreightJobOfferController::class, 'accept'])->middleware('perm:shipper:loads.decide');
-    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/decline',[FreightJobOfferController::class, 'decline'])->middleware('perm:shipper:loads.decide');
+    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/accept', [FreightJobOfferController::class, 'accept'])->middleware('perm:shipper:loads.decide')->middleware('company.approved');
+    Route::post('/shipper/freight-jobs/{job}/offers/{offer}/decline',[FreightJobOfferController::class, 'decline'])->middleware('perm:shipper:loads.decide')->middleware('company.approved');
 
 
     // ── Ratings ────────────────────────────────────────────────────────────
