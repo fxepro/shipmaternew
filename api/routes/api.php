@@ -3,7 +3,6 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CarrierController;
 use App\Http\Controllers\Api\AdminPeopleController;
-use App\Http\Controllers\Api\PlaidController;
 use App\Http\Controllers\Api\CarrierVerificationController;
 use App\Http\Controllers\Api\ClearinghouseController;
 use App\Http\Controllers\Api\StripeConnectController;
@@ -436,11 +435,6 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::post('/shipper/freight-jobs/{job}/offers/{offer}/accept', [FreightJobOfferController::class, 'accept'])->middleware('perm:shipper:loads.decide');
     Route::post('/shipper/freight-jobs/{job}/offers/{offer}/decline',[FreightJobOfferController::class, 'decline'])->middleware('perm:shipper:loads.decide');
 
-    // ── Plaid / ACH bank connection (shipper) ──────────────────────────────
-    Route::get('/shipper/plaid/link-token',    [PlaidController::class, 'linkToken'])->middleware('perm:shipper:money.methods');
-    Route::post('/shipper/plaid/exchange',     [PlaidController::class, 'exchange'])->middleware('perm:shipper:money.methods');
-    Route::get('/shipper/plaid/status',        [PlaidController::class, 'status'])->middleware('perm:shipper:money.payments=view');
-    Route::delete('/shipper/plaid/disconnect', [PlaidController::class, 'disconnect'])->middleware('perm:shipper:money.methods');
 
     // ── Ratings ────────────────────────────────────────────────────────────
     Route::post('/jobs/{job}/ratings', [RatingController::class, 'store'])->middleware('perm:carrier:ratings.give,shipper:ratings.give');

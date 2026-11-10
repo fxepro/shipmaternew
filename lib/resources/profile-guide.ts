@@ -72,7 +72,7 @@ export const SHIPPER_PROFILE_TABS: GuideSection[] = [
       'Not in the page banner — validated when you add a method',
       'Card: name, 13–19 digit number, MM/YY expiry, 3–4 digit CVV',
       'Bank: holder name, 9-digit routing, account (≥4 digits) with confirm match',
-      'You can also connect a bank securely via Plaid',
+      'You can also add a bank account through Stripe',
     ],
   },
   {

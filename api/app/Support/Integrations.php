@@ -35,14 +35,10 @@ class Integrations
 
         return [
             // ── Payments ──
-            ['key' => 'stripe', 'group' => 'Payments', 'name' => 'Stripe', 'used_for' => 'Card payments, subscriptions (Billing), carrier and factor payouts (Connect), and the owner\'s ID check (Identity)',
+            ['key' => 'stripe', 'group' => 'Payments', 'name' => 'Stripe', 'used_for' => 'Card and bank account payments, subscriptions (Billing), carrier and factor payouts (Connect), and the owner\'s ID check (Identity)',
              'cost' => 'Identity $1.50 per check · Connect $2 per active account a month + 0.25% + $0.25 per payout · Billing 0.5–0.8% · cards at standard rates',
              'keys' => self::keys([['STRIPE_SECRET_KEY', 'services.stripe.secret'], ['STRIPE_WEBHOOK_SECRET', 'services.stripe.webhook_secret'], ['STRIPE_CONNECT_WEBHOOK_SECRET', 'services.stripe.connect_webhook_secret']]),
              'mode' => self::prefix('services.stripe.secret', 'sk_test', 'sk_live'), 'webhook' => "{$base}/stripe/webhook", 'testable' => true, 'settings' => '/admin/settings'],
-            ['key' => 'plaid', 'group' => 'Payments', 'name' => 'Plaid', 'used_for' => 'Linking a bank account',
-             'cost' => 'Per linked account; the price is shown when applying for production',
-             'keys' => self::keys([['PLAID_CLIENT_ID', 'services.plaid.client_id'], ['PLAID_SECRET', 'services.plaid.secret']]),
-             'mode' => config('services.plaid.env') === 'production' ? 'live' : 'test', 'webhook' => null, 'testable' => true],
 
             // ── Business verification ──
             ['key' => 'middesk', 'group' => 'Business verification', 'name' => 'Middesk', 'used_for' => 'Shipper, broker and factor checks: EIN with the IRS, state registration, address, sanctions, officers',
@@ -101,11 +97,6 @@ class Integrations
                 if (self::prefix('services.stripe.secret', 'sk_test', 'sk_live') === 'live' && app()->environment('local')) throw new \RuntimeException('A live Stripe key is not called from a developer\'s computer.');
                 Http::withToken(config('services.stripe.secret'))->timeout(15)->get('https://api.stripe.com/v1/balance')->throw();
                 return 'Connected to Stripe (' . (self::prefix('services.stripe.secret', 'sk_test', 'sk_live') ?? 'unknown') . ' mode).';
-            case 'plaid':
-                $need(['services.plaid.client_id', 'services.plaid.secret']);
-                $env = config('services.plaid.env') ?: 'sandbox';
-                Http::timeout(15)->post("https://{$env}.plaid.com/institutions/get", ['client_id' => config('services.plaid.client_id'), 'secret' => config('services.plaid.secret'), 'count' => 1, 'offset' => 0, 'country_codes' => ['US']])->throw();
-                return "Connected to Plaid ({$env}).";
             case 'middesk':
             case 'didit':
                 return Kyb::provider($key)->testConnection($key === 'didit' && self::prefix('services.didit.key', 'sk_test_', 'sk_live_') === 'live' ? 'live' : Kyb::mode());

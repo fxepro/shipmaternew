@@ -196,7 +196,7 @@ TWILIO_VERIFY_SID=<verify-service-sid>
         id: 'api',
         title: 'API (Railway / local)',
         paragraphs: [
-          'Laravel .env (or Railway variables) holds APP_URL, DB_*, MAIL_*, TWILIO_*, Stripe, Plaid, etc. After changing mail/SMS vars, redeploy the API.',
+          'Laravel .env (or Railway variables) holds APP_URL, DB_*, MAIL_*, TWILIO_*, Stripe, etc. After changing mail/SMS vars, redeploy the API.',
         ],
       },
     ],

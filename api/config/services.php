@@ -42,12 +42,6 @@ return [
         'connect_webhook_secret' => env('STRIPE_CONNECT_WEBHOOK_SECRET'),
     ],
 
-    'plaid' => [
-        'client_id' => env('PLAID_CLIENT_ID'),
-        'secret'    => env('PLAID_SECRET'),
-        'env'       => env('PLAID_ENV', 'sandbox'),
-    ],
-
     // Business verification (KYB), demo/compliance-checks.html
     'middesk' => [
         'test_key'       => env('MIDDESK_TEST_KEY', ''),

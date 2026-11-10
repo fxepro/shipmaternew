@@ -12,7 +12,6 @@ import { MyVerification } from '@/components/people/MyVerification';
 import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
 import { PaymentMethods } from '@/components/payments/PaymentMethods';
 import { ShipperSubscription } from '@/components/billing/ShipperSubscription';
-import { PlaidLinkButton } from '@/components/payments/PlaidLinkButton';
 import {
   User, Building2, CreditCard, Bell, Zap, ShieldCheck,
   Camera, Check, ChevronDown, Plus, Trash2,

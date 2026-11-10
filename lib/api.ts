@@ -161,14 +161,6 @@ export const shipmentApi = {
   ping:          (id: number, data: { lat: number; lng: number; speed?: number | null }) => api.post(`/api/v1/jobs/${id}/ping`, data),
 };
 
-// ── Plaid / ACH bank connection (shipper) ─────────────────────────────
-export const plaidApi = {
-  linkToken:   () => api.get('/api/v1/shipper/plaid/link-token'),
-  exchange:    (data: { public_token: string; account_id: string; institution_name?: string }) =>
-                 api.post('/api/v1/shipper/plaid/exchange', data),
-  status:      () => api.get('/api/v1/shipper/plaid/status'),
-  disconnect:  () => api.delete('/api/v1/shipper/plaid/disconnect'),
-};
 
 // ── Carrier ───────────────────────────────────────────────────────────
 export const carrierApi = {
