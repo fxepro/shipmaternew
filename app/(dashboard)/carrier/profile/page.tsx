@@ -16,6 +16,7 @@ import { ProProfileCard } from '@/components/entities/ProProfileCard';
 import { DataCard, SectionHeader, Pill, fmtDate, expiryPill, type DataRow } from '@/components/profile/DataCard';
 import { DriversSection } from '@/components/profile/DriversSection';
 import { CompanyCompliance } from '@/components/compliance/CompanyCompliance';
+import { FmcsaRecord } from '@/components/compliance/FmcsaRecord';
 import { TeamManager } from '@/components/team/TeamManager';
 import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
 import { PROFILE_SECTIONS, groupOf, toSection, type ProfileSection, type ProfileGroup } from '@/lib/profile-sections';
@@ -902,6 +903,7 @@ export default function CarrierProfilePage() {
                 ['Checked', fmtDate(profile.fmcsa_checked_at)],
               ]} />
             )}
+            <FmcsaRecord />
           </div>
         )}
 

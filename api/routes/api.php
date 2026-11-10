@@ -148,6 +148,8 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::post('/carrier/verify/dot',         [CarrierVerificationController::class, 'verifyDot'])->middleware('perm:carrier:company.profile');
     Route::post('/carrier/verify/mc',          [CarrierVerificationController::class, 'verifyMc'])->middleware('perm:carrier:company.profile');
     Route::get('/carrier/verifications',       [CarrierVerificationController::class, 'index']);
+    // FMCSA public data: insurance, BOC-3, authority history, revocations, SMS (carriers and brokers)
+    Route::get('/company/fmcsa-record',        [\App\Http\Controllers\Api\FmcsaRecordController::class, 'show']);
 
     // FMCSA Drug & Alcohol Clearinghouse
     Route::post('/carrier/clearinghouse',         [ClearinghouseController::class, 'initiate']);
@@ -228,6 +230,8 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
 
     // Admin: fees (Platform settings)
     Route::put('/admin/settings/fees',    [\App\Http\Controllers\Api\FeesController::class, 'update']);
+    Route::get('/admin/integrations',              [\App\Http\Controllers\Api\AdminIntegrationsController::class, 'index']);
+    Route::post('/admin/integrations/{key}/test',  [\App\Http\Controllers\Api\AdminIntegrationsController::class, 'test']);
     Route::get('/admin/settings/kyb',              [\App\Http\Controllers\Api\ComplianceChecksController::class, 'settings']);
     Route::put('/admin/settings/kyb',              [\App\Http\Controllers\Api\ComplianceChecksController::class, 'updateSettings']);
     Route::post('/admin/settings/kyb/test',        [\App\Http\Controllers\Api\ComplianceChecksController::class, 'test']);

@@ -11,12 +11,12 @@ use Illuminate\Support\Facades\Log;
 /**
  * Business verification (KYB) for shippers, brokers and factors: EIN (IRS TIN match), Secretary of State registration,
  * registered address, OFAC sanctions screen and the officers on file. Runs as one request to the provider set in
- * Admin Settings (Middesk, or the test provider locally); results arrive by webhook and update the compliance items.
+ * Admin Settings (Middesk, Didit as its backup, or the test provider locally); results arrive by webhook and update the compliance items.
  */
 class Kyb
 {
     public const TYPES = ['shipper', 'broker', 'factor'];
-    public const PROVIDERS = ['middesk', 'fake'];
+    public const PROVIDERS = ['middesk', 'didit', 'fake'];
 
     // ── Settings (Admin Settings, Business verification) ───────────────────
 
@@ -48,6 +48,7 @@ class Kyb
     {
         return match ($key ?? self::settings()['provider']) {
             'middesk' => new MiddeskKyb(),
+            'didit'   => new DiditKyb(),
             default   => new FakeKyb(),
         };
     }

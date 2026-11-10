@@ -55,6 +55,12 @@ return [
         'webhook_secret' => env('MIDDESK_WEBHOOK_SECRET', ''),
     ],
 
+    // Business verification backup (app/Services/Checks/DiditKyb.php); one key per Didit application, sandbox or live
+    'didit' => [
+        'key'            => env('DIDIT_API_KEY', ''),
+        'webhook_secret' => env('DIDIT_WEBHOOK_SECRET', ''),
+    ],
+
     'sam_gov' => [
         'key' => env('SAM_GOV_API_KEY', ''),
     ],

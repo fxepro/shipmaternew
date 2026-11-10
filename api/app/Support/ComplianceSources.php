@@ -50,10 +50,20 @@ class ComplianceSources
         'bank'              => ['Stripe Connect', 'auto'],
     ];
 
+    /** Business verification when Didit is the provider (Admin Settings): it can't match an EIN with the IRS */
+    public const DIDIT = [
+        'ein'               => ['EIN read from the W-9 (Didit Document AI)', 'auto'],
+        'kyb_registration'  => ['Secretary of State records (Didit)', 'auto'],
+        'address'           => ['Registered address in the state records (Didit)', 'auto'],
+        'kyb_sanctions'     => ['OFAC and other sanctions lists (Didit)', 'auto'],
+        'authorized_signer' => ['Officers in the Secretary of State filing (Didit)', 'auto'],
+    ];
+
     /** ['check' => ..., 'method' => auto|review] for a key */
     public static function for(string $key): array
     {
-        [$check, $method] = self::SOURCES[$key] ?? [null, 'review'];
+        $didit = isset(self::DIDIT[$key]) && \App\Services\Checks\Kyb::settings()['provider'] === 'didit';
+        [$check, $method] = $didit ? self::DIDIT[$key] : (self::SOURCES[$key] ?? [null, 'review']);
         return ['check' => $check, 'method' => $method];
     }
 }

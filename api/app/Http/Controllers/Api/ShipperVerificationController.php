@@ -187,6 +187,14 @@ class ShipperVerificationController extends Controller
             ], fn ($v) => $v !== null));
         }
 
+        // Didit reads the EIN from the W-9, so a new W-9 runs business verification again
+        if ($validated['type'] === 'w9' && \App\Services\Checks\Kyb::settings()['provider'] === 'didit') {
+            $id = $org->id;
+            dispatch(function () use ($id) {
+                if ($o = \App\Models\Organization::find($id)) \App\Services\Checks\Kyb::run($o, true);
+            })->afterResponse();
+        }
+
         return response()->json(['data' => $this->shapeDoc($doc)], 201);
     }
 

@@ -493,6 +493,12 @@ export const kybApi = {
   test:           (provider: string) => api.post('/api/v1/admin/settings/kyb/test', { provider }),
 };
 
+// ── Admin → Integrations: every outside service, keys set or not (never values), connection test ──
+export const integrationsApi = {
+  list: () => api.get('/api/v1/admin/integrations'),
+  test: (key: string) => api.post(`/api/v1/admin/integrations/${key}/test`),
+};
+
 // ── Admin: financial reporting ─────────────────────────────────────────
 export const adminFinancialsApi = {
   get:    (params: Record<string, string>) => api.get('/api/v1/admin/financials', { params }),

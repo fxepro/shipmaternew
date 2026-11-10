@@ -48,6 +48,11 @@ class RefreshComplianceChecks extends Command
             RegistryChecks::samGov($o); $n++;
         }
 
+        // Didit registry data still being fetched: read the decision again
+        foreach (OrgCheck::where('check', 'kyb')->where('provider', 'didit')->where('status', 'pending')->whereNotNull('external_id')->get() as $c) {
+            \App\Services\Checks\Kyb::refresh('didit', $c->external_id); $n++;
+        }
+
         $this->info("{$n} companies checked again.");
         return self::SUCCESS;
     }

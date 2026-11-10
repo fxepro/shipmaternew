@@ -7,6 +7,7 @@ import { paymentApi, profileApi, orgApi, shipperVerificationApi } from '@/lib/ap
 import { TeamManager } from '@/components/team/TeamManager';
 import { useIsBrokerPortal } from '@/lib/portal';
 import { CompanyCompliance } from '@/components/compliance/CompanyCompliance';
+import { FmcsaRecord } from '@/components/compliance/FmcsaRecord';
 import { MyVerification } from '@/components/people/MyVerification';
 import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
 import { PaymentMethods } from '@/components/payments/PaymentMethods';
@@ -1069,9 +1070,12 @@ function UploadDoc({ required, url, link, docType, expiry, onFileChange, onExpir
 function ComplianceTab(_props: { initialData: ShipperProfile }) {
   const broker = useIsBrokerPortal();
   return (
-    <CompanyCompliance variant="rows" note={broker
-      ? 'What Shipmater needs from a broker: your broker authority, surety bond and W-9. Required items must be on file before you can post loads.'
-      : 'What Shipmater needs to post your loads. Special freight items are only asked for when a load needs them, for example a hazmat load.'} />
+    <div className="space-y-4">
+      <CompanyCompliance variant="rows" note={broker
+        ? 'What Shipmater needs from a broker: your broker authority, surety bond and W-9. Required items must be on file before you can post loads.'
+        : 'What Shipmater needs to post your loads. Special freight items are only asked for when a load needs them, for example a hazmat load.'} />
+      {broker && <FmcsaRecord />}
+    </div>
   );
 }
 
