@@ -7,7 +7,7 @@ import type { AdminManualTopic } from '../admin-manual';
  */
 export const PLATFORM_SETTINGS_TOPIC: AdminManualTopic = {
   slug: 'platform-settings',
-  title: 'Platform settings and decisions',
+  title: 'Platform settings',
   icon: SlidersHorizontal,
   summary:
     'Admin → Platform holds the switches that change how the whole platform behaves: one Test / Live mode, then tabs for Fees, Background checks, Verification and the Rate card. This page records what each one does and why it was built that way.',

@@ -44,8 +44,9 @@ class ContractController extends Controller
     // ── GET /contracts ────────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
+        // A platform admin on the admin Operations pages sees every contract
         $query = Contract::with('carrier')
-            ->where('shipper_id', $request->user()->current_org_id);
+            ->when(!$request->user()->seesAllCompanies(), fn ($q) => $q->where('shipper_id', $request->user()->current_org_id));
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));

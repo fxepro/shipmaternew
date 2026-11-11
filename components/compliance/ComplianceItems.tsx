@@ -5,6 +5,7 @@ import { CheckCircle2, Upload, Loader2, ShieldCheck } from 'lucide-react';
 import { ProfileSection } from '@/components/shared/ProfileSection';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { DataCard } from '@/components/profile/DataCard';
 
 export type ComplianceState = 'passed' | 'pending' | 'missing' | 'failed' | 'expired';
 export interface ComplianceItem {
@@ -30,9 +31,12 @@ const STATE: Record<ComplianceState, [string, string]> = {
  * verifyUrl: admins only, to mark an uploaded file verified or not.
  * variant 'rows': profile section cards with the field name on the left and the data on the right (shipper profile).
  */
-export function ComplianceItems({ items, uploadUrl, verifyUrl, onChange, variant = 'cards' }: {
+export function ComplianceItems({ items, uploadUrl, verifyUrl, onChange, variant = 'cards', sectionExtra }: {
   items: ComplianceItem[];
-  variant?: 'cards' | 'rows';
+  /** 'data': one DataCard per section, rows field name left and value right (admin) */
+  variant?: 'cards' | 'rows' | 'data';
+  /** More rows at the end of a section (admin: the authority status beside USDOT and MC) */
+  sectionExtra?: (section: string) => React.ReactNode;
   uploadUrl?: (key: string) => string;
   verifyUrl?: (key: string) => string;
   onChange: (items: ComplianceItem[]) => void;
@@ -45,6 +49,22 @@ export function ComplianceItems({ items, uploadUrl, verifyUrl, onChange, variant
     );
   }
   const sections = Array.from(new Set(items.map((i) => i.section)));
+  if (variant === 'data') {
+    return (
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {sections.map((s) => (
+          <DataCard key={s} title={s}>
+            <dl className="divide-y divide-[var(--color-cream-dark)]">
+              {items.filter((i) => i.section === s).map((i) => (
+                <Item key={i.key} item={i} uploadUrl={uploadUrl} verifyUrl={verifyUrl} onChange={onChange} row />
+              ))}
+              {sectionExtra?.(s)}
+            </dl>
+          </DataCard>
+        ))}
+      </div>
+    );
+  }
   if (variant === 'rows') {
     return (
       <div className="space-y-6">
@@ -126,6 +146,11 @@ function Item({ item: i, uploadUrl, verifyUrl, onChange, row }: {
       <Upload size={12} />{valueOnly ? (i.value ? 'Change' : 'Add') : i.file ? 'Replace' : 'Upload'}
     </button>
   );
+  const verifyBtn = i.upload && verifyUrl && i.file && i.method !== 'auto' && (
+    i.verified
+      ? <button type="button" disabled={busy} onClick={() => verify(false)} className="text-[13px] font-medium text-[var(--color-text-muted)] hover:underline disabled:opacity-50">Unverify</button>
+      : <button type="button" disabled={busy} onClick={() => verify(true)} className="text-[13px] font-semibold text-emerald-700 hover:underline disabled:opacity-50">Verify</button>
+  );
   const statusPill = (
     <span className={`rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
       {i.state === 'passed' && i.verified ? <span className="inline-flex items-center gap-0.5"><CheckCircle2 size={10} />Verified</span> : word}
@@ -160,6 +185,7 @@ function Item({ item: i, uploadUrl, verifyUrl, onChange, row }: {
             <span className={i.value ? '' : 'text-[var(--color-text-faint)]'}>{i.value ?? '—'}</span>
             {statusPill}
             {i.file && <a href={i.file} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-[var(--color-teal)] hover:underline">View file</a>}
+            {verifyBtn}
             {actionBtn}
           </div>
           {i.detail && <p className="mt-0.5 text-[13px] text-[var(--color-text-muted)]">{i.detail}</p>}

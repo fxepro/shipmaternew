@@ -31,7 +31,8 @@ class ComplianceRules
                 : self::item($section, $key, $label, $required,
                     $has ? ($row->value ?: ($row->file_name ?: 'On file')) : null,
                     $row?->file_path ? (bool) $row->verified_at : null, $row?->expires_at, $file($row?->file_path));
-            return array_merge($item, ['upload' => ['value_label' => $valueLabel, 'expires' => $expires, 'value_only' => $valueOnly], 'value_raw' => $row?->value]);
+            return array_merge($item, ['upload' => ['value_label' => $valueLabel, 'expires' => $expires, 'value_only' => $valueOnly], 'value_raw' => $row?->value,
+                'checked_at' => ($row?->verified_at ?? $row?->updated_at)?->toISOString()]);
         };
 
         // Results from outside checks (demo/compliance-checks.html)
@@ -142,6 +143,23 @@ class ComplianceRules
             ],
             default => [],
         };
+
+        // When each item was last checked: outside checks by their last run, carrier FMCSA items by the last lookup
+        $ran = fn (?\App\Models\OrgCheck $c) => ($c?->completed_at ?? $c?->requested_at)?->toISOString();
+        $fmcsaAt = $o->carrier_last_verification_at
+            ?? ($o->exists && $o->type === 'carrier' ? \App\Models\CarrierVerification::where('carrier_id', $o->id)->where('check_type', 'fmcsa')->value('updated_at') : null);
+        $fmcsaAt = $fmcsaAt ? Carbon::parse($fmcsaAt)->toISOString() : null;
+        $when = [
+            'ein' => $ran($kyb), 'kyb_registration' => $ran($kyb), 'address' => $ran($kyb), 'kyb_sanctions' => $ran($kyb),
+            'broker_mc' => $ran($checks->get('fmcsa_broker')), 'sam_gov' => $ran($checks->get('sam_gov')),
+            'dot_number' => $fmcsaAt, 'mc_number' => $fmcsaAt, 'auto_insurance' => $fmcsaAt,
+        ];
+        $items = array_map(function ($i) use ($when) {
+            if (array_key_exists($i['key'], $when)) $i['checked_at'] = $when[$i['key']] ?? ($i['checked_at'] ?? null);
+            // The bond is checked with the broker authority when no file was verified
+            if ($i['key'] === 'surety_bond' && empty($i['checked_at'])) $i['checked_at'] = $when['broker_mc'];
+            return $i + ['checked_at' => null];
+        }, $items);
 
         // What each item is checked against, and whether automatically or by review
         $items = array_map(fn ($i) => array_merge($i, \App\Support\ComplianceSources::for($i['key'])), $items);

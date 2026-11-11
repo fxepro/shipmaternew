@@ -132,7 +132,7 @@ class FreightJob extends Model
     public function stops(): HasMany       { return $this->hasMany(JobStop::class)->orderBy('optimized_sequence')->orderBy('sequence'); }
     public function evidence(): HasMany    { return $this->hasMany(JobEvidence::class); }
     public function offers(): HasMany      { return $this->hasMany(FreightJobOffer::class)->latest(); }
-    public function ratings(): HasMany     { return $this->hasMany(Rating::class); }
+    public function reviews(): HasMany     { return $this->hasMany(Review::class); }
 
     public function pickupStops(): HasMany
     {

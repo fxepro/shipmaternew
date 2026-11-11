@@ -25,7 +25,8 @@ class FreightJobController extends Controller
     public function shipperIndex(Request $request): JsonResponse
     {
         // A shipper sees its own loads and those a broker handles for it; a broker sees the loads it posted
-        $jobs = FreightJob::shipperSide($request->user()->current_org_id)
+        // A platform admin on the admin Operations pages sees every company's loads
+        $jobs = ($request->user()->seesAllCompanies() ? FreightJob::query() : FreightJob::shipperSide($request->user()->current_org_id))
             ->with(['contract.carrier:' . Organization::PUBLIC, 'carrier:' . Organization::PUBLIC, 'shipper:' . Organization::PUBLIC, 'broker:' . Organization::PUBLIC, 'stops'])
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->when($request->filled('contract_id'), fn($q) => $q->where('contract_id', $request->contract_id))
@@ -537,6 +538,6 @@ class FreightJobController extends Controller
     private function authorise(Request $request, FreightJob $job): void
     {
         $user = $request->user();
-        abort_unless($user->isShipperOf($job) || $user->isCarrierOf($job), 403);
+        abort_unless($user->seesAllCompanies() || $user->isShipperOf($job) || $user->isCarrierOf($job), 403);
     }
 }

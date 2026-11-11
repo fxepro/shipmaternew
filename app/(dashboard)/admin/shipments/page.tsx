@@ -9,14 +9,18 @@ import { ShipmentTable } from '@/components/shipments/ShipmentTable';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { Shipment, ShipmentStatus } from '@/types/shipment';
 
-const FILTERS: { label: string; value: ShipmentStatus | 'all' }[] = [
-  { label: 'All', value: 'all' }, { label: 'In Transit', value: 'in_transit' },
-  { label: 'Disputed', value: 'disputed' }, { label: 'Delivered', value: 'delivered' },
+// The same status tabs as the shipper's Shipments page, plus disputes
+const FILTERS: { label: string; value: string }[] = [
+  { label: 'All', value: 'all' }, { label: 'Draft', value: 'draft' }, { label: 'Posted', value: 'pending' },
+  { label: 'Booked', value: 'assigned' }, { label: 'In transit', value: 'in_transit' },
+  { label: 'Delivered', value: 'delivered' }, { label: 'Disputed', value: 'disputed' },
 ];
+const KINDS = [{ label: 'All loads', value: 'all' }, { label: 'Marketplace', value: 'open' }, { label: 'Contract freight', value: 'contracted' }] as const;
 
 export default function AdminShipmentsPage() {
   const router = useRouter();
-  const [filter, setFilter] = useState<ShipmentStatus | 'all'>('all');
+  const [filter, setFilter] = useState('all');
+  const [kind, setKind] = useState<(typeof KINDS)[number]['value']>('all');
   const [search, setSearch] = useState('');
 
   const { data: res, isLoading } = useQuery({
@@ -27,6 +31,7 @@ export default function AdminShipmentsPage() {
   const all: Shipment[] = res?.data?.data ?? [];
   const filtered = all
     .filter((s) => filter === 'all' || s.status === filter)
+    .filter((s) => kind === 'all' || (s as Shipment & { job_type?: string }).job_type === kind)
     .filter((s) => !search || s.item_description.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -40,11 +45,15 @@ export default function AdminShipmentsPage() {
           placeholder="Search by item name…"
           className="w-64 bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)] transition-colors"
         />
-        <div className="flex gap-2">
+        <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} aria-label="Load type"
+          className="bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]">
+          {KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+        </select>
+        <div className="flex flex-wrap gap-2">
           {FILTERS.map((f) => (
             <button key={f.value} onClick={() => setFilter(f.value)}
               className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${filter === f.value ? 'bg-[var(--color-slate)] text-white' : 'bg-[var(--color-white)] border border-[var(--color-cream-dark)] text-[var(--color-text-muted)]'}`}>
-              {f.label}
+              {f.label} <span className="opacity-60">{f.value === 'all' ? all.length : all.filter((s) => s.status === f.value).length}</span>
             </button>
           ))}
         </div>
@@ -53,7 +62,7 @@ export default function AdminShipmentsPage() {
       {isLoading ? (
         <div className="skeleton h-64 rounded-xl" />
       ) : filtered.length === 0 ? (
-        <EmptyState icon={Package} title="No shipments found" />
+        <EmptyState icon={Package} title="No loads found" />
       ) : (
         <ShipmentTable shipments={filtered} onView={(id) => router.push(`/admin/shipments/${id}`)} />
       )}

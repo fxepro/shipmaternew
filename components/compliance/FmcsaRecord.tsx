@@ -19,24 +19,29 @@ type FmcsaRecordData = {
 
 const pct = (n: number | null) => (n === null ? null : `${n}%`);
 
+type FmcsaResponse = { data: FmcsaRecordData | null; dot: string | null; mc: string | null; pulled_at: string | null; history: number };
+
 /**
- * FMCSA's public record for the signed-in carrier or broker (api FmcsaOpenData):
+ * FMCSA's public record for a carrier or broker, as saved in Shipmater (api FmcsaOpenData::forOrg, refreshed daily):
  * insurance on file, BOC-3 process agent, authority, revocations and SMS safety measures.
+ * orgId: an admin looking at any company; omitted, the signed-in company.
  */
-export function FmcsaRecord() {
+export function FmcsaRecord({ orgId }: { orgId?: number | string } = {}) {
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const url = orgId ? `/api/v1/admin/companies/${orgId}/fmcsa-record` : '/api/v1/company/fmcsa-record';
+  const key = ['fmcsa-record', orgId ?? 'own'];
   const { data, isLoading } = useQuery({
-    queryKey: ['fmcsa-record'],
-    queryFn: () => api.get('/api/v1/company/fmcsa-record').then((r) => r.data as { data: FmcsaRecordData | null; dot: string | null; mc: string | null }),
+    queryKey: key,
+    queryFn: () => api.get(url).then((r) => r.data as FmcsaResponse),
     staleTime: 10 * 60 * 1000,
   });
 
   const refresh = async () => {
     setRefreshing(true);
     try {
-      const r = await api.get('/api/v1/company/fmcsa-record', { params: { fresh: 1 } });
-      qc.setQueryData(['fmcsa-record'], r.data);
+      const r = await api.get(url, { params: { fresh: 1 } });
+      qc.setQueryData(key, r.data);
     } finally { setRefreshing(false); }
   };
 
@@ -52,7 +57,7 @@ export function FmcsaRecord() {
       <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Check again
     </button>
   );
-  const source = `FMCSA public data · checked ${fmtDate(rec.checked_at)}`;
+  const source = `FMCSA public data · checked ${fmtDate(data?.pulled_at ?? rec.checked_at)}${data && data.history > 1 ? ` · ${data.history} versions kept` : ''}`;
 
   const insuranceRows: DataRow[] = rec.insurance.length
     ? rec.insurance.map((i, n) => [`${i.form}${rec.insurance.length > 1 ? ` (${n + 1})` : ''}`, (

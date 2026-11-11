@@ -189,7 +189,8 @@ class PersonChecks
                 $detail = "Must be {$rules['min_age']} or older (age {$age}).";
             }
 
-            $items[] = ['key' => 'identity', 'label' => 'Identity', 'required' => $rules['identity'], 'state' => $state, 'detail' => $detail];
+            $items[] = ['key' => 'identity', 'label' => 'Identity', 'required' => $rules['identity'], 'state' => $state, 'detail' => $detail,
+                'checked_at' => ($identity?->verified_at ?? $identity?->submitted_at)?->toISOString()];
         }
 
         if ($rules['background']) {
@@ -203,6 +204,7 @@ class PersonChecks
                     default                                                           => 'missing',
                 },
                 'detail' => $bg === 'consider' ? 'Results need admin review.' : null,
+                'checked_at' => $pv?->background_checked_at ? \Illuminate\Support\Carbon::parse($pv->background_checked_at)->toISOString() : null,
             ];
         }
 

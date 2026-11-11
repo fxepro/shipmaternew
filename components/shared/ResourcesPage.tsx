@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Library, Clock, ChevronRight, ExternalLink } from 'lucide-react';
+import { BookOpen, Library, Clock, ChevronRight, ExternalLink, BookA } from 'lucide-react';
+import { Definitions } from '@/components/resources/Definitions';
 import { topicsFor, type ManualAudience, type ManualTopic, type ManualSubtopic } from '@/lib/resources/manual';
 import {
   SHIPPER_PROFILE_TABS,
@@ -19,7 +20,7 @@ import {
   CARRIER_VALIDATION_BEHAVIOR_MATRIX,
 } from '@/lib/resources/carrier-profile-guide';
 
-type ResourcesTab = 'manual' | 'library';
+type ResourcesTab = 'manual' | 'definitions' | 'library';
 
 function basePath(audience: ManualAudience) {
   return audience === 'shipper' ? '/shipper/resources' : '/carrier/resources';
@@ -317,6 +318,15 @@ export function ResourcesTopicDetail({
   );
 }
 
+/** Resources → Definitions: the platform's vocabulary */
+export function ResourcesDefinitions({ audience }: { audience: ManualAudience }) {
+  return (
+    <ResourcesShell audience={audience} tab="definitions">
+      <Definitions portal={audience === 'carrier' ? 'carrier' : 'shipper'} />
+    </ResourcesShell>
+  );
+}
+
 export function ResourcesLibrary({ audience }: { audience: ManualAudience }) {
   return (
     <ResourcesShell audience={audience} tab="library">
@@ -387,6 +397,9 @@ function ResourcesShell({
   const base = basePath(audience);
   const pathname = usePathname();
   const onLibrary = pathname.endsWith('/library');
+  const onDefinitions = pathname.endsWith('/definitions');
+  const tabCls = (on: boolean) => `flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+    on ? 'bg-[var(--color-slate)] text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`;
 
   return (
     <div className="space-y-6">
@@ -400,13 +413,12 @@ function ResourcesShell({
         <div className="flex gap-1 rounded-xl border border-[var(--color-cream-dark)] bg-[var(--color-cream)] p-1">
           <Link
             href={base}
-            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-              tab === 'manual' && !onLibrary
-                ? 'bg-[var(--color-slate)] text-white shadow-sm'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-            }`}
+            className={tabCls(tab === 'manual' && !onLibrary && !onDefinitions)}
           >
             <BookOpen size={14} /> Manual
+          </Link>
+          <Link href={`${base}/definitions`} className={tabCls(onDefinitions || tab === 'definitions')}>
+            <BookA size={14} /> Definitions
           </Link>
           <Link
             href={`${base}/library`}

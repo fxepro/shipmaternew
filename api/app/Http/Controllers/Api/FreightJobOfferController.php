@@ -177,12 +177,13 @@ class FreightJobOfferController extends Controller
     public function shipperAllOffers(Request $request): JsonResponse
     {
         $uid = $request->user()->current_org_id;   // the shipper company
+        $all = $request->user()->seesAllCompanies(); // admin Operations: every company's offers
 
         $offers = FreightJobOffer::with([
             'carrier',
-            'freightJob' => fn($q) => $q->postedBy($uid)->withCount('stops'),
+            'freightJob' => fn($q) => $q->when(!$all, fn($q) => $q->postedBy($uid))->withCount('stops'),
         ])
-            ->whereHas('freightJob', fn($q) => $q->postedBy($uid))
+            ->when(!$all, fn($q) => $q->whereHas('freightJob', fn($q) => $q->postedBy($uid)))
             ->whereIn('status', ['pending', 'accepted', 'rejected'])
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->orderByDesc('created_at')

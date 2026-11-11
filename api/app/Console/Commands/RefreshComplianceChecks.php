@@ -48,6 +48,15 @@ class RefreshComplianceChecks extends Command
             RegistryChecks::samGov($o); $n++;
         }
 
+        // FMCSA public data (insurance filings, BOC-3, authority history, revocations, SMS), saved daily
+        $open = app(\App\Services\FmcsaOpenData::class);
+        $orgs = Organization::whereIn('type', ['carrier', 'broker'])->whereNotNull('owner_id')
+            ->where(fn ($q) => $q->whereNotNull('carrier_dot_number')->orWhereNotNull('fmcsa_broker_mc'))->get();
+        foreach ($orgs as $o) {
+            try { $open->forOrg($o, true); $n++; }
+            catch (\Throwable $e) { report($e); }
+        }
+
         // Didit registry data still being fetched: read the decision again
         foreach (OrgCheck::where('check', 'kyb')->where('provider', 'didit')->where('status', 'pending')->whereNotNull('external_id')->get() as $c) {
             \App\Services\Checks\Kyb::refresh('didit', $c->external_id); $n++;

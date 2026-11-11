@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronRight, Shield } from 'lucide-react';
 import { getUser } from '@/lib/auth';
 import { topicsByCategory, type AdminManualTopic } from '@/lib/resources/admin-manual';
+import { Definitions } from '@/components/resources/Definitions';
 
 const BASE = '/admin/resources';
 
@@ -78,6 +79,16 @@ function Shell({
                 }`}
               >
                 Overview
+              </Link>
+              <Link
+                href={`${BASE}/definitions`}
+                className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
+                  activeSlug === 'definitions'
+                    ? 'bg-[var(--color-teal-pale)] text-[var(--color-teal)] font-semibold'
+                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-cream)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                Definitions
               </Link>
               {topicsByCategory().map(({ category, topics }) => (
                 <div key={category}>
@@ -157,6 +168,17 @@ export function AdminResourcesIndex() {
         </div>
         </div>
         ))}
+      </Shell>
+    </AdminGate>
+  );
+}
+
+/** Admin Resources → Definitions: the same vocabulary, with links to the admin pages */
+export function AdminResourcesDefinitions() {
+  return (
+    <AdminGate>
+      <Shell activeSlug="definitions">
+        <Definitions portal="admin" />
       </Shell>
     </AdminGate>
   );

@@ -108,3 +108,98 @@ export function AuthoritiesPanel({ items, mode, orgId, onChange }: {
     </div>
   );
 }
+
+/** One row in a field-name-left, value-right list (same as components/profile/DataCard) */
+function Line({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[minmax(120px,38%)_1fr] gap-3 px-4 py-2.5">
+      <dt className="pt-0.5 text-[13px] font-medium text-[var(--color-text-faint)]">{label}</dt>
+      <dd className="min-w-0 text-base text-[var(--color-text)]">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * Admin: the company's authorities as rows to put under its USDOT / MC compliance items, so the numbers
+ * show once. The main authority adds its status, last check, hazmat and vehicles; any other authority
+ * (a carrier that also brokers) gets one row. Insurance is not repeated: it is synced to the company's
+ * insurance items (api Authorities::syncFromOrg).
+ */
+export function AuthorityRows({ items, orgType, orgId, onChange }: {
+  items: Authority[]; orgType: string; orgId: number; onChange: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ kind: 'broker', dot_number: '', mc_number: '' });
+  const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-1.5 text-base focus:outline-none focus:border-[var(--color-teal)]';
+  const err = (e: any, m: string) => toast.error(e?.response?.data?.message ?? m);
+  const update = async (a: Authority, data: Record<string, unknown>) => {
+    try { await api.put(`/api/v1/admin/authorities/${a.id}`, data); onChange(); } catch (e) { err(e, 'Could not update'); }
+  };
+  const add = async () => {
+    try {
+      await api.post(`/api/v1/admin/companies/${orgId}/authorities`, form);
+      toast.success('Authority added'); setAdding(false); setForm({ kind: 'broker', dot_number: '', mc_number: '' }); onChange();
+    } catch (e) { err(e, 'Could not add the authority'); }
+  };
+  const status = (a: Authority) => (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <select value={a.status} onChange={(e) => update(a, { status: e.target.value })} aria-label="Authority status"
+        className="rounded-lg border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-2 py-0.5 text-[13px]">
+        {['pending', 'active', 'inactive', 'revoked'].map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+      {a.status === 'active' && !a.good_standing && <Pill tone="bad">Insurance lapsed</Pill>}
+    </span>
+  );
+
+  const main = items.find((a) => a.kind === orgType && a.is_primary) ?? items.find((a) => a.kind === orgType);
+  const others = items.filter((a) => a !== main);
+  return (
+    <>
+      {main && <>
+        <Line label="Authority status">{status(main)}</Line>
+        <Line label="Checked">{main.verified_at ? `${fmtDate(main.verified_at)} · ${main.source === 'fmcsa' ? 'FMCSA' : main.source}` : <span className="text-[var(--color-text-faint)]">—</span>}</Line>
+        {main.authority_number && <Line label="Authority number">{main.authority_number} ({main.country})</Line>}
+        {main.kind === 'carrier' && <>
+          <Line label="Hazardous materials">
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" checked={main.hazmat_authorized} onChange={() => update(main, { hazmat_authorized: !main.hazmat_authorized })} className="h-3.5 w-3.5 accent-[var(--color-teal)]" />
+              {main.hazmat_authorized ? 'Authorized' : 'Not authorized'}
+            </label>
+          </Line>
+          <Line label="Vehicles under it">{main.vehicles}</Line>
+        </>}
+      </>}
+      {others.map((a) => (
+        <Line key={a.id} label={AUTHORITY_KIND[a.kind]}>
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {[a.dot_number && `USDOT ${a.dot_number}`, a.mc_number && `MC ${a.mc_number}`].filter(Boolean).join(' · ') || '—'}
+            {status(a)}
+          </span>
+        </Line>
+      ))}
+      <div className="px-4 py-2.5">
+        {adding ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} aria-label="Kind" className={inputCls}>
+                <option value="broker">Broker authority</option>
+                <option value="carrier">Motor carrier authority</option>
+                <option value="forwarder">Freight forwarder authority</option>
+              </select>
+              {form.kind !== 'broker' && <input value={form.dot_number} onChange={(e) => setForm({ ...form, dot_number: e.target.value })} placeholder="USDOT #" className={inputCls} />}
+              <input value={form.mc_number} onChange={(e) => setForm({ ...form, mc_number: e.target.value })} placeholder="MC #" className={inputCls} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={add} className="btn btn-navy">Add authority</button>
+              <button onClick={() => setAdding(false)} className="btn border border-[var(--color-cream-dark)]">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-teal)] hover:underline">
+            <Plus size={13} /> Add another authority
+          </button>
+        )}
+      </div>
+    </>
+  );
+}

@@ -150,6 +150,9 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isReceiver(): bool      { return $this->role === 'receiver'; }
     public function isPlatformAdmin(): bool { return $this->role === 'admin'; }
 
+    /** A platform admin on the admin Operations pages (not viewing as a company): sees every company's records */
+    public function seesAllCompanies(): bool { return $this->isPlatformAdmin() && !$this->viewingAs; }
+
     /** Org role for the current org */
     public function orgRole(): ?string
     {

@@ -264,8 +264,10 @@ class AdminCompanyController extends Controller
     public function approvalChecklist(Organization $o, bool $isCarrier): array
     {
         $rows = [];
-        $add = function (string $key, string $group, string $label, bool $required, string $state, ?string $detail = null) use (&$rows) {
-            $rows[] = compact('key', 'group', 'label', 'required', 'state', 'detail');
+        // checked_at: when the check last ran or the item was last verified (ISO), so a daily re-check shows
+        $add = function (string $key, string $group, string $label, bool $required, string $state, ?string $detail = null, $checked_at = null) use (&$rows) {
+            $checked_at = $checked_at ? \Illuminate\Support\Carbon::parse($checked_at)->toISOString() : null;
+            $rows[] = compact('key', 'group', 'label', 'required', 'state', 'detail', 'checked_at');
         };
         $date = fn ($d) => $d ? \Illuminate\Support\Carbon::parse($d)->toFormattedDateString() : null;
         $type = $o->type;
@@ -276,16 +278,16 @@ class AdminCompanyController extends Controller
 
         if ($owner) {
             $add('owner_email', 'Account', 'Owner email verified', true, $owner->email_verified_at ? 'passed' : 'pending',
-                $owner->email_verified_at ? $date($owner->email_verified_at) : 'Waiting for the owner to enter the code');
+                $owner->email_verified_at ? $date($owner->email_verified_at) : 'Waiting for the owner to enter the code', $owner->email_verified_at);
         }
         if ($has('phone_verified')) {
             $add('phone_verified', 'Business', 'Business phone verified', false, $o->shipper_phone_verified_at ? 'passed' : ($o->phone ? 'pending' : 'missing'),
-                $o->shipper_phone_verified_at ? $date($o->shipper_phone_verified_at) : ($o->phone ?: 'No phone'));
+                $o->shipper_phone_verified_at ? $date($o->shipper_phone_verified_at) : ($o->phone ?: 'No phone'), $o->shipper_phone_verified_at);
         }
 
         // Compliance items for this type (same list as the company's Compliance tab)
         foreach (\App\Support\ComplianceRules::items($o, false) as $i) {
-            $add($i['key'], $i['section'], $i['label'], $i['required'], $i['state'], $i['detail'] ?? $i['value']);
+            $add($i['key'], $i['section'], $i['label'], $i['required'], $i['state'], $i['detail'] ?? $i['value'], $i['checked_at'] ?? null);
         }
 
         // The owner as a person: identity (Stripe Identity) and, for carriers, the background check (Checkr)
@@ -293,29 +295,31 @@ class AdminCompanyController extends Controller
             if (!$has($key)) continue;
             $p = $person($personKey);
             $state = ($p['state'] ?? 'missing') === 'met' ? 'passed' : ($p['state'] ?? 'missing');
-            $add($key, 'People', $extra[$key][1], true, $state, $p['detail'] ?? ($owner ? null : 'No owner'));
+            $add($key, 'People', $extra[$key][1], true, $state, $p['detail'] ?? ($owner ? null : 'No owner'), $p['checked_at'] ?? null);
         }
 
         if ($isCarrier) {
             $drivers = $o->orgMembers->filter(fn ($m) => $m->role === 'driver' && $m->user);
             $okDrivers = $drivers->filter(fn ($m) => $m->user->personVerification?->status === 'approved')->count();
+            $driversAt = $drivers->map(fn ($m) => $m->user->personVerification?->reviewed_at)->filter()->max();
             $add('drivers_approved', 'People', 'Drivers approved', false, $drivers->isEmpty() ? 'missing' : ($okDrivers === $drivers->count() ? 'passed' : 'pending'),
-                $drivers->isEmpty() ? 'No drivers yet' : "{$okDrivers} of {$drivers->count()} approved");
+                $drivers->isEmpty() ? 'No drivers yet' : "{$okDrivers} of {$drivers->count()} approved", $driversAt);
             // Vehicles: each VIN decoded by NHTSA vPIC
-            $vehicles = DB::table('carrier_vehicles')->where('carrier_id', $o->id)->get(['vin', 'vin_status']);
+            $vehicles = DB::table('carrier_vehicles')->where('carrier_id', $o->id)->get(['vin', 'vin_status', 'vin_checked_at']);
             $valid = $vehicles->where('vin_status', 'valid')->count();
             $invalid = $vehicles->where('vin_status', 'invalid')->count();
             $add('vehicles', 'Fleet', 'Vehicles (VIN checked)', false,
                 $vehicles->isEmpty() ? 'missing' : ($invalid ? 'failed' : ($valid === $vehicles->count() ? 'passed' : 'pending')),
-                $vehicles->isEmpty() ? 'No vehicles yet' : "{$valid} of {$vehicles->count()} VINs valid" . ($invalid ? ", {$invalid} invalid" : ''));
+                $vehicles->isEmpty() ? 'No vehicles yet' : "{$valid} of {$vehicles->count()} VINs valid" . ($invalid ? ", {$invalid} invalid" : ''), $vehicles->max('vin_checked_at'));
             $payout = $o->stripe_connect_status ?? ($o->stripe_connect_id ? 'reviewing' : 'not_connected');
             $add('payouts', 'Money', 'Payouts set up', true, in_array($payout, ['active', 'verified'], true) ? 'passed' : ($payout === 'not_connected' ? 'missing' : 'pending'), ucfirst(str_replace('_', ' ', $payout)));
         }
         if ($has('payment_method')) {
-            $methods = DB::table('payment_methods')->where('org_id', $o->id)->whereNotNull('stripe_pm_id')->count();
-            $add('payment_method', 'Money', 'Payment method on file', true, $methods ? 'passed' : 'missing', $methods ? "{$methods} on file" : null);
-            $active = DB::table('shipper_subscriptions')->where('org_id', $o->id)->where('status', 'active')->exists();
-            $add('subscription', 'Money', 'Subscription active (needed to post loads)', true, $active ? 'passed' : 'missing');
+            $pm = DB::table('payment_methods')->where('org_id', $o->id)->whereNotNull('stripe_pm_id');
+            $methods = (clone $pm)->count();
+            $add('payment_method', 'Money', 'Payment method on file', true, $methods ? 'passed' : 'missing', $methods ? "{$methods} on file" : null, (clone $pm)->max('created_at'));
+            $sub = DB::table('shipper_subscriptions')->where('org_id', $o->id)->where('status', 'active')->orderByDesc('id')->first();
+            $add('subscription', 'Money', 'Subscription active (needed to post loads)', true, $sub ? 'passed' : 'missing', null, $sub->started_at ?? $sub->created_at ?? null);
         }
         // Admin policy (Compliance page): off drops the check, optional / deferred stop it blocking
         return array_values(array_filter(array_map(fn ($r) => \App\Services\VerificationPolicy::apply($o, $r), $rows)));

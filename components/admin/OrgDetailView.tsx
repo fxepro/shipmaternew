@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Building2, LayoutDashboard, Briefcase, Package, ShieldCheck, Truck, CreditCard, Zap, Bell, Users, ClipboardList,
-  CheckCircle2, Circle, ExternalLink, AlertTriangle, MapPin,
+  CheckCircle2, Circle, ExternalLink, AlertTriangle, MapPin, Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -19,7 +19,10 @@ import { formatCurrency } from '@/lib/utils';
 import { OrgProfile } from '@/components/orgs/OrgProfile';
 import { ClaimDecision } from '@/components/admin/ClaimDecision';
 import { ComplianceItems, type ComplianceItem } from '@/components/compliance/ComplianceItems';
-import { AuthoritiesPanel, type Authority } from '@/components/entities/AuthoritiesPanel';
+import { AuthorityRows, type Authority } from '@/components/entities/AuthoritiesPanel';
+import { DataCard, DataRows, type DataRow } from '@/components/profile/DataCard';
+import { FmcsaRecord } from '@/components/compliance/FmcsaRecord';
+import { AdminReviews } from '@/components/admin/AdminReviews';
 import { CategoriesEditor } from '@/components/entities/CategoriesEditor';
 import { useCatalog, nameOf } from '@/components/entities/catalog';
 
@@ -50,9 +53,11 @@ interface CheckRow {
   setting?: 'required' | 'optional' | 'deferred'; due?: string | null; overdue?: boolean; promotion?: string | null;
   /** What it is checked against (demo/compliance-checks.html) */
   check?: string | null; method?: 'auto' | 'review';
+  /** When the check last ran or the item was last verified */
+  checked_at?: string | null;
 }
 
-type Tab = 'overview' | 'business' | 'services' | 'compliance' | 'vehicles' | 'payment' | 'subscription' | 'notifications' | 'team' | 'loads' | 'directory';
+type Tab = 'overview' | 'business' | 'services' | 'compliance' | 'vehicles' | 'payment' | 'subscription' | 'notifications' | 'team' | 'loads' | 'directory' | 'reviews';
 /** [key, label, verifiedKey?]: verifiedKey adds a Verified tag beside the value */
 type Field = [string, string, string?];
 type Section = { title: string; fields: Field[] };
@@ -65,14 +70,14 @@ const SHIPPER_TABS: TabDef[] = [
   { id: 'directory', label: 'Locations & contacts', icon: MapPin },
   { id: 'payment', label: 'Payment', icon: CreditCard }, { id: 'subscription', label: 'Subscription', icon: Zap },
   { id: 'notifications', label: 'Notifications', icon: Bell }, { id: 'team', label: 'Team', icon: Users },
-  { id: 'loads', label: 'Loads', icon: ClipboardList },
+  { id: 'loads', label: 'Loads', icon: ClipboardList }, { id: 'reviews', label: 'Reviews', icon: Star },
 ];
 const CARRIER_TABS: TabDef[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard }, { id: 'business', label: 'Business', icon: Briefcase },
   { id: 'services', label: 'Services', icon: Package }, { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
   { id: 'vehicles', label: 'Vehicles', icon: Truck }, { id: 'directory', label: 'Locations & contacts', icon: MapPin },
   { id: 'payment', label: 'Payouts', icon: CreditCard },
-  { id: 'team', label: 'Team', icon: Users }, { id: 'loads', label: 'Loads', icon: ClipboardList },
+  { id: 'team', label: 'Team', icon: Users }, { id: 'loads', label: 'Loads', icon: ClipboardList }, { id: 'reviews', label: 'Reviews', icon: Star },
 ];
 const TYPE_NAME: Record<string, string> = { carrier: 'Carrier', shipper: 'Shipper', factor: 'Factoring company', receiver: 'Receiver', broker: 'Broker' };
 
@@ -93,44 +98,37 @@ const SHIPPER_BUSINESS: Section[] = [
 
 // ── Layout pieces ────────────────────────────────────────────────────────────
 
-function Panel({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode }) {
+/** A titled section (same look as the Profile pages). flush: the body has no padding (tables, row lists). */
+function Panel({ title, subtitle, action, children, flush }: { title: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode; flush?: boolean }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--color-cream-dark)] bg-[var(--color-white)] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-      <header className="flex items-center justify-between gap-3 border-b border-[var(--color-cream-dark)] bg-[var(--color-cream)]/40 px-4 py-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-[var(--color-slate)]">{title}</p>
-          {subtitle && <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">{subtitle}</p>}
-        </div>
-        {action}
-      </header>
-      <div className="px-4 py-3">{children}</div>
-    </section>
+    <DataCard title={title} subtitle={subtitle} action={action}>
+      <div className={flush ? '' : 'px-4 py-3'}>{children}</div>
+    </DataCard>
   );
 }
 
-/** Label / value grid. Empty values read "Not provided" so gaps are easy to spot. */
-function Details({ data, fields, cols = 2 }: { data: Row; fields: Field[]; cols?: 1 | 2 | 3 }) {
-  const grid = cols === 1 ? '' : cols === 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-2';
+/** Field name on the left, value on the right. Empty values show a dash so gaps are easy to spot. */
+function Details({ data, fields }: { data: Row; fields: Field[] }) {
   return (
-    <dl className={`grid grid-cols-1 gap-x-6 gap-y-2.5 ${grid}`}>
-      {fields.map(([key, label, verifiedKey]) => {
-        const v = data[key];
-        const empty = v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
-        const verified = verifiedKey ? !!data[verifiedKey] : false;
-        return (
-          <div key={key} className="min-w-0">
-            <dt className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--color-text-faint)]">{label}</dt>
-            <dd className={`mt-0.5 flex flex-wrap items-center gap-1.5 text-sm ${empty ? 'text-[var(--color-text-faint)]' : 'font-medium text-[var(--color-text)]'}`}>
-              {empty ? '—' : display(key, v)}
-              {!empty && verifiedKey && (verified
-                ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-700"><CheckCircle2 size={10} />Verified</span>
-                : <span className="rounded-full bg-[var(--color-cream)] px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">Not verified</span>)}
-            </dd>
-          </div>
-        );
-      })}
-    </dl>
+    <DataRows rows={fields.map(([key, label, verifiedKey]): DataRow => {
+      const v = data[key];
+      const empty = v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+      if (empty) return [label, null];
+      return [label, (
+        <span key={key} className="inline-flex flex-wrap items-center gap-1.5">
+          {display(key, v)}
+          {verifiedKey && (data[verifiedKey]
+            ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-700"><CheckCircle2 size={10} />Verified</span>
+            : <span className="rounded-full bg-[var(--color-cream)] px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">Not verified</span>)}
+        </span>
+      )];
+    })} />
   );
+}
+
+/** A section whose rows are already worked out */
+function Rows({ title, subtitle, action, rows }: { title: string; subtitle?: string; action?: React.ReactNode; rows: DataRow[] }) {
+  return <DataCard title={title} subtitle={subtitle} action={action} rows={rows} />;
 }
 
 const CHECK_STYLE: Record<CheckRow['state'], [string, string]> = {
@@ -146,9 +144,9 @@ function ChecklistTable({ rows }: { rows: CheckRow[] }) {
   const required = rows.filter((r) => r.required);
   const met = required.filter((r) => r.state === 'passed').length;
   return (
-    <Panel title="Verification status" subtitle="Everything checked before this company can be approved. What is required is set in Admin Console, Compliance."
+    <Panel flush title="Verification status" subtitle="Everything checked before this company can be approved. What is required is set in Admin Console, Compliance."
       action={<span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${met === required.length ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{met} of {required.length} required passed</span>}>
-      <div className="-mx-4 -my-3 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--color-cream-dark)] text-left text-[11px] uppercase tracking-[0.05em] text-[var(--color-text-faint)]">
@@ -157,6 +155,7 @@ function ChecklistTable({ rows }: { rows: CheckRow[] }) {
               <th className="px-2 py-1.5 font-medium">Checked against</th>
               <th className="px-2 py-1.5 font-medium">Required</th>
               <th className="px-2 py-1.5 font-medium">Status</th>
+              <th className="px-2 py-1.5 font-medium">Checked</th>
               <th className="px-4 py-1.5 font-medium">Detail</th>
             </tr>
           </thead>
@@ -175,6 +174,9 @@ function ChecklistTable({ rows }: { rows: CheckRow[] }) {
                     {r.promotion && <span className="block text-[10px] text-[var(--color-text-faint)]">{r.promotion}</span>}
                   </td>
                   <td className="px-2 py-1.5"><span className={`rounded-full px-2 py-px text-xs font-semibold ${cls}`}>{word}</span></td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-xs tabular-nums text-[var(--color-text-muted)]" title={r.checked_at ? new Date(r.checked_at).toLocaleString() : undefined}>
+                    {r.checked_at ? new Date(r.checked_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                  </td>
                   <td className="px-4 py-1.5 text-[var(--color-text-muted)]">{r.detail ?? '—'}</td>
                 </tr>
               );
@@ -282,8 +284,12 @@ export function OrgDetailView({ id }: { id: string }) {
     ['Company approved', v.status === 'approved'],
   ];
   const blocking = data.checklist.filter((r) => r.required && r.state !== 'passed');
+  // Uploaded files not already shown on a compliance item
+  const itemFiles = new Set((data.compliance ?? []).map((i) => i.file).filter(Boolean));
+  const itemKeys = new Set((data.compliance ?? []).map((i) => i.key));
+  const otherDocs = data.documents.filter((d) => !itemFiles.has(String(d.url ?? '')) && !itemKeys.has(String(d.type ?? '')));
   const counts: Partial<Record<Tab, number>> = {
-    team: data.members.length, compliance: data.documents.length, vehicles: t?.vehicles.length,
+    team: data.members.length, compliance: (data.compliance ?? []).length, vehicles: t?.vehicles.length,
     loads: act.shipments ?? undefined, services: t ? t.services.length + t.certifications.length : undefined,
   };
 
@@ -414,30 +420,26 @@ export function OrgDetailView({ id }: { id: string }) {
       {current === 'business' && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {!data.company_profile ? <Panel title="Business">{noProfile}</Panel> : (isCarrier ? CARRIER_BUSINESS : SHIPPER_BUSINESS).map((sec) => (
-            <Panel key={sec.title} title={sec.title}><Details data={profile} fields={sec.fields} /></Panel>
+            <Panel flush key={sec.title} title={sec.title}><Details data={profile} fields={sec.fields} /></Panel>
           ))}
-          <Panel title="Company record" subtitle="How the company is stored in Shipmater">
+          <Panel flush title="Company record" subtitle="How the company is stored in Shipmater">
             <Details data={c as Row} fields={[['org_name', 'Company name'], ['plan', 'Plan'], ['status', 'Account status'], ['created_at', 'Created']]} />
           </Panel>
-          {t && (
-            <Panel title="Directory categories" subtitle="What the company is in the directory. Several allowed; its type stays the same.">
-              <CategoriesEditor value={t.categories ?? []} saveUrl={`/api/v1/admin/companies/${id}/categories`} onSaved={() => refresh()} />
-            </Panel>
-          )}
+          {/* CategoriesEditor draws its own card */}
+          {t && <CategoriesEditor value={t.categories ?? []} saveUrl={`/api/v1/admin/companies/${id}/categories`} onSaved={() => refresh()} />}
         </div>
       )}
 
       {/* Services */}
       {current === 'services' && t && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Panel title={isCarrier ? 'What they transport' : 'What they ship'} subtitle="Used to match carriers and filter searches">
-            <Pills items={t.services} empty="No service types selected yet." />
-          </Panel>
-          {isCarrier ? (
-            <Panel title="Certifications"><Pills items={t.certifications} empty="No certifications selected yet." /></Panel>
-          ) : (
-            <Panel title="Shipment defaults" subtitle="Pre-filled on new shipments">
-              <Details data={profile} cols={1} fields={[['preferred_categories', 'Preferred categories'], ['default_pickup_contact_name', 'Pickup contact'], ['default_pickup_contact_phone', 'Pickup phone'], ['internal_ref_format', 'Reference format']]} />
+          <Rows title="Services" subtitle="Used to match carriers and filter searches" rows={[
+            [isCarrier ? 'What they transport' : 'What they ship', t.services.length ? <Pills key="s" items={t.services} empty="" /> : null],
+            ...(isCarrier ? [['Certifications', t.certifications.length ? <Pills key="c" items={t.certifications} empty="" /> : null] as DataRow] : []),
+          ]} />
+          {!isCarrier && (
+            <Panel flush title="Shipment defaults" subtitle="Pre-filled on new shipments">
+              <Details data={profile} fields={[['preferred_categories', 'Preferred categories'], ['default_pickup_contact_name', 'Pickup contact'], ['default_pickup_contact_phone', 'Pickup phone'], ['internal_ref_format', 'Reference format']]} />
             </Panel>
           )}
         </div>
@@ -445,24 +447,31 @@ export function OrgDetailView({ id }: { id: string }) {
 
       {/* Compliance */}
       {current === 'compliance' && (<>
-        {t && (isCarrier || c.type === 'broker' || (t.authorities ?? []).length > 0) && (
-          <Panel title="Operating authority" subtitle="DOT / MC and broker authority, with the insurance filed on each. Matching only uses an active authority with insurance in date.">
-            <AuthoritiesPanel items={t.authorities ?? []} mode="admin" orgId={Number(id)} onChange={() => refresh()} />
-          </Panel>
-        )}
-        <ComplianceItems items={data.compliance ?? []}
+        {/* Each item once: the company's data with its status, file and Verify. The authority's status sits under its USDOT / MC. */}
+        <ComplianceItems variant="data" items={data.compliance ?? []}
           uploadUrl={(key) => `/api/v1/admin/companies/${id}/compliance/${key}`}
           verifyUrl={(key) => `/api/v1/admin/companies/${id}/compliance/${key}/verify`}
-          onChange={() => refresh()} />
-        {(isCarrier || c.type === 'shipper') && <Panel title="Documents" subtitle={`${data.documents.length} uploaded`}>
-          <Table rows={data.documents} empty="No documents uploaded."
-            columns={[['type', 'Type'], ['name', 'Name'], ['expiry_date', 'Expires'], ['verified_at', 'Verified'], ['created_at', 'Uploaded'], ['url', 'File']]} />
-        </Panel>}
+          onChange={() => refresh()}
+          sectionExtra={(sec) => t && (sec === 'Operating authority' || sec === 'Authority')
+            ? <AuthorityRows items={t.authorities ?? []} orgType={String(c.type)} orgId={Number(id)} onChange={() => refresh()} />
+            : null} />
+        {/* What FMCSA itself holds, saved daily: filings, BOC-3, authority history, revocations, safety */}
+        {(isCarrier || c.type === 'broker') && (
+          <div className="space-y-3">
+            <p className="pt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-faint)]">FMCSA record</p>
+            <FmcsaRecord orgId={id} />
+          </div>
+        )}
+        {otherDocs.length > 0 && (
+          <Panel flush title="Other documents" subtitle="Uploaded files that aren't one of the items above">
+            <Table rows={otherDocs} empty="" columns={[['type', 'Type'], ['name', 'Name'], ['expiry_date', 'Expires'], ['verified_at', 'Verified'], ['created_at', 'Uploaded'], ['url', 'File']]} />
+          </Panel>
+        )}
       </>)}
 
       {/* Vehicles */}
       {current === 'vehicles' && t && (
-        <Panel title="Vehicles" subtitle={`${t.vehicles.length} on file`}>
+        <Panel flush title="Vehicles" subtitle={`${t.vehicles.length} on file`}>
           <Table rows={t.vehicles.map((v) => ({ ...v,
               equipment: v.equipment_type ? nameOf(catalog.equipment, String(v.equipment_type)) : null,
               features: ((v.capabilities as string[] | undefined) ?? []).map((k) => nameOf(catalog.features, k)).join(', ') || null,
@@ -476,13 +485,13 @@ export function OrgDetailView({ id }: { id: string }) {
       {/* Payment */}
       {current === 'payment' && t && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Panel title={isCarrier ? 'Payouts' : 'Paying for loads'} subtitle="Only names, last 4 digits and statuses. Account numbers and tokens stay with the payment provider.">
+          <Panel flush title={isCarrier ? 'Payouts' : 'Paying for loads'} subtitle="Only names, last 4 digits and statuses. Account numbers and tokens stay with the payment provider.">
             <Details data={{ ...t.payment, bank_institution_name: profile.bank_institution_name, profile_bank_last4: profile.bank_last4, bank_connected_at: profile.bank_connected_at }}
               fields={isCarrier
                 ? [['payout_status', 'Stripe payouts'], ['stripe_connected', 'Stripe account linked'], ['stripe_mode', 'Stripe mode'], ['legal_name', 'Legal name on Stripe'], ['business_structure', 'Business structure'], ['bank_name', 'Payout bank'], ['bank_last4', 'Account last 4'], ['commission_rate', 'Commission rate']]
                 : [['stripe_customer', 'Stripe customer set up'], ['stripe_mode', 'Stripe mode'], ['bank_institution_name', 'Linked bank'], ['profile_bank_last4', 'Account last 4'], ['bank_connected_at', 'Bank linked'], ['commission_rate', 'Commission rate']]} />
           </Panel>
-          <Panel title="Payment methods" subtitle={`${t.payment_methods.length} on file`}>
+          <Panel flush title="Payment methods" subtitle={`${t.payment_methods.length} on file`}>
             <Table rows={t.payment_methods} empty="No payment methods on file."
               columns={[['type', 'Type'], ['brand', 'Brand / bank'], ['last4', 'Last 4'], ['expires', 'Expires'], ['is_default', 'Default'], ['created_at', 'Added']]} />
           </Panel>
@@ -493,21 +502,19 @@ export function OrgDetailView({ id }: { id: string }) {
       {current === 'subscription' && t && (
         <div className="space-y-5">
           {activeSub ? (
-            <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-[var(--color-teal)]/40 bg-[var(--color-teal-pale)] p-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--color-teal)] text-white"><Zap size={18} /></div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-[var(--color-slate)]">{formatCurrency(Number(activeSub.monthly_price ?? 0))} a month · {String(activeSub.tier ?? '').replace(/_/g, ' ')}</p>
-                <p className="text-xs text-[var(--color-text-muted)]">Renews {display('current_period_end', activeSub.current_period_end)}</p>
-              </div>
-              <span className="badge badge-success">Active</span>
-            </div>
+            <Rows title="Current subscription" action={<span className="badge badge-success">Active</span>} rows={[
+              ['Tier', display('tier', activeSub.tier)],
+              ['Price', `${formatCurrency(Number(activeSub.monthly_price ?? 0))} a month`],
+              ['Started', display('started_at', activeSub.started_at)],
+              ['Renews', display('current_period_end', activeSub.current_period_end)],
+            ]} />
           ) : (
             <Callout>
               No active subscription. This company can&apos;t post new loads until the owner subscribes on their Subscription tab.
               {t.subscription.history[0] ? <> Last status: <strong>{String(t.subscription.history[0].status).replace(/_/g, ' ')}</strong>.</> : null}
             </Callout>
           )}
-          <Panel title="Subscription history">
+          <Panel flush title="Subscription history">
             <Table rows={t.subscription.history} empty="Never subscribed."
               columns={[['tier', 'Tier'], ['monthly_price', 'Monthly price'], ['status', 'Status'], ['started_at', 'Started'], ['current_period_end', 'Renews'], ['tier_review_at', 'Tier review']]} />
           </Panel>
@@ -516,12 +523,15 @@ export function OrgDetailView({ id }: { id: string }) {
 
       {/* Notifications */}
       {current === 'notifications' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          {!data.company_profile ? <Panel title="Notifications">{noProfile}</Panel> : ([
-            ['Email alerts', 'notif_email'], ['SMS alerts', 'notif_sms'], ['Extra recipients', 'notif_recipients'],
-          ] as const).map(([title, key]) => (
-            <Panel key={key} title={title}><Pills items={(profile[key] as string[]) ?? []} empty="None turned on." /></Panel>
-          ))}
+        <div className="max-w-3xl">
+          {!data.company_profile ? <Panel title="Notifications">{noProfile}</Panel> : (
+            <Rows title="Notifications" rows={([
+              ['Email alerts', 'notif_email'], ['SMS alerts', 'notif_sms'], ['Extra recipients', 'notif_recipients'],
+            ] as const).map(([label, key]): DataRow => {
+              const list = (profile[key] as string[]) ?? [];
+              return [label, list.length ? <Pills key={key} items={list} empty="" /> : 'None turned on'];
+            })} />
+          )}
         </div>
       )}
 
@@ -530,10 +540,10 @@ export function OrgDetailView({ id }: { id: string }) {
 
       {/* Team */}
       {current === 'team' && (<>
-        <Panel title="Members" subtitle={`${data.members.length} ${data.members.length === 1 ? 'person' : 'people'} · click a row to review the person`}
+        <Panel flush title="Members" subtitle={`${data.members.length} ${data.members.length === 1 ? 'person' : 'people'} · click a row to review the person`}
           action={<Link href={`/admin/people?type=${c.type}`} className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-teal)] hover:underline">All people <ExternalLink size={12} /></Link>}>
           {data.members.length === 0 ? (
-            <p className="text-sm italic text-[var(--color-text-faint)]">No members.</p>
+            <p className="px-4 py-3 text-sm italic text-[var(--color-text-faint)]">No members.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -563,20 +573,23 @@ export function OrgDetailView({ id }: { id: string }) {
               </table>
             </div>
           )}
-          {isCarrier && <p className="mt-3 text-xs text-[var(--color-text-faint)]">The owner must be approved before the company can be.</p>}
+          {isCarrier && <p className="border-t border-[var(--color-cream-dark)] px-4 py-2 text-xs text-[var(--color-text-faint)]">The owner must be approved before the company can be.</p>}
         </Panel>
         {t && (
-          <Panel title="Invitations not yet accepted" subtitle={`${t.invitations.length} open`}>
+          <Panel flush title="Invitations not yet accepted" subtitle={`${t.invitations.length} open`}>
             <Table rows={t.invitations} empty="No open invitations."
               columns={[['email', 'Email'], ['role', 'Role'], ['state', 'Status'], ['created_at', 'Sent'], ['expires_at', 'Expires']]} />
           </Panel>
         )}
       </>)}
 
+      {/* Reviews */}
+      {current === 'reviews' && <AdminReviews orgId={id} />}
+
       {/* Loads */}
       {current === 'loads' && t && (<>
-        <Panel title="Recent shipments" subtitle={`${act.shipments ?? 0} in total · latest 10`}>
-          {data.recent_shipments.length === 0 ? <p className="text-sm italic text-[var(--color-text-faint)]">No shipments.</p> : (
+        <Panel flush title="Recent shipments" subtitle={`${act.shipments ?? 0} in total · latest 10`}>
+          {data.recent_shipments.length === 0 ? <p className="px-4 py-3 text-sm italic text-[var(--color-text-faint)]">No shipments.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -604,17 +617,17 @@ export function OrgDetailView({ id }: { id: string }) {
           )}
         </Panel>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Panel title="Contracts" subtitle={`${t.contracts.length} in total`}>
+          <Panel flush title="Contracts" subtitle={`${t.contracts.length} in total`}>
             <Table rows={t.contracts} empty="No contracts."
               columns={[['title', 'Title'], ['with', isCarrier ? 'Shipper' : 'Carrier'], ['status', 'Status'], ['rate', 'Rate'], ['valid_to', 'Valid to']]} />
           </Panel>
-          <Panel title={isCarrier ? 'On preferred lists' : 'Preferred carriers'} subtitle={`${t.preferred.length} in total`}>
+          <Panel flush title={isCarrier ? 'On preferred lists' : 'Preferred carriers'} subtitle={`${t.preferred.length} in total`}>
             <Table rows={t.preferred} empty="None."
               columns={[['with', isCarrier ? 'Shipper' : 'Carrier'], ['status', 'Status'], ['created_at', 'Added']]} />
           </Panel>
         </div>
         {!isCarrier && (
-          <Panel title="Saved locations" subtitle={`${t.locations.length} in total`}>
+          <Panel flush title="Saved locations" subtitle={`${t.locations.length} in total`}>
             <Table rows={t.locations} empty="No saved locations."
               columns={[['name', 'Name'], ['type', 'Type'], ['city', 'City'], ['state', 'State'], ['contact_name', 'Contact'], ['is_default', 'Default'], ['usage_count', 'Used']]} />
           </Panel>

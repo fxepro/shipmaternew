@@ -59,7 +59,7 @@ export function Fields({ data, fields, single }: { data: Row; fields: [string, s
 }
 
 export function Table({ rows, columns, empty }: { rows: Row[]; columns: [string, string][]; empty: string }) {
-  if (rows.length === 0) return <p className="text-sm text-[var(--color-text-muted)]">{empty}</p>;
+  if (rows.length === 0) return <p className="px-3 py-2 text-sm text-[var(--color-text-muted)]">{empty}</p>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">

@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\FmcsaRecord;
+use App\Models\OrgCheck;
+use App\Models\Organization;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -46,25 +49,67 @@ class FmcsaOpenData
         if ($dot === '' && $mc === '') return null;
         $key = "fmcsa-open:{$dot}:{$mc}";
         if ($fresh) Cache::forget($key);
-        return Cache::remember($key, now()->addDay(), function () use ($dot, $mc) {
-            $this->fetchAll($dot, $mc);
-            return [
-                'insurance'   => $this->insurance($dot, $mc),
-                'boc3'        => $this->boc3($dot, $mc),
-                'authority'   => $this->authority($dot, $mc),
-                'revocations' => $this->revocations($dot, $mc),
-                'safety'      => $dot !== '' ? $this->safety($dot) : null,
-                'checked_at'  => now()->toISOString(),
-            ];
-        });
+        return Cache::remember($key, now()->addDay(), fn () => $this->build($dot, $mc));
+    }
+
+    /**
+     * A company's record as saved in fmcsa_records, pulled from FMCSA when there is none, when it is
+     * older than a day, when the DOT or MC changed, or when $fresh. A new row is saved only when the
+     * record changed; otherwise the latest row's pulled_at moves. If FMCSA can't be reached the last
+     * saved record is returned.
+     *
+     * @return array{data: ?array, dot: ?string, mc: ?string, pulled_at: ?string, history: int}
+     */
+    public function forOrg(Organization $o, bool $fresh = false): array
+    {
+        [$dot, $mc] = $o->type === 'carrier'
+            ? [$o->carrier_dot_number, $o->carrier_mc_number]
+            : [OrgCheck::for($o, 'fmcsa_broker')?->external_id, $o->fmcsa_broker_mc];
+        $d = ltrim(preg_replace('/\D/', '', (string) $dot), '0');
+        $m = ltrim(preg_replace('/\D/', '', (string) $mc), '0');
+        $out = fn (?FmcsaRecord $r) => [
+            'data' => $r?->data, 'dot' => $dot, 'mc' => $mc, 'pulled_at' => $r?->pulled_at?->toISOString(),
+            'history' => $r ? FmcsaRecord::where('org_id', $o->id)->count() : 0,
+        ];
+        if ($d === '' && $m === '') return $out(null);
+
+        $last = FmcsaRecord::latestFor($o->id);
+        $stale = !$last || $fresh || $last->dot !== $d || $last->mc !== $m || $last->pulled_at->lt(now()->subDay());
+        if (!$stale) return $out($last);
+
+        $data = $this->build($d, $m);
+        if ($data === null) return $out($last);
+        Cache::put("fmcsa-open:{$d}:{$m}", $data, now()->addDay());
+
+        $hash = hash('sha256', json_encode(array_diff_key($data, ['checked_at' => 1])));
+        if ($last && $last->data_hash === $hash && $last->dot === $d && $last->mc === $m) {
+            $last->update(['pulled_at' => now(), 'data' => $data]);
+            return $out($last);
+        }
+        return $out(FmcsaRecord::create(['org_id' => $o->id, 'dot' => $d, 'mc' => $m, 'data' => $data, 'data_hash' => $hash, 'pulled_at' => now()]));
+    }
+
+    /** The record pulled from FMCSA now; null when no data set could be reached */
+    private function build(string $dot, string $mc): ?array
+    {
+        if (!$this->fetchAll($dot, $mc)) return null;
+        return [
+            'insurance'   => $this->insurance($dot, $mc),
+            'boc3'        => $this->boc3($dot, $mc),
+            'authority'   => $this->authority($dot, $mc),
+            'revocations' => $this->revocations($dot, $mc),
+            'safety'      => $dot !== '' ? $this->safety($dot) : null,
+            'checked_at'  => now()->toISOString(),
+        ];
     }
 
     /** Rows per data set, fetched together */
     private array $rows = [];
 
-    /** All nine data sets at once (one at a time is too slow, and blocks a single-threaded server) */
-    private function fetchAll(string $dot, string $mc): void
+    /** All nine data sets at once (one at a time is too slow, and blocks a single-threaded server). False when none answered. */
+    private function fetchAll(string $dot, string $mc): bool
     {
+        $ok = 0;
         $where = [];
         foreach (array_keys(self::SETS) as $set) {
             $where[$set] = $set === 'sms' ? ($dot !== '' ? "dot_number='{$dot}'" : null) : $this->where($dot, $mc, str_ends_with($set, '_motus'));
@@ -77,10 +122,11 @@ class FmcsaOpenData
         $this->rows = [];
         foreach ($where as $set => $_) {
             $r = $responses[$set] ?? null;
-            if ($r instanceof \Illuminate\Http\Client\Response && $r->successful()) { $this->rows[$set] = $r->json() ?: []; continue; }
+            if ($r instanceof \Illuminate\Http\Client\Response && $r->successful()) { $this->rows[$set] = $r->json() ?: []; $ok++; continue; }
             Log::warning('[FMCSA open data] query failed', ['set' => $set, 'status' => $r instanceof \Illuminate\Http\Client\Response ? $r->status() : (is_object($r) ? get_class($r) : null)]);
             $this->rows[$set] = [];
         }
+        return $ok > 0;
     }
 
     // ── Insurance and bonds on file ─────────────────────────────────────────

@@ -26,7 +26,7 @@ use App\Http\Controllers\Api\OrgController;
 use App\Http\Controllers\Api\MyChecksController;
 use App\Http\Controllers\Api\DriverAssignmentController;
 use App\Http\Controllers\Api\PlatformLeadController;
-use App\Http\Controllers\Api\RatingController;
+use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceTypeController;
 use App\Http\Controllers\Api\ShipperVerificationController;
 use App\Http\Controllers\Api\TrackController;
@@ -77,10 +77,10 @@ Route::post('/platform-leads', [PlatformLeadController::class, 'store']);
 Route::get('/tenant/resolve', [TenantController::class, 'resolve']);
 
 // ── Org ratings (public — shown on carrier/shipper public profiles) ─────────
-Route::get('/orgs/{org}/ratings', [RatingController::class, 'profileRatings']);
+Route::get('/orgs/{org}/ratings', [ReviewController::class, 'profileRatings']);
 
 // ── Ratings: org profile (public) ──────────────────────────────────────────
-Route::get('/orgs/{org}/ratings', [RatingController::class, 'profileRatings']);
+Route::get('/orgs/{org}/ratings', [ReviewController::class, 'profileRatings']);
 
 // ── Auth (public) ──────────────────────────────────────────────────────────
 Route::post('/auth/register', [AuthController::class, 'register']);
@@ -326,6 +326,10 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/admin/companies',                  [AdminCompanyController::class, 'index']);
     Route::get('/admin/companies/{org}',            [AdminCompanyController::class, 'show']);
     Route::post('/admin/companies/{org}/review',    [AdminCompanyController::class, 'review']);
+    Route::get('/admin/companies/{org}/reviews',    [ReviewController::class, 'adminIndex']);
+    Route::post('/admin/reviews/{review}/hide',     [ReviewController::class, 'hide']);
+    Route::delete('/admin/reviews/{review}/hide',   [ReviewController::class, 'unhide']);
+    Route::get('/admin/companies/{org}/fmcsa-record', [\App\Http\Controllers\Api\FmcsaRecordController::class, 'adminShow']);
     Route::put('/admin/companies/{org}/categories', [\App\Http\Controllers\Api\CapabilityController::class, 'adminUpdateCategories']);
     Route::post('/admin/companies/{org}/authorities', [\App\Http\Controllers\Api\AuthorityController::class, 'adminStore']);
     Route::put('/admin/authorities/{authority}',    [\App\Http\Controllers\Api\AuthorityController::class, 'adminUpdate']);
@@ -359,8 +363,9 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/admin/financials/export', [AdminController::class, 'financialsExport']);
 
     // Ratings & reviews
-    Route::post('/jobs/{job}/ratings', [RatingController::class, 'store'])->middleware('perm:carrier:ratings.give,shipper:ratings.give');
-    Route::get('/jobs/{job}/ratings',  [RatingController::class, 'jobRatings']);
+    Route::post('/jobs/{job}/ratings', [ReviewController::class, 'store'])->middleware('perm:carrier:ratings.give,shipper:ratings.give');
+    Route::get('/jobs/{job}/ratings',  [ReviewController::class, 'jobRatings']);
+    Route::post('/noas/{noa}/reviews', [ReviewController::class, 'storeNoa']);
 
     // Blog admin
     Route::get('/admin/blog',         [BlogController::class, 'adminIndex']);
@@ -446,6 +451,6 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
 
 
     // ── Ratings ────────────────────────────────────────────────────────────
-    Route::post('/jobs/{job}/ratings', [RatingController::class, 'store'])->middleware('perm:carrier:ratings.give,shipper:ratings.give');
-    Route::get('/jobs/{job}/ratings',  [RatingController::class, 'jobRatings']);
+    Route::post('/jobs/{job}/ratings', [ReviewController::class, 'store'])->middleware('perm:carrier:ratings.give,shipper:ratings.give');
+    Route::get('/jobs/{job}/ratings',  [ReviewController::class, 'jobRatings']);
 });

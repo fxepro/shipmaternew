@@ -48,7 +48,8 @@ class RateCheckController extends Controller
     public function history(Request $request): JsonResponse
     {
         $org = PersonChecks::companyOf($request->user(), ['shipper', 'broker']);
-        $rows = DB::table('rate_checks')->where($org ? 'org_id' : 'user_id', $org?->id ?? $request->user()->id)
+        $rows = DB::table('rate_checks')
+            ->when(!$request->user()->seesAllCompanies(), fn ($q) => $q->where($org ? 'org_id' : 'user_id', $org?->id ?? $request->user()->id))
             ->orderByDesc('created_at')->limit(25)->get()
             ->map(fn ($r) => [
                 'id' => $r->id, 'origin' => $r->origin, 'destination' => $r->destination, 'equipment' => $r->equipment,
@@ -61,7 +62,7 @@ class RateCheckController extends Controller
     // GET /api/v1/shipper/freight-jobs/{job}/market-rate   the estimate for a load; kept on the load while it is a draft
     public function forJob(Request $request, FreightJob $job, RateEstimator $rates): JsonResponse
     {
-        abort_unless($request->user()->isShipperOf($job), 403);
+        abort_unless($request->user()->seesAllCompanies() || $request->user()->isShipperOf($job), 403);
         $result = $rates->forJob($job);
         if ($result['ok'] && $job->status === 'draft') $job->update(['market_rate' => $result]);
         return response()->json(['data' => $result]);

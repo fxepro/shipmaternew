@@ -165,8 +165,14 @@ export const NAV: Record<UserRole, NavSection[]> = {
     {
       section: 'Operations',
       items: [
-        { label: 'Loads',            href: '/admin/shipments', icon: Package       },
-        { label: 'Disputes',         href: '/admin/disputes',  icon: AlertTriangle },
+        { label: 'Loads',            href: '/admin/shipments',           icon: Package       },
+        { label: 'Live tracking',    href: '/admin/ops/tracking',        icon: MapPin        },
+        { label: 'Route planner',    href: '/admin/ops/route-planner',   icon: Route         },
+        { label: 'Offers',           href: '/admin/ops/jobs/offers',     icon: Radio         },
+        { label: 'Contract freight', href: '/admin/ops/jobs/contracted', icon: Briefcase     },
+        { label: 'Contracts',        href: '/admin/ops/contracts',       icon: FileText      },
+        { label: 'Rate check',       href: '/admin/ops/rate-check',      icon: Gauge         },
+        { label: 'Disputes',         href: '/admin/disputes',            icon: AlertTriangle },
         { label: 'Users',            href: '/admin/users',     icon: Users         },
       ],
     },
