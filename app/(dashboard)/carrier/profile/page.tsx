@@ -58,6 +58,18 @@ interface FmcsaResult {
 }
 
 // ── Vehicle types ─────────────────────────────────────────────────────────────
+/** What NHTSA vPIC returns for a VIN (api RegistryChecks::decodeVin) */
+interface VinDecoded {
+  make: string | null; model: string | null; year: string | null; series?: string | null; trim?: string | null;
+  vehicle_type?: string | null; body?: string | null; manufacturer?: string | null; gvwr?: string | null;
+  engine?: string | null; engine_hp?: string | null; fuel?: string | null; axles?: string | null; drive?: string | null;
+  brakes?: string | null; trailer_type?: string | null; trailer_body?: string | null; trailer_length?: string | null; plant?: string | null;
+  error: string | null;
+}
+const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
+const cleanVin = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+const MISMATCH_LABEL: Record<string, string> = { year: 'Year', make: 'Make', vehicle_class: 'Vehicle type', gvwr: 'GVWR' };
+
 interface Vehicle {
   id: string;
   year: string;
@@ -67,7 +79,9 @@ interface Vehicle {
   vin: string;
   /** NHTSA vPIC decode of the VIN (demo/compliance-checks.html) */
   vin_status?: 'valid' | 'invalid' | 'error' | null;
-  vin_decoded?: { make: string | null; model: string | null; year: string | null; error: string | null } | null;
+  vin_decoded?: VinDecoded | null;
+  vin_mismatches?: { field: string; entered: string; decoded: string }[];
+  vin_recalls?: { campaign: string | null; date: string | null; component: string | null; summary: string | null; remedy: string | null; park_it: boolean }[] | null;
   license_plate: string;
   license_plate_state: string;
   gvwr: string;
@@ -597,6 +611,26 @@ export default function CarrierProfilePage() {
     enabled: showAddVehicle,
   });
   const [vehicleForm, setVehicleForm] = useState<Vehicle>(newVehicle(true));
+  // The VIN is decoded by NHTSA as it is typed; year, make and model come from it
+  const [vinCheck, setVinCheck] = useState<{ vin: string; state: 'checking' | 'valid' | 'invalid' | 'error'; decoded?: VinDecoded; error?: string } | null>(null);
+  async function checkVin(raw: string) {
+    const vin = cleanVin(raw);
+    if (!VIN_RE.test(vin)) { setVinCheck(null); return; }
+    if (vinCheck?.vin === vin && vinCheck.state !== 'error') return;
+    setVinCheck({ vin, state: 'checking' });
+    try {
+      const d = (await api.get(`/api/v1/carrier/vehicles/vin/${vin}`)).data?.data;
+      setVinCheck({ vin, state: d.status, decoded: d.decoded, error: d.decoded?.error ?? undefined });
+      // Fill in what the VIN says when those fields are still empty
+      if (d.status === 'valid') setVehicleForm(p => cleanVin(p.vin) !== vin ? p : ({ ...p,
+        make: p.make || d.decoded.make || '', model: p.model || d.decoded.model || '',
+        year: !p.make && !p.model && d.decoded.year ? d.decoded.year : p.year }));
+    } catch (e: any) {
+      setVinCheck({ vin, state: 'error', error: e?.response?.data?.error ?? 'NHTSA could not be reached' });
+    }
+  }
+  const useVinDetails = () => vinCheck?.decoded && setVehicleForm(p => ({ ...p,
+    year: vinCheck.decoded!.year || p.year, make: vinCheck.decoded!.make || p.make, model: vinCheck.decoded!.model || p.model }));
 
   const addVehicleMutation = useMutation({
     mutationFn: (data: Omit<Vehicle, 'id'>) => api.post('/api/v1/carrier/vehicles', data),
@@ -604,6 +638,7 @@ export default function CarrierProfilePage() {
       qc.invalidateQueries({ queryKey: ['carrier-vehicles'] });
       setShowAddVehicle(false);
       setVehicleForm(newVehicle(false));
+      setVinCheck(null);
       toast.success('Vehicle added');
     },
     onError: () => toast.error('Failed to add vehicle'),
@@ -1954,8 +1989,50 @@ export default function CarrierProfilePage() {
                     {v.vin && v.vin_status === 'valid' && <span className="block text-[13px] text-emerald-700">Checked with NHTSA{v.vin_decoded?.make ? `: ${v.vin_decoded.year ?? ''} ${v.vin_decoded.make} ${v.vin_decoded.model ?? ''}`.trimEnd() : ''}</span>}
                     {v.vin && v.vin_status === 'invalid' && <span className="block text-[13px] text-red-700">NHTSA: {v.vin_decoded?.error ?? 'not a valid VIN'}</span>}
                     {v.vin && !v.vin_status && <span className="block text-[13px] text-[var(--color-text-faint)]">Checking with NHTSA…</span>}
+                    {v.vin && v.vin_status === 'error' && <span className="block text-[13px] text-amber-700">NHTSA could not be reached; checked again when the VIN is saved</span>}
+                    {!v.vin && <span className="block text-[13px] text-amber-700">Add the VIN</span>}
                   </div>
                 </div>
+                {/* Where what was entered differs from the VIN */}
+                {(v.vin_mismatches ?? []).length > 0 && (
+                  <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[13px] text-amber-800">
+                    <p className="font-semibold">Doesn&apos;t match the VIN</p>
+                    {(v.vin_mismatches as NonNullable<Vehicle['vin_mismatches']>).map(m => (
+                      <p key={m.field}>{MISMATCH_LABEL[m.field] ?? m.field}: you entered {m.entered}, the VIN says {m.decoded}</p>
+                    ))}
+                  </div>
+                )}
+                {/* Full NHTSA decode and recalls for the model */}
+                {v.vin_status === 'valid' && v.vin_decoded && (
+                  <details className="mt-3 text-[13px]">
+                    <summary className="cursor-pointer text-[var(--color-teal)] font-medium">
+                      VIN details{v.vin_recalls?.length ? ` · ${v.vin_recalls.length} NHTSA recall${v.vin_recalls.length === 1 ? '' : 's'} for this model` : ''}
+                    </summary>
+                    <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1">
+                      {([['Vehicle type', 'vehicle_type'], ['Body', 'body'], ['Series', 'series'], ['Weight class', 'gvwr'], ['Engine', 'engine'], ['Horsepower', 'engine_hp'], ['Fuel', 'fuel'],
+                         ['Axles', 'axles'], ['Drive', 'drive'], ['Brakes', 'brakes'], ['Trailer type', 'trailer_type'], ['Trailer body', 'trailer_body'], ['Trailer length', 'trailer_length'],
+                         ['Manufacturer', 'manufacturer'], ['Built in', 'plant']] as [string, keyof VinDecoded][])
+                        .filter(([, k]) => v.vin_decoded[k]).map(([label, k]) => (
+                          <div key={k} className="contents"><dt className="text-[var(--color-text-faint)]">{label}</dt><dd className="text-[var(--color-text)]">{v.vin_decoded[k]}</dd></div>
+                        ))}
+                      <dt className="text-[var(--color-text-faint)]">Checked</dt>
+                      <dd className="text-[var(--color-text)]">NHTSA{v.vin_checked_at ? ` · ${fmtDate(v.vin_checked_at)}` : ''}</dd>
+                    </dl>
+                    {v.vin_recalls?.length ? (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[var(--color-text-faint)]">Recalls NHTSA lists for this year, make and model. A recall may already have been repaired on this vehicle.</p>
+                        {v.vin_recalls.map((r: NonNullable<Vehicle['vin_recalls']>[number]) => (
+                          <div key={r.campaign ?? r.summary} className="rounded-lg border border-[var(--color-cream-dark)] px-3 py-2">
+                            <p className="font-medium text-[var(--color-text)]">{r.component}{r.park_it && <span className="ml-2 text-red-700">Park it: do not drive</span>}</p>
+                            <p className="text-[var(--color-text-faint)]">Campaign {r.campaign}{r.date ? ` · ${r.date}` : ''}</p>
+                            {r.summary && <p className="mt-1 text-[var(--color-text-muted)]">{r.summary}</p>}
+                            {r.remedy && <p className="mt-1 text-[var(--color-text-muted)]"><span className="text-[var(--color-text-faint)]">Remedy: </span>{r.remedy}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : v.recalls_checked_at ? <p className="mt-2 text-[var(--color-text-faint)]">No NHTSA recalls listed for this model.</p> : null}
+                  </details>
+                )}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   {v.liftgate && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">Liftgate</span>}
                   {v.climate_controlled && <span className="px-1.5 py-0.5 rounded bg-[var(--color-cream)] text-[13px] text-[var(--color-text-faint)]">Climate</span>}
@@ -2042,7 +2119,24 @@ export default function CarrierProfilePage() {
 
                 {/* VIN / Plate */}
                 <div className="grid grid-cols-2 gap-4">
-                  <Field label="VIN" value={vehicleForm.vin} onChange={v => setVehicleForm(p => ({...p, vin: v}))} placeholder="1FUJA6CV17LY12345" />
+                  <div>
+                    <Field label="VIN" required value={vehicleForm.vin} placeholder="1FUJA6CV17LY12345"
+                      onChange={v => { setVehicleForm(p => ({...p, vin: v.toUpperCase()})); checkVin(v); }}
+                      hint={!vinCheck ? '17 letters and numbers. Checked with NHTSA as you type.' : undefined} />
+                    {vinCheck?.state === 'checking' && <p className="mt-1 flex items-center gap-1 text-[13px] text-[var(--color-text-faint)]"><Loader2 size={12} className="animate-spin" /> Checking with NHTSA…</p>}
+                    {vinCheck?.state === 'invalid' && <p className="mt-1 text-[13px] text-red-700">NHTSA: {vinCheck.error ?? 'not a valid VIN'}</p>}
+                    {vinCheck?.state === 'error' && <p className="mt-1 text-[13px] text-amber-700">{vinCheck.error}</p>}
+                    {vinCheck?.state === 'valid' && vinCheck.decoded && (() => {
+                      const d = vinCheck.decoded;
+                      const differs = (d.year && d.year !== vehicleForm.year) || (d.make && d.make.toUpperCase() !== vehicleForm.make.toUpperCase()) || (d.model && d.model.toUpperCase() !== vehicleForm.model.toUpperCase());
+                      return (
+                        <div className="mt-1 text-[13px]">
+                          <p className="text-emerald-700">NHTSA: {[d.year, d.make, d.model].filter(Boolean).join(' ')}{d.vehicle_type ? ` · ${d.vehicle_type.toLowerCase()}` : ''}{d.gvwr ? ` · ${d.gvwr.split('(')[0].trim()}` : ''}</p>
+                          {differs && <button type="button" onClick={useVinDetails} className="font-semibold text-[var(--color-teal)] hover:underline">Use these for year, make and model</button>}
+                        </div>
+                      );
+                    })()}
+                  </div>
                   <Field label="License Plate" value={vehicleForm.license_plate} onChange={v => setVehicleForm(p => ({...p, license_plate: v}))} placeholder="ABC-1234" />
                   <Field label="Plate State" value={vehicleForm.license_plate_state} onChange={v => setVehicleForm(p => ({...p, license_plate_state: v}))} placeholder="CO" />
                 </div>

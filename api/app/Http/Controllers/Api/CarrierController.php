@@ -594,6 +594,12 @@ class CarrierController extends Controller
                     'make'                 => $v->make,
                     'model'                => $v->model,
                     'vin'                  => $v->vin,
+                    'vin_status'           => $v->vin_status,
+                    'vin_decoded'          => $v->vin_decoded ? \Illuminate\Support\Arr::except($v->vin_decoded, ['raw']) : null,
+                    'vin_checked_at'       => $v->vin_checked_at?->toISOString(),
+                    'vin_mismatches'       => $v->vin_mismatches ?? [],
+                    'vin_recalls'          => $v->vin_recalls,
+                    'recalls_checked_at'   => $v->recalls_checked_at?->toISOString(),
                     'license_plate'        => $v->license_plate,
                     'license_plate_state'  => $v->license_plate_state,
                     'gvwr'                 => $v->gvwr,
@@ -628,12 +634,13 @@ class CarrierController extends Controller
     {
         abort_unless($request->user()->isCarrier(), 403);
 
+        self::cleanVinInput($request);
         $validated = $request->validate([
             'type'                 => ['required', 'string'],
             'year'                 => ['required', 'string', 'max:4'],
             'make'                 => ['required', 'string'],
             'model'                => ['required', 'string'],
-            'vin'                  => ['sometimes', 'nullable', 'string'],
+            'vin'                  => ['required', 'string', 'regex:/^[A-HJ-NPR-Z0-9]{17}$/'],
             'license_plate'        => ['sometimes', 'nullable', 'string'],
             'license_plate_state'  => ['sometimes', 'nullable', 'string', 'max:2'],
             'gvwr'                 => ['sometimes', 'nullable', 'numeric'],
@@ -646,7 +653,7 @@ class CarrierController extends Controller
             'enclosed'             => ['sometimes', 'boolean'],
             'is_primary'           => ['sometimes', 'boolean'],
             'registration_expiry'  => ['sometimes', 'nullable', 'date'],
-        ] + self::vehicleExtraRules());
+        ] + self::vehicleExtraRules(), self::VIN_MESSAGES);
 
         $org = $this->carrier($request->user());
         abort_unless($org, 422, 'You are not part of a carrier company.');
@@ -680,12 +687,13 @@ class CarrierController extends Controller
         abort_unless($org, 404);
         $vehicle = $org->vehicles()->findOrFail($id);
 
+        self::cleanVinInput($request);
         $validated = $request->validate([
             'type'                 => ['sometimes', 'string'],
             'year'                 => ['sometimes', 'string', 'max:4'],
             'make'                 => ['sometimes', 'string'],
             'model'                => ['sometimes', 'string'],
-            'vin'                  => ['sometimes', 'nullable', 'string'],
+            'vin'                  => ['sometimes', 'required', 'string', 'regex:/^[A-HJ-NPR-Z0-9]{17}$/'],
             'license_plate'        => ['sometimes', 'nullable', 'string'],
             'license_plate_state'  => ['sometimes', 'nullable', 'string', 'max:2'],
             'gvwr'                 => ['sometimes', 'nullable', 'numeric'],
@@ -698,7 +706,7 @@ class CarrierController extends Controller
             'enclosed'             => ['sometimes', 'boolean'],
             'is_primary'           => ['sometimes', 'boolean'],
             'registration_expiry'  => ['sometimes', 'nullable', 'date'],
-        ] + self::vehicleExtraRules());
+        ] + self::vehicleExtraRules(), self::VIN_MESSAGES);
 
         if (!empty($validated['is_primary'])) {
             $org->vehicles()->update(['is_primary' => false]);
@@ -716,6 +724,36 @@ class CarrierController extends Controller
         }
 
         return response()->json(['data' => $vehicle]);
+    }
+
+    private const VIN_MESSAGES = [
+        'vin.required' => 'Enter the VIN.',
+        'vin.regex'    => 'A VIN is 17 letters and numbers (no I, O or Q).',
+    ];
+
+    /** Spaces, dashes and lower case are removed from a VIN before it is checked */
+    private static function cleanVinInput(Request $request): void
+    {
+        if ($request->has('vin')) $request->merge(['vin' => \App\Services\Checks\RegistryChecks::cleanVin($request->input('vin'))]);
+    }
+
+    // ── GET /api/v1/carrier/vehicles/vin/{vin} ──────────────────────────────
+
+    /** Decode a VIN with NHTSA before the vehicle is saved, so the form can fill in year, make and model */
+    public function decodeVin(Request $request, string $vin): JsonResponse
+    {
+        abort_unless($request->user()->isCarrier(), 403);
+        $vin = \App\Services\Checks\RegistryChecks::cleanVin($vin);
+        if (!preg_match('/^[A-HJ-NPR-Z0-9]{17}$/', $vin)) {
+            return response()->json(['error' => self::VIN_MESSAGES['vin.regex']], 422);
+        }
+        try {
+            $d = \App\Services\Checks\RegistryChecks::decodeVin($vin);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[vPIC] VIN preview failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'NHTSA could not be reached. You can still save; the VIN is checked again after saving.'], 503);
+        }
+        return response()->json(['data' => ['vin' => $d['vin'], 'status' => $d['status'], 'decoded' => $d['fields']]]);
     }
 
     /** Fields beyond the original form: equipment, features, temperature, owner vs operator */

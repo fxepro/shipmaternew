@@ -157,6 +157,7 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/carrier/documents',           [CarrierController::class, 'getDocuments'])->middleware('perm:carrier:company.profile=view');
     Route::post('/carrier/documents',          [CarrierController::class, 'uploadDocument'])->middleware('perm:carrier:company.profile');
     Route::get('/carrier/vehicles',            [CarrierController::class, 'getVehicles'])->middleware('perm:carrier:fleet.vehicles=view');
+    Route::get('/carrier/vehicles/vin/{vin}',  [CarrierController::class, 'decodeVin'])->middleware(['perm:carrier:fleet.vehicles', 'throttle:30,1']);
     Route::post('/carrier/vehicles',           [CarrierController::class, 'createVehicle'])->middleware('perm:carrier:fleet.vehicles');
     Route::put('/carrier/vehicles/{id}',       [CarrierController::class, 'updateVehicle'])->middleware('perm:carrier:fleet.vehicles');
     Route::delete('/carrier/vehicles/{id}',    [CarrierController::class, 'deleteVehicle'])->middleware('perm:carrier:fleet.vehicles');

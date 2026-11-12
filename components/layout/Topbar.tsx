@@ -45,7 +45,8 @@ export function Topbar({ role, userName, onLogout }: TopbarProps) {
         >
           <Bell size={17} />
         </button>
-        <Person href={profileHref ?? ''} className="flex items-center gap-2 rounded-lg pl-1 pr-2 py-1 hover:bg-[var(--border)]" title={profileHref ? 'Profile' : undefined}>
+        {/* Admins have no profile page: a plain div with no href (an empty href makes React warn) */}
+        <Person {...(profileHref ? { href: profileHref } : {}) as { href: string }} className="flex items-center gap-2 rounded-lg pl-1 pr-2 py-1 hover:bg-[var(--border)]" title={profileHref ? 'Profile' : undefined}>
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-medium"
             style={{ background: 'var(--navy)', color: 'var(--on-dark)' }}

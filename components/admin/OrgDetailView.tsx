@@ -477,8 +477,12 @@ export function OrgDetailView({ id }: { id: string }) {
               features: ((v.capabilities as string[] | undefined) ?? []).map((k) => nameOf(catalog.features, k)).join(', ') || null,
               temp: v.temp_min_f != null || v.temp_max_f != null ? `${v.temp_min_f ?? '?'}° to ${v.temp_max_f ?? '?'}°F` : null,
               owned_by: v.owner_user_id ? 'Driver (owner-operator)' : v.owner_org_id && Number(v.owner_org_id) !== Number(id) ? 'Another company' : 'This company',
+              // NHTSA check of the VIN: invalid, entered details that don't match it, recalls for the model
+              vin_check: !v.vin ? 'No VIN' : v.vin_status === 'invalid' ? 'Invalid VIN' : v.vin_status === 'error' ? 'NHTSA unreachable' : !v.vin_status ? 'Checking…'
+                : [((v.vin_mismatches as { field: string; entered: string; decoded: string }[] | undefined) ?? []).map((m) => `${m.field.replace('_', ' ')}: entered ${m.entered}, VIN says ${m.decoded}`).join('; ') || 'Valid, matches',
+                   Number(v.recall_count) ? `${v.recall_count} recalls` : null].filter(Boolean).join(' · '),
             }))} empty="No vehicles added."
-            columns={[['unit_number', 'Unit'], ['equipment', 'Equipment'], ['year', 'Year'], ['make', 'Make'], ['model', 'Model'], ['license_plate', 'Plate'], ['max_payload', 'Max payload (lb)'], ['temp', 'Temp. range'], ['features', 'Features'], ['owned_by', 'Owned by'], ['status', 'Status'], ['registration_expiry', 'Registration expires']]} />
+            columns={[['unit_number', 'Unit'], ['equipment', 'Equipment'], ['year', 'Year'], ['make', 'Make'], ['model', 'Model'], ['license_plate', 'Plate'], ['max_payload', 'Max payload (lb)'], ['temp', 'Temp. range'], ['features', 'Features'], ['owned_by', 'Owned by'], ['status', 'Status'], ['registration_expiry', 'Registration expires'], ['vin', 'VIN'], ['vin_check', 'VIN check (NHTSA)']]} />
         </Panel>
       )}
 

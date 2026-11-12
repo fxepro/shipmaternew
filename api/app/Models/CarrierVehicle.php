@@ -12,7 +12,13 @@ class CarrierVehicle extends Model
     protected static function booted(): void
     {
         static::saved(function (CarrierVehicle $v) {
-            if (!$v->wasRecentlyCreated && !$v->wasChanged('vin')) return;
+            if (!$v->wasRecentlyCreated && !$v->wasChanged('vin')) {
+                // Details compared with the decoded VIN changed: compare again without calling NHTSA
+                if ($v->wasChanged(['year', 'make', 'type', 'vehicle_class', 'gvwr'])) {
+                    $v->forceFill(['vin_mismatches' => \App\Services\Checks\RegistryChecks::mismatches($v)])->saveQuietly();
+                }
+                return;
+            }
             $id = $v->id;
             dispatch(function () use ($id) {
                 if ($veh = CarrierVehicle::find($id)) \App\Services\Checks\RegistryChecks::vin($veh);
@@ -40,6 +46,9 @@ class CarrierVehicle extends Model
             'is_primary'           => 'boolean',
             'vin_decoded'          => 'array',
             'vin_checked_at'       => 'datetime',
+            'vin_mismatches'       => 'array',
+            'vin_recalls'          => 'array',
+            'recalls_checked_at'   => 'datetime',
             'gvwr'                 => 'decimal:2',
             'max_payload'          => 'decimal:2',
             'cargo_length'         => 'decimal:2',

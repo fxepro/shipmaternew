@@ -305,12 +305,22 @@ class AdminCompanyController extends Controller
             $add('drivers_approved', 'People', 'Drivers approved', false, $drivers->isEmpty() ? 'missing' : ($okDrivers === $drivers->count() ? 'passed' : 'pending'),
                 $drivers->isEmpty() ? 'No drivers yet' : "{$okDrivers} of {$drivers->count()} approved", $driversAt);
             // Vehicles: each VIN decoded by NHTSA vPIC
-            $vehicles = DB::table('carrier_vehicles')->where('carrier_id', $o->id)->get(['vin', 'vin_status', 'vin_checked_at']);
+            // A valid VIN whose decode differs from what was entered (year, make, trailer vs truck, GVWR) waits on the carrier
+            $vehicles = DB::table('carrier_vehicles')->where('carrier_id', $o->id)->get(['vin', 'vin_status', 'vin_checked_at', 'vin_mismatches', 'vin_recalls']);
             $valid = $vehicles->where('vin_status', 'valid')->count();
             $invalid = $vehicles->where('vin_status', 'invalid')->count();
+            $noVin = $vehicles->filter(fn ($v) => !$v->vin)->count();
+            $mismatched = $vehicles->filter(fn ($v) => count(json_decode($v->vin_mismatches ?? '[]', true) ?: []) > 0)->count();
+            $recalls = $vehicles->sum(fn ($v) => count(json_decode($v->vin_recalls ?? '[]', true) ?: []));
             $add('vehicles', 'Fleet', 'Vehicles (VIN checked)', false,
-                $vehicles->isEmpty() ? 'missing' : ($invalid ? 'failed' : ($valid === $vehicles->count() ? 'passed' : 'pending')),
-                $vehicles->isEmpty() ? 'No vehicles yet' : "{$valid} of {$vehicles->count()} VINs valid" . ($invalid ? ", {$invalid} invalid" : ''), $vehicles->max('vin_checked_at'));
+                $vehicles->isEmpty() ? 'missing' : ($invalid ? 'failed' : ($valid === $vehicles->count() && !$mismatched ? 'passed' : 'pending')),
+                $vehicles->isEmpty() ? 'No vehicles yet' : implode(', ', array_filter([
+                    "{$valid} of {$vehicles->count()} VINs valid",
+                    $invalid ? "{$invalid} invalid" : null,
+                    $noVin ? "{$noVin} without a VIN" : null,
+                    $mismatched ? "{$mismatched} not matching the VIN" : null,
+                    $recalls ? "{$recalls} NHTSA recalls for these models" : null,
+                ])), $vehicles->max('vin_checked_at'));
             $payout = $o->stripe_connect_status ?? ($o->stripe_connect_id ? 'reviewing' : 'not_connected');
             $add('payouts', 'Money', 'Payouts set up', true, in_array($payout, ['active', 'verified'], true) ? 'passed' : ($payout === 'not_connected' ? 'missing' : 'pending'), ucfirst(str_replace('_', ' ', $payout)));
         }
@@ -402,8 +412,10 @@ class AdminCompanyController extends Controller
             'services'       => $services->values(),
             'certifications' => $isCarrier ? $org->certifications()->orderBy('name')->pluck('name') : [],
             'vehicles'       => $isCarrier ? DB::table('carrier_vehicles')->where('carrier_id', $org->id)
-                ->get(['id', 'type', 'equipment_type', 'unit_number', 'year', 'make', 'model', 'license_plate', 'license_plate_state', 'max_payload', 'temp_min_f', 'temp_max_f', 'registration_expiry', 'is_primary', 'status', 'owner_org_id', 'owner_user_id', 'operating_authority_id'])
-                ->map(fn ($v) => (array) $v + ['capabilities' => DB::table('vehicle_capabilities')->where('vehicle_id', $v->id)->pluck('capability_key')]) : [],
+                ->get(['id', 'type', 'equipment_type', 'unit_number', 'year', 'make', 'model', 'license_plate', 'license_plate_state', 'max_payload', 'temp_min_f', 'temp_max_f', 'registration_expiry', 'is_primary', 'status', 'owner_org_id', 'owner_user_id', 'operating_authority_id', 'vin', 'vin_status', 'vin_mismatches', 'vin_recalls'])
+                ->map(fn ($v) => ['vin_mismatches' => json_decode($v->vin_mismatches ?? '[]', true) ?: [], 'recall_count' => count(json_decode($v->vin_recalls ?? '[]', true) ?: [])]
+                    + \Illuminate\Support\Arr::except((array) $v, ['vin_mismatches', 'vin_recalls'])
+                    + ['capabilities' => DB::table('vehicle_capabilities')->where('vehicle_id', $v->id)->pluck('capability_key')]) : [],
             'authorities'    => $org->authorities()->orderBy('kind')->orderByDesc('is_primary')->get()->map->toCard(),
             'categories'     => $org->categories ?? [],
             'service_types'  => $org->serviceTypes()->pluck('key'),

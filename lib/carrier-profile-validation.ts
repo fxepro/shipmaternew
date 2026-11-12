@@ -361,7 +361,11 @@ export function validateCarrierVehicleForm(form: {
   year: string;
   make: string;
   model: string;
+  vin: string;
 }): string | null {
+  const vin = form.vin.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!vin) return 'Enter the VIN.';
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) return 'A VIN is 17 letters and numbers (no I, O or Q).';
   if (blank(form.year)) return 'Vehicle year is required.';
   if (blank(form.make)) return 'Vehicle make is required.';
   if (blank(form.model)) return 'Vehicle model is required.';
