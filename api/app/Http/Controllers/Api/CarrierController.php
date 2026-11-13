@@ -176,6 +176,7 @@ class CarrierController extends Controller
             'clearinghouse_query_status' => $pv?->clearinghouse_query_status ?? 'not_run',
             'clearinghouse_queried_at'   => $pv?->clearinghouse_queried_at?->toISOString(),
             'clearinghouse_completed_at' => $pv?->clearinghouse_completed_at?->toISOString(),
+            'clearinghouse_consent_at'   => $pv?->clearinghouse_consent_at?->toISOString(),
 
             // Payout account (company)
             'stripe_account_id'       => $org?->stripe_connect_id,
@@ -187,6 +188,9 @@ class CarrierController extends Controller
             'total_deliveries'        => $org?->carrier_total_deliveries ?? 0,
             'org_id'                  => $org?->id,
             'can_edit_company'        => $user->canDo('company.profile'),
+            'is_owner'                => $org && $org->owner_id === $user->id,
+            'owner_drives'            => $org && $org->owner_id === $user->id
+                && (bool) \App\Models\OrgMember::where('org_id', $org->id)->where('user_id', $user->id)->value('drives'),
             'member_since'            => $user->created_at->format('M Y'),
 
             // Services and certifications (company)

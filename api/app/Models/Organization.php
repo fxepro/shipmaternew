@@ -14,6 +14,7 @@ class Organization extends Model
     protected static function booted(): void
     {
         static::creating(function (Organization $o) {
+            if (!$o->profile_slug) $o->profile_slug = self::newProfileSlug($o->name ?: $o->legal_name);
             if (!$o->joined_promotion_id && $o->owner_id && $o->type) {
                 $o->joined_promotion_id = \App\Services\VerificationPolicy::activePromotion($o->type)?->id;
             }
@@ -40,7 +41,7 @@ class Organization extends Model
     }
 
     protected $fillable = [
-        'name', 'slug', 'type', 'plan', 'status', 'owner_id', 'listed_by_org_id', 'listed_by_user_id', 'claimed_at',
+        'name', 'slug', 'profile_slug', 'about', 'type', 'plan', 'status', 'owner_id', 'listed_by_org_id', 'listed_by_user_id', 'claimed_at',
         'phone', 'email', 'website',
         'street', 'city', 'state', 'zip', 'country', 'currency',
         'tax_id', 'tax_id_type',
@@ -131,6 +132,21 @@ class Organization extends Model
     }
 
     // ── Relationships ─────────────────────────────────────────────────────────
+
+    /** The public profile address /c/{slug}: from the company name, unique, never changed afterwards */
+    public static function newProfileSlug(?string $name): string
+    {
+        $base = \Illuminate\Support\Str::slug((string) $name) ?: 'company';
+        $slug = $base; $n = 2;
+        while (self::where('profile_slug', $slug)->exists()) $slug = $base . '-' . $n++;
+        return $slug;
+    }
+
+    public function profileSlug(): string
+    {
+        if (!$this->profile_slug) $this->forceFill(['profile_slug' => self::newProfileSlug($this->name ?: $this->legal_name)])->saveQuietly();
+        return $this->profile_slug;
+    }
 
     public function owner(): BelongsTo
     {

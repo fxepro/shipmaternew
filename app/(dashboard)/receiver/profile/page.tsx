@@ -4,16 +4,20 @@
 
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ShieldCheck, User } from 'lucide-react';
+import { Award, Briefcase, ShieldCheck, User } from 'lucide-react';
 import { PersonHeader } from '@/components/account/AccountHeader';
 import { AccountTabs } from '@/components/account/AccountTabs';
 import { PersonalDetails } from '@/components/account/PersonalDetails';
+import { CertificationsSection } from '@/components/people/CertificationsSection';
+import { ProProfileCard } from '@/components/entities/ProProfileCard';
 import { MyVerification } from '@/components/people/MyVerification';
 
-type Tab = 'personal' | 'verification';
+type Tab = 'personal' | 'certifications' | 'verification' | 'pro';
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'personal',     label: 'Personal',     icon: User        },
+  { id: 'certifications', label: 'Certifications', icon: Award },
   { id: 'verification', label: 'Verification', icon: ShieldCheck },
+  { id: 'pro',          label: 'Professional profile', icon: Briefcase },
 ];
 
 function Profile() {
@@ -29,7 +33,9 @@ function Profile() {
       <PersonHeader />
       <AccountTabs tabs={TABS} active={tab} onSelect={(id) => router.replace(`/receiver/profile?tab=${id}`)} />
       {tab === 'personal' && <PersonalDetails />}
+      {tab === 'certifications' && <CertificationsSection />}
       {tab === 'verification' && <MyVerification embedded />}
+      {tab === 'pro' && <ProProfileCard driving={false} />}
     </div>
   );
 }

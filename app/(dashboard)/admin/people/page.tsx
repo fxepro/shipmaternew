@@ -18,6 +18,7 @@ interface PersonRow {
   company: { id: number; name: string } | null;
   company_type: 'carrier' | 'shipper' | 'factor' | null;
   role: string | null;
+  drives?: boolean;
   account_status: string;
   approval_required: boolean;
   identity: string | null;
@@ -122,7 +123,7 @@ function People() {
                       {p.company?.name ?? '—'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[var(--color-text)]">{p.role ? ROLE_LABELS[p.role] ?? p.role : '—'}</td>
+                  <td className="px-4 py-3 text-[var(--color-text)]">{p.role ? `${ROLE_LABELS[p.role] ?? p.role}${p.drives && p.role !== 'driver' ? ' · Driver' : ''}` : '—'}</td>
                   <td className="px-4 py-3">{p.identity ? <CheckChip state={p.identity} /> : <span className="text-xs text-[var(--color-text-faint)]">Not required</span>}</td>
                   <td className="px-4 py-3">
                     {p.background ? <CheckChip state={backgroundState(p.background)} /> : <span className="text-xs text-[var(--color-text-faint)]">Not required</span>}

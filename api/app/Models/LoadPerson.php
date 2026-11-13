@@ -32,6 +32,6 @@ class LoadPerson extends Model
     public static function drivers(string $loadType, int $loadId, ?int $orgId)
     {
         return self::where('load_type', $loadType)->where('load_id', $loadId)->where('org_id', $orgId)
-            ->whereIn('user_id', OrgMember::where('org_id', $orgId)->where('role', 'driver')->select('user_id'));
+            ->whereIn('user_id', OrgMember::where('org_id', $orgId)->drivers()->select('user_id'));
     }
 }

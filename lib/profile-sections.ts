@@ -8,8 +8,8 @@
  */
 export type ProfileGroup = 'me' | 'company';
 export type ProfileSection =
-  | 'identity' | 'driving' | 'checks' | 'pro'
-  | 'business' | 'authority' | 'services' | 'fleet' | 'drivers' | 'payouts' | 'reviews' | 'team';
+  | 'identity' | 'driving' | 'certifications' | 'checks' | 'pro'
+  | 'business' | 'authority' | 'services' | 'fleet' | 'drivers' | 'payouts' | 'performance' | 'reviews' | 'team';
 
 export interface SectionDef { id: ProfileSection; label: string; description: string; editable: boolean }
 
@@ -17,8 +17,9 @@ export const PROFILE_SECTIONS: Record<ProfileGroup, SectionDef[]> = {
   me: [
     { id: 'identity', label: 'Personal', description: 'Your legal name, contact details, home address and government ID.', editable: true },
     { id: 'driving',  label: 'Driving credentials', description: 'Your CDL, endorsements and DOT medical card. Endorsements here are the ones used to match loads.', editable: true },
+    { id: 'certifications', label: 'Certifications', description: '', editable: false },
     { id: 'checks',   label: 'Verification', description: 'Background check, FMCSA Clearinghouse and identity verification.', editable: false },
-    { id: 'pro',      label: 'Professional profile', description: 'Your experience and availability. It stays with you if you change companies.', editable: false },
+    { id: 'pro',      label: 'Professional profile', description: '', editable: false },
   ],
   company: [
     { id: 'business',  label: 'Business',            description: 'How the business is set up for payouts, and what it is in the directory.', editable: false },
@@ -27,6 +28,7 @@ export const PROFILE_SECTIONS: Record<ProfileGroup, SectionDef[]> = {
     { id: 'fleet',     label: 'Fleet',               description: 'Trucks and trailers, who owns each one, and its equipment.', editable: false },
     { id: 'drivers',   label: 'Drivers',             description: 'People who drive for the company, the owner-operator included.', editable: false },
     { id: 'payouts',   label: 'Payouts',             description: 'Bank account and Stripe payout setup.', editable: false },
+    { id: 'performance', label: 'Performance',       description: '', editable: false },
     { id: 'reviews',   label: 'Reviews',             description: 'Ratings from shippers.', editable: false },
     { id: 'team',      label: 'Team',                description: 'Everyone at the company: invite people and set their roles.', editable: false },
   ],
@@ -38,7 +40,7 @@ export const groupOf = (s: ProfileSection): ProfileGroup =>
 /** Old tab ids (links, banners, Stripe returns) to the new sections */
 export const LEGACY_TABS: Record<string, ProfileSection> = {
   personal: 'identity', dot: 'driving', medical: 'driving', background: 'checks', verification: 'checks',
-  business: 'business', insurance: 'authority', services: 'services', certifications: 'services',
+  business: 'business', insurance: 'authority', services: 'services',
   vehicles: 'fleet', financial: 'payouts', reviews: 'reviews',
 };
 

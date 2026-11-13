@@ -36,6 +36,11 @@ class FoleyProvider implements Provider
         return null;
     }
 
+    public function reportPdf(string $reportId, string $mode): ?string
+    {
+        return null;
+    }
+
     public function testConnection(string $mode): string
     {
         throw new \RuntimeException('Not connected yet: Shipmater needs Foley\'s API documents and sandbox keys.');

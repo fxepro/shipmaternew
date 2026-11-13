@@ -8,6 +8,10 @@ import { TeamManager } from '@/components/team/TeamManager';
 import { useIsBrokerPortal } from '@/lib/portal';
 import { CompanyCompliance } from '@/components/compliance/CompanyCompliance';
 import { FmcsaRecord } from '@/components/compliance/FmcsaRecord';
+import { PerformancePanel } from '@/components/entities/PerformancePanel';
+import { CompanyProfileCard } from '@/components/entities/CompanyProfileCard';
+import { CertificationsSection } from '@/components/people/CertificationsSection';
+import { ProProfileCard } from '@/components/entities/ProProfileCard';
 import { MyVerification } from '@/components/people/MyVerification';
 import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
 import { PaymentMethods } from '@/components/payments/PaymentMethods';
@@ -18,7 +22,7 @@ import {
   Mail, Phone, MapPin, Globe, Hash, Shield,
   AlertCircle, Landmark, X, Loader2, Star,
   CalendarDays, RefreshCw, ChevronRight, Upload, FileCheck,
-  Users, Package, Crown, UserMinus, Send, MessageCircle,
+  Users, Package, Crown, UserMinus, Send, MessageCircle, Award, Briefcase, TrendingUp,
 } from 'lucide-react';
 import ServiceTypeSelector from '@/components/carrier/ServiceTypeSelector';
 import AddressFields from '@/components/shared/AddressFields';
@@ -39,7 +43,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'verification' | 'business' | 'services' | 'compliance' | 'payment' | 'subscription' | 'notifications' | 'team';
+type Tab = 'profile' | 'verification' | 'certifications' | 'pro' | 'business' | 'services' | 'compliance' | 'payment' | 'subscription' | 'notifications' | 'performance' | 'team';
 
 interface ShipperProfile {
   name: string; email: string; phone: string; member_since: string;
@@ -1186,7 +1190,9 @@ function SubscriptionTab() {
 
 const PROFILE_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'profile',       label: 'Personal',      icon: User        },
+  { id: 'certifications', label: 'Certifications', icon: Award     },
   { id: 'verification',  label: 'Verification',  icon: ShieldCheck },
+  { id: 'pro',           label: 'Professional profile', icon: Briefcase },
 ];
 const COMPANY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'business',      label: 'Business',      icon: Building2  },
@@ -1195,6 +1201,7 @@ const COMPANY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'payment',       label: 'Payment',       icon: CreditCard },
   { id: 'subscription',  label: 'Subscription',  icon: Zap        },
   { id: 'notifications', label: 'Notifications', icon: Bell       },
+  { id: 'performance',   label: 'Performance',   icon: TrendingUp },
   { id: 'team',          label: 'Team',          icon: Users      },
 ];
 
@@ -1279,13 +1286,17 @@ export default function ShipperProfilePage() {
       )}
 
       {!isLoading && profile && activeTab === 'profile'       && <ProfileTab       key={profile.email} initialData={profile} />}
+      {activeTab === 'certifications' && <CertificationsSection />}
       {activeTab === 'verification'  && <Suspense><MyVerification embedded /></Suspense>}
+      {activeTab === 'pro'           && <ProProfileCard driving={false} />}
+      {activeTab === 'business' && <CompanyProfileCard />}
       {!isLoading && profile && activeTab === 'business'      && <BusinessTab      key={`biz-${profile.email}`} initialData={profile} />}
       {!isLoading && profile && activeTab === 'services'      && <ServicesTab      key={`svc-${profile.email}`} initialData={profile} />}
       {!isLoading && profile && activeTab === 'compliance'    && <ComplianceTab    key={`cmp-${profile.email}`} initialData={profile} />}
       {!isLoading && profile && activeTab === 'notifications' && <NotificationsTab key={`ntf-${profile.email}`} initialData={profile} />}
       {activeTab === 'payment'       && <PaymentTab />}
       {activeTab === 'subscription'  && <SubscriptionTab />}
+      {activeTab === 'performance'   && <PerformancePanel />}
       {activeTab === 'team'          && <TeamTab />}
     </div>
   );

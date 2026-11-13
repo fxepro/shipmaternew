@@ -18,7 +18,7 @@ class ProProfile extends Model
     public const HAUL_TYPES = ['local' => 'Local', 'regional' => 'Regional', 'otr' => 'Over the road', 'dedicated' => 'Dedicated route'];
 
     protected $fillable = [
-        'user_id', 'headline', 'roles', 'cdl_class', 'cdl_state', 'endorsements', 'years_experience', 'equipment_experience',
+        'user_id', 'slug', 'headline', 'roles', 'cdl_class', 'cdl_state', 'endorsements', 'years_experience', 'equipment_experience',
         'haul_types', 'team_ok', 'home_city', 'home_state', 'home_country', 'preferred_regions', 'open_to_work',
         'available_from', 'bio', 'visibility',
     ];
@@ -36,6 +36,21 @@ class ProProfile extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** The profile for a person, created with its public link the first time */
+    public static function for(User $user): self
+    {
+        $p = self::firstOrCreate(['user_id' => $user->id], ['slug' => self::newSlug($user->name)]);
+        if (!$p->slug) $p->update(['slug' => self::newSlug($user->name)]);
+        return $p;
+    }
+
+    public static function newSlug(?string $name): string
+    {
+        $base = \Illuminate\Support\Str::slug(\Illuminate\Support\Str::limit((string) $name, 60, '')) ?: 'driver';
+        do { $slug = $base . '-' . \Illuminate\Support\Str::lower(\Illuminate\Support\Str::random(4)); } while (self::where('slug', $slug)->exists());
+        return $slug;
+    }
+
     public function toCard(): array
     {
         return [
@@ -47,7 +62,7 @@ class ProProfile extends Model
             'equipment_experience' => $this->equipment_experience ?? [], 'haul_types' => $this->haul_types ?? [], 'team_ok' => (bool) $this->team_ok,
             'home_city' => $this->home_city, 'home_state' => $this->home_state, 'home_country' => $this->home_country ?? 'US',
             'preferred_regions' => $this->preferred_regions ?? [], 'open_to_work' => (bool) $this->open_to_work,
-            'available_from' => $this->available_from?->toDateString(), 'bio' => $this->bio, 'visibility' => $this->visibility ?? 'private',
+            'available_from' => $this->available_from?->toDateString(), 'bio' => $this->bio, 'visibility' => $this->visibility ?? 'private', 'slug' => $this->slug,
         ];
     }
 }

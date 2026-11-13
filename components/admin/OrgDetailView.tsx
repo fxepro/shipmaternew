@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Building2, LayoutDashboard, Briefcase, Package, ShieldCheck, Truck, CreditCard, Zap, Bell, Users, ClipboardList,
-  CheckCircle2, Circle, ExternalLink, AlertTriangle, MapPin, Star,
+  CheckCircle2, Circle, ExternalLink, AlertTriangle, MapPin, Star, TrendingUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -23,6 +23,7 @@ import { AuthorityRows, type Authority } from '@/components/entities/Authorities
 import { DataCard, DataRows, type DataRow } from '@/components/profile/DataCard';
 import { FmcsaRecord } from '@/components/compliance/FmcsaRecord';
 import { AdminReviews } from '@/components/admin/AdminReviews';
+import { MetricTiles, type Metric } from '@/components/entities/PerformancePanel';
 import { CategoriesEditor } from '@/components/entities/CategoriesEditor';
 import { useCatalog, nameOf } from '@/components/entities/catalog';
 
@@ -43,7 +44,7 @@ interface CompanyDetail {
     authorities: Authority[]; categories: string[];
     payment: Row; payment_methods: Row[];
     subscription: { plan: string | null; history: Row[] };
-    invitations: Row[]; contracts: Row[]; preferred: Row[]; locations: Row[];
+    invitations: Row[]; contracts: Row[]; preferred: Row[]; locations: Row[]; performance?: Metric[];
   } | null;
 }
 
@@ -57,7 +58,7 @@ interface CheckRow {
   checked_at?: string | null;
 }
 
-type Tab = 'overview' | 'business' | 'services' | 'compliance' | 'vehicles' | 'payment' | 'subscription' | 'notifications' | 'team' | 'loads' | 'directory' | 'reviews';
+type Tab = 'overview' | 'business' | 'services' | 'compliance' | 'vehicles' | 'payment' | 'subscription' | 'notifications' | 'team' | 'loads' | 'directory' | 'performance' | 'reviews';
 /** [key, label, verifiedKey?]: verifiedKey adds a Verified tag beside the value */
 type Field = [string, string, string?];
 type Section = { title: string; fields: Field[] };
@@ -70,14 +71,14 @@ const SHIPPER_TABS: TabDef[] = [
   { id: 'directory', label: 'Locations & contacts', icon: MapPin },
   { id: 'payment', label: 'Payment', icon: CreditCard }, { id: 'subscription', label: 'Subscription', icon: Zap },
   { id: 'notifications', label: 'Notifications', icon: Bell }, { id: 'team', label: 'Team', icon: Users },
-  { id: 'loads', label: 'Loads', icon: ClipboardList }, { id: 'reviews', label: 'Reviews', icon: Star },
+  { id: 'loads', label: 'Loads', icon: ClipboardList }, { id: 'performance', label: 'Performance', icon: TrendingUp }, { id: 'reviews', label: 'Reviews', icon: Star },
 ];
 const CARRIER_TABS: TabDef[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard }, { id: 'business', label: 'Business', icon: Briefcase },
   { id: 'services', label: 'Services', icon: Package }, { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
   { id: 'vehicles', label: 'Vehicles', icon: Truck }, { id: 'directory', label: 'Locations & contacts', icon: MapPin },
   { id: 'payment', label: 'Payouts', icon: CreditCard },
-  { id: 'team', label: 'Team', icon: Users }, { id: 'loads', label: 'Loads', icon: ClipboardList }, { id: 'reviews', label: 'Reviews', icon: Star },
+  { id: 'team', label: 'Team', icon: Users }, { id: 'loads', label: 'Loads', icon: ClipboardList }, { id: 'performance', label: 'Performance', icon: TrendingUp }, { id: 'reviews', label: 'Reviews', icon: Star },
 ];
 const TYPE_NAME: Record<string, string> = { carrier: 'Carrier', shipper: 'Shipper', factor: 'Factoring company', receiver: 'Receiver', broker: 'Broker' };
 
@@ -586,6 +587,8 @@ export function OrgDetailView({ id }: { id: string }) {
           </Panel>
         )}
       </>)}
+
+      {current === 'performance' && <MetricTiles metrics={t?.performance ?? []} detail />}
 
       {/* Reviews */}
       {current === 'reviews' && <AdminReviews orgId={id} />}

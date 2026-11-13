@@ -299,7 +299,7 @@ class AdminCompanyController extends Controller
         }
 
         if ($isCarrier) {
-            $drivers = $o->orgMembers->filter(fn ($m) => $m->role === 'driver' && $m->user);
+            $drivers = $o->orgMembers->filter(fn ($m) => $m->isDriving() && $m->user);
             $okDrivers = $drivers->filter(fn ($m) => $m->user->personVerification?->status === 'approved')->count();
             $driversAt = $drivers->map(fn ($m) => $m->user->personVerification?->reviewed_at)->filter()->max();
             $add('drivers_approved', 'People', 'Drivers approved', false, $drivers->isEmpty() ? 'missing' : ($okDrivers === $drivers->count() ? 'passed' : 'pending'),
@@ -410,6 +410,7 @@ class AdminCompanyController extends Controller
 
         return [
             'services'       => $services->values(),
+            'performance'    => \App\Services\OrgMetrics::for($org),
             'certifications' => $isCarrier ? $org->certifications()->orderBy('name')->pluck('name') : [],
             'vehicles'       => $isCarrier ? DB::table('carrier_vehicles')->where('carrier_id', $org->id)
                 ->get(['id', 'type', 'equipment_type', 'unit_number', 'year', 'make', 'model', 'license_plate', 'license_plate_state', 'max_payload', 'temp_min_f', 'temp_max_f', 'registration_expiry', 'is_primary', 'status', 'owner_org_id', 'owner_user_id', 'operating_authority_id', 'vin', 'vin_status', 'vin_mismatches', 'vin_recalls'])

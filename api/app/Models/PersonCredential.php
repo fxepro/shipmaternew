@@ -14,6 +14,7 @@ class PersonCredential extends Model
     protected $fillable = [
         'user_id', 'type', 'name', 'issuer', 'number', 'issuing_state', 'class', 'issued_at', 'expires_at',
         'result', 'document_path', 'source', 'verified_at', 'verified_by', 'notes',
+        'verification_method', 'ai_status', 'ai_fields', 'ai_name_score', 'ai_reason', 'ai_checked_at',
     ];
 
     protected $hidden = ['document_path'];
@@ -24,6 +25,8 @@ class PersonCredential extends Model
             'issued_at'   => 'date',
             'expires_at'  => 'date',
             'verified_at' => 'datetime',
+            'ai_fields'   => 'array',
+            'ai_checked_at' => 'datetime',
         ];
     }
 

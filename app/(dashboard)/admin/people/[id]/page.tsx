@@ -19,7 +19,14 @@ interface Credential {
   issuing_state: string | null; class: string | null; issued_at: string | null; expires_at: string | null;
   result: string | null; source: string; has_document: boolean; state: string; notes: string | null;
   verified_at: string | null; verified_by: string | null;
+  ai: { status: string; fields: Record<string, unknown> & { _flags?: string[]; holder_name?: string; number?: string; expiry_date?: string } | null } | null;
 }
+
+/** Yellow asterisk on a data point the document reader couldn't match; hover shows what the document says */
+const Flag = ({ c, field, read }: { c: Credential; field: string; read?: unknown }) =>
+  !c.verified_at && c.ai?.fields?._flags?.includes(field)
+    ? <span title={read ? `Document: ${String(read)}` : undefined} className="ml-0.5 cursor-help font-bold text-amber-500">*</span>
+    : null;
 interface PersonDetail {
   person: { id: number; name: string; email: string; account_status: string; created_at: string };
   company: { id: number; name: string; type: string; verification_status: string } | null;
@@ -333,15 +340,15 @@ export default function AdminPersonPage() {
                   {data.credentials.map((c) => (
                     <tr key={c.id} className="border-b border-[var(--color-cream-dark)] last:border-b-0 align-top">
                       <td className="px-3 py-2">
-                        <p className="font-medium">{c.type_label}</p>
+                        <p className="font-medium">{c.type_label}<Flag c={c} field="name" read={c.ai?.fields?.holder_name} /><Flag c={c} field="document" /></p>
                         <p className="text-xs text-[var(--color-text-faint)]">
                           {[c.name !== c.type_label ? c.name : null, c.issuer, c.class && `Class ${c.class}`, c.issuing_state].filter(Boolean).join(' · ') || '—'}
                         </p>
                         <p className="text-[11px] text-[var(--color-text-faint)]">From {c.source.replace(/_/g, ' ')}</p>
                       </td>
-                      <td className="px-3 py-2">{display('number', c.number)}</td>
+                      <td className="px-3 py-2">{display('number', c.number)}<Flag c={c} field="number" read={c.ai?.fields?.number} /></td>
                       <td className="px-3 py-2">{display('issued_at', c.issued_at)}</td>
-                      <td className="px-3 py-2">{display('expires_at', c.expires_at)}</td>
+                      <td className="px-3 py-2">{display('expires_at', c.expires_at)}<Flag c={c} field="expires_at" read={c.ai?.fields?.expiry_date} /></td>
                       <td className="px-3 py-2">{display('result_status', c.result)}</td>
                       <td className="px-3 py-2"><CheckChip state={c.state} /></td>
                       <td className="px-3 py-2 text-xs text-[var(--color-text-muted)]">

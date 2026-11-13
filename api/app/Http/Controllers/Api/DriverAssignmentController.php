@@ -23,7 +23,7 @@ class DriverAssignmentController extends Controller
         $org = $request->user()->currentOrg;
         abort_unless($org && $org->type === 'carrier', 404);
 
-        $drivers = OrgMember::where('org_id', $org->id)->where('role', 'driver')->where('status', 'active')
+        $drivers = OrgMember::where('org_id', $org->id)->drivers()->where('status', 'active')
             ->with('user')->get()->filter(fn ($m) => $m->user)
             ->map(fn ($m) => $this->driverSummary($m->user))
             ->values();
@@ -61,7 +61,7 @@ class DriverAssignmentController extends Controller
 
         if ($personId) {
             $isDriver = OrgMember::where('org_id', $user->current_org_id)->where('user_id', $personId)
-                ->where('role', 'driver')->where('status', 'active')->exists();
+                ->drivers()->where('status', 'active')->exists();
             if (!$isDriver) {
                 return response()->json(['error' => 'That person is not a driver on your team.', 'code' => 'not_a_driver'], 422);
             }

@@ -34,6 +34,14 @@ class FakeProvider implements Provider
         return null;
     }
 
+    /** A sample report, so downloads can be built and tested without a real provider */
+    public function reportPdf(string $reportId, string $mode): ?string
+    {
+        $check = \App\Models\BackgroundCheck::where('report_id', $reportId)->first();
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('checks.fake_report', ['check' => $check, 'reportId' => $reportId])
+            ->setPaper('letter')->setWarnings(false)->output();
+    }
+
     public function testConnection(string $mode): string
     {
         return 'Test provider: checks finish from the link on the person\'s form, with no outside service.';

@@ -3,22 +3,28 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Landmark, Users, Loader2, Save, ShieldCheck, User } from 'lucide-react';
+import { Award, Briefcase, TrendingUp, Building2, Landmark, Users, Loader2, Save, ShieldCheck, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, orgApi, payoutsApi } from '@/lib/api';
 import { TeamManager } from '@/components/team/TeamManager';
 import { ComplianceItems, type ComplianceItem } from '@/components/compliance/ComplianceItems';
 import { BusinessDetailsForm, BankAccountForm, PayoutStatus } from '@/components/payouts/PayoutSetup';
+import { PerformancePanel } from '@/components/entities/PerformancePanel';
+import { CompanyProfileCard } from '@/components/entities/CompanyProfileCard';
+import { CertificationsSection } from '@/components/people/CertificationsSection';
+import { ProProfileCard } from '@/components/entities/ProProfileCard';
 import { MyVerification } from '@/components/people/MyVerification';
 import { PersonHeader, CompanyHeader } from '@/components/account/AccountHeader';
 import { PersonalDetails } from '@/components/account/PersonalDetails';
 
-type Tab = 'personal' | 'verification' | 'company' | 'finance' | 'compliance' | 'team';
+type Tab = 'personal' | 'verification' | 'certifications' | 'pro' | 'company' | 'finance' | 'compliance' | 'performance' | 'team';
 
 /** Profile (/factor/profile): the signed-in person */
 const PROFILE_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'personal',     label: 'Personal',     icon: User        },
+  { id: 'certifications', label: 'Certifications', icon: Award },
   { id: 'verification', label: 'Verification', icon: ShieldCheck },
+  { id: 'pro', label: 'Professional profile', icon: Briefcase },
 ];
 
 /** Company (/factor/company): the factoring company */
@@ -26,6 +32,7 @@ const COMPANY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'company', label: 'Business', icon: Building2 },
   { id: 'finance', label: 'Finance', icon: Landmark  },
   { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
+  { id: 'performance', label: 'Performance', icon: TrendingUp },
   { id: 'team',    label: 'Team',    icon: Users     },
 ];
 
@@ -324,8 +331,11 @@ function Account() {
       </div>
 
       {tab === 'personal' && <PersonalDetails />}
+      {tab === 'performance' && <PerformancePanel />}
+      {tab === 'certifications' && <CertificationsSection />}
       {tab === 'verification' && <MyVerification embedded />}
-      {tab === 'company' && <CompanyTab />}
+      {tab === 'pro' && <ProProfileCard driving={false} />}
+      {tab === 'company' && <><CompanyProfileCard /><CompanyTab /></>}
       {tab === 'finance' && <FinanceTab onGoTo={goTo} />}
       {tab === 'compliance' && <MyCompliance />}
       {tab === 'team'    && <TeamManager type="factor" />}

@@ -67,6 +67,10 @@ Route::get('/blog/{slug}', [BlogController::class, 'show']);
 Route::get('/service-types',       [ServiceTypeController::class, 'index']);
 Route::get('/service-types/rules', [ServiceTypeController::class, 'rules']);
 
+// ── Public profile of a person, /p/{slug} (visibility and contact rules in ProProfileController) ──
+Route::get('/public/people/{slug}', [\App\Http\Controllers\Api\ProProfileController::class, 'publicShow'])->middleware('throttle:60,1');
+Route::get('/public/companies/{slug}', [\App\Http\Controllers\Api\CompanyProfileController::class, 'publicShow'])->middleware('throttle:60,1');
+
 // ── Certifications (public list) ───────────────────────────────────────
 Route::get('/certifications', [CertificationController::class, 'index']);
 
@@ -140,6 +144,8 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/background',                         [\App\Http\Controllers\Api\BackgroundCheckController::class, 'show']);
     Route::post('/background/pay',                    [\App\Http\Controllers\Api\BackgroundCheckController::class, 'pay']);
     Route::post('/background/checks/{check}/start',   [\App\Http\Controllers\Api\BackgroundCheckController::class, 'start']);
+    Route::get('/background/checks/{check}/pdf/{type}', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'pdf'])->middleware('throttle:30,1');
+    Route::post('/background/checks/{check}/email',   [\App\Http\Controllers\Api\BackgroundCheckController::class, 'email'])->middleware('throttle:5,10');
     Route::get('/shipper/carriers/{carrier}/background',  [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperShow'])->middleware('perm:shipper:carriers.checks=view');
     Route::post('/shipper/carriers/{carrier}/background', [\App\Http\Controllers\Api\BackgroundCheckController::class, 'shipperOrder'])->middleware('perm:shipper:carriers.order_check');
 
@@ -153,6 +159,7 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     // FMCSA Drug & Alcohol Clearinghouse
     Route::post('/carrier/clearinghouse',         [ClearinghouseController::class, 'initiate']);
     Route::get('/carrier/clearinghouse/status',   [ClearinghouseController::class, 'status']);
+    Route::put('/carrier/clearinghouse/consent',  [ClearinghouseController::class, 'consent']);
 
     Route::get('/carrier/documents',           [CarrierController::class, 'getDocuments'])->middleware('perm:carrier:company.profile=view');
     Route::post('/carrier/documents',          [CarrierController::class, 'uploadDocument'])->middleware('perm:carrier:company.profile');
@@ -181,12 +188,21 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
     Route::put('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'update'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
     Route::get('/org/members',                     [OrgController::class, 'members']);
+    Route::get('/org/performance',                 [\App\Http\Controllers\Api\CompanyProfileController::class, 'performance']);
+    Route::get('/org/public-profile',              [\App\Http\Controllers\Api\CompanyProfileController::class, 'show']);
+    Route::put('/org/public-profile',              [\App\Http\Controllers\Api\CompanyProfileController::class, 'update']);
+    Route::put('/org/owner-drives',                [OrgController::class, 'ownerDrives']);
     Route::put('/org/members/{id}',                [OrgController::class, 'updateMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     Route::delete('/org/members/{id}',             [OrgController::class, 'removeMember'])->middleware('perm:carrier:team.manage,shipper:team.manage,factor:team.manage,receiver:team.manage');
     // A person's own checks: identity record and credentials (docs/people-types-and-checks.md)
     Route::get('/capabilities',                      [\App\Http\Controllers\Api\CapabilityController::class, 'catalog']);
     Route::get('/me/pro-profile',                    [\App\Http\Controllers\Api\ProProfileController::class, 'show']);
     Route::put('/me/pro-profile',                    [\App\Http\Controllers\Api\ProProfileController::class, 'update']);
+    Route::get('/me/experiences/companies',          [\App\Http\Controllers\Api\ProProfileController::class, 'myCompanies']);
+    Route::post('/me/experiences',                   [\App\Http\Controllers\Api\ProProfileController::class, 'storeExperience']);
+    Route::put('/me/experiences/{experience}',       [\App\Http\Controllers\Api\ProProfileController::class, 'updateExperience']);
+    Route::delete('/me/experiences/{experience}',    [\App\Http\Controllers\Api\ProProfileController::class, 'destroyExperience']);
+    Route::get('/me/credentials/{credential}/file',  [MyChecksController::class, 'credentialFile']);
     Route::get('/me/checks',                         [MyChecksController::class, 'show']);
     Route::put('/me/identity',                       [MyChecksController::class, 'updateIdentity']);
     Route::post('/me/identity/files',                [MyChecksController::class, 'uploadIdentityFile']);

@@ -51,14 +51,23 @@ class PersonChecks
         'school_bus_endorsement'   => 'School bus endorsement',
         'dispatcher_certification' => 'Dispatcher certification',
         'hazmat_shipper_training'  => 'Hazmat shipper training (49 CFR 172.704)',
+        'twic'                     => 'TWIC card',
+        'training'                 => 'Training or course certificate',
         'other'                    => 'Other certification',
     ];
+
+    /** Certifications a person keeps on their profile (Profile → Certifications), apart from driving credentials and checks */
+    public const CERT_TYPES = ['twic', 'hazmat_shipper_training', 'dispatcher_certification', 'training', 'other'];
 
     private const NONE = ['approval' => false, 'auto_approve' => false, 'identity' => false, 'background' => false, 'min_age' => null, 'required' => [], 'recorded' => []];
 
     /** Requirements by company type and role */
-    public static function rules(?string $type, ?string $role): array
+    public static function rules(?string $type, ?string $role, bool $drives = false): array
     {
+        // A carrier owner who drives needs what a driver needs, and stays the owner
+        if ($type === 'carrier' && $role === 'owner' && $drives) {
+            return self::rules('carrier', 'driver');
+        }
         return match ("{$type}.{$role}") {
             'carrier.driver' => [
                 'approval' => true, 'identity' => true, 'background' => true, 'min_age' => 21,
@@ -93,7 +102,7 @@ class PersonChecks
 
         if ($m) {
             $role = $m->user_id === $m->org->owner_id ? 'owner' : $m->role;
-            return ['org' => $m->org, 'type' => $m->org->type, 'role' => $role];
+            return ['org' => $m->org, 'type' => $m->org->type, 'role' => $role, 'drives' => $m->isDriving()];
         }
 
         $type = in_array($user->role, ['carrier', 'shipper', 'broker', 'factor'], true) ? $user->role : null;
@@ -167,7 +176,7 @@ class PersonChecks
     public static function checklist(User $user, ?array $membership = null): array
     {
         $membership ??= self::membership($user);
-        $rules = self::rules($membership['type'], $membership['role']);
+        $rules = self::rules($membership['type'], $membership['role'], $membership['drives'] ?? false);
 
         $pv       = PersonVerification::where('user_id', $user->id)->first();
         $identity = PersonIdentity::where('user_id', $user->id)->first();
@@ -416,6 +425,9 @@ class PersonChecks
             'class' => $c->class, 'issued_at' => $c->issued_at?->toDateString(), 'expires_at' => $c->expires_at?->toDateString(),
             'result' => $c->result, 'source' => $c->source, 'has_document' => (bool) $c->document_path,
             'state' => self::credentialState($c), 'notes' => $c->notes,
+            'verification_method' => $c->verification_method,
+            'ai' => $c->ai_status ? ['status' => $c->ai_status, 'name_score' => $c->ai_name_score, 'reason' => $c->ai_reason,
+                'fields' => $c->ai_fields, 'checked_at' => $c->ai_checked_at?->toISOString()] : null,
             'verified_at' => $c->verified_at?->toISOString(),
             'verified_by' => $c->verified_by ? User::where('id', $c->verified_by)->value('name') : null,
         ];

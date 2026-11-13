@@ -1,5 +1,6 @@
 'use client';
 
+import { useCan } from '@/components/layout/PermissionsContext';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { loadStripe } from '@stripe/stripe-js';
@@ -52,7 +53,9 @@ function errorMessage(e: unknown): string {
 }
 
 export function usePayoutSetup() {
-  return useQuery({ queryKey: ['payout-setup'], queryFn: () => payoutsApi.setup().then((r) => r.data.data as PayoutSetupData), retry: false });
+  const can = useCan();
+  return useQuery({ queryKey: ['payout-setup'], queryFn: () => payoutsApi.setup().then((r) => r.data.data as PayoutSetupData), retry: false,
+    enabled: can.see('company.payouts') });
 }
 
 // ── Small form pieces ─────────────────────────────────────────────────────────

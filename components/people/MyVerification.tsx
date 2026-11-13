@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import { myChecksApi, kycApi } from '@/lib/api';
 import { CheckChip, PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
 import { BackgroundCheckPanel } from '@/components/background/BackgroundCheckPanel';
-import { ProProfileCard } from '@/components/entities/ProProfileCard';
 
 interface ChecklistItem { key: string; label: string; required: boolean; state: string; detail: string | null }
 interface Credential {
@@ -27,6 +26,7 @@ interface MyChecks {
   identity: Identity | null;
   credentials: Credential[];
   credential_types: { value: string; label: string }[];
+  cert_types: { value: string; label: string }[];
   background_required: boolean;
   identity_required: boolean;
   min_age: number | null;
@@ -121,7 +121,6 @@ export function MyVerification({ embedded }: { embedded?: boolean } = {}) {
         ) : (
           <p>
             Your role doesn&apos;t need approval — you have access once your company is approved.
-            {data.credential_types.length > 1 && ' You can keep your certifications on file here.'}
           </p>
         )}
       </div>
@@ -152,9 +151,14 @@ export function MyVerification({ embedded }: { embedded?: boolean } = {}) {
 
       {showIdentity && <IdentitySection identity={data.identity} isCarrier={data.company_type === 'carrier' || data.company_type === 'factor'} onSaved={refresh} />}
 
-      <CredentialsSection credentials={data.credentials} types={data.credential_types} onSaved={refresh} />
-      {/* Carrier owners keep it under Profile, Me, Professional profile */}
-      {data.company_type !== 'factor' && !(data.company_type === 'carrier' && data.role === 'owner') && <ProProfileCard />}
+      {/* Certifications and the professional profile have their own tabs */}
+      {(() => {
+        const isCert = (t: string) => (data.cert_types ?? []).some((c) => c.value === t);
+        const types = data.credential_types.filter((t) => !isCert(t.value));
+        return types.length > 0 && (
+          <CredentialsSection credentials={data.credentials.filter((c) => !isCert(c.type))} types={types} onSaved={refresh} />
+        );
+      })()}
     </div>
   );
 }

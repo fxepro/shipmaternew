@@ -102,6 +102,27 @@ class CheckrProvider implements Provider
         ];
     }
 
+    /**
+     * The report PDF: the report lists its documents; the one of type pdf_report has a download link.
+     * To confirm against the live API once Checkr access is approved (field names from Checkr's Documents resource).
+     */
+    public function reportPdf(string $reportId, string $mode): ?string
+    {
+        $report = $this->http($mode)->get("/reports/{$reportId}");
+        if (!$report->successful()) {
+            Log::warning('[Background:checkr] Report fetch failed', ['report_id' => $reportId, 'status' => $report->status()]);
+            return null;
+        }
+        foreach ((array) $report->json('document_ids', []) as $docId) {
+            $doc = $this->http($mode)->get("/documents/{$docId}");
+            if ($doc->successful() && $doc->json('type') === 'pdf_report' && ($uri = $doc->json('download_uri'))) {
+                $file = Http::timeout(30)->get($uri);
+                return $file->successful() ? $file->body() : null;
+            }
+        }
+        return null;
+    }
+
     public function testConnection(string $mode): string
     {
         $response = $this->http($mode)->get('/packages');

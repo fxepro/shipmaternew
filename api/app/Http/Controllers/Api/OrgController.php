@@ -73,6 +73,20 @@ class OrgController extends Controller
     }
 
     // GET /api/v1/org/members
+    // PUT /api/v1/org/owner-drives   { drives: bool }   The carrier owner also drives for the company
+    public function ownerDrives(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $org  = $user->currentOrg;
+        abort_unless($org && $org->type === 'carrier' && $org->owner_id === $user->id, 403, 'Only the owner can set this.');
+        $data = $request->validate(['drives' => ['required', 'boolean']]);
+
+        OrgMember::updateOrCreate(['org_id' => $org->id, 'user_id' => $user->id], ['drives' => $data['drives']]);
+        \App\Services\PersonChecks::refresh($user);
+
+        return response()->json(['data' => ['drives' => $data['drives']]]);
+    }
+
     public function members(Request $request): JsonResponse
     {
         $org = $request->user()->currentOrg;
@@ -84,7 +98,7 @@ class OrgController extends Controller
         $creds = \App\Models\PersonCredential::whereIn('user_id', $userIds)->whereIn('type', ['cdl', 'dot_medical'])
             ->orderByDesc('updated_at')->get()->groupBy(fn ($c) => $c->user_id . ':' . $c->type)->map->first();
         $members = $memberRows
-            ->map(function ($m) use ($org, $endorsements, $creds) {
+            ->map(function ($m) use ($org, $endorsements, $creds, $request) {
                 $cdl = $creds[$m->user_id . ':cdl'] ?? null;
                 $med = $creds[$m->user_id . ':dot_medical'] ?? null;
                 $role      = $m->user_id === $org->owner_id ? 'owner' : $m->role;
@@ -98,13 +112,14 @@ class OrgController extends Controller
                     'status'    => $m->status,
                     'joined_at' => $m->joined_at?->toDateString(),
                     'is_owner'  => $m->user_id === $org->owner_id,
+                    'is_me'     => $m->user_id === $request->user()->id,
                     // Person checks: only carrier owners and drivers need approval
                     'approval_required' => $checklist['approval_required'],
                     'person_status'     => $checklist['approval_required'] ? ($m->user->personVerification?->status ?? 'incomplete') : 'not_required',
                     'required_met'      => $checklist['required_met'],
                     'required_total'    => $checklist['required_total'],
-                    // Driving: anyone with a CDL drives, the owner-operator included
-                    'drives'            => $m->role === 'driver' || (bool) $cdl?->number,
+                    // Drives for the company: the Driver role, or the owner who ticked "I drive for this company"
+                    'drives'            => $m->isDriving(),
                     'cdl'               => $cdl?->number ? [
                         'class' => $cdl->class, 'state' => $cdl->issuing_state, 'expires' => $cdl->expires_at?->toDateString(),
                         'verified' => (bool) $cdl->verified_at,

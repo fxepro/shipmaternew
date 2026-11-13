@@ -16,6 +16,19 @@ class ClearinghouseController extends Controller
 {
     public function __construct(private ClearinghouseService $clearinghouse) {}
 
+    // ── PUT /api/v1/carrier/clearinghouse/consent   { consent: bool } ─────────
+    // The person's consent for Shipmater to query the Clearinghouse about them. Given or withdrawn here; the query
+    // itself is sent once the FMCSA integration is live.
+    public function consent(Request $request): JsonResponse
+    {
+        $data = $request->validate(['consent' => ['required', 'boolean']]);
+        $pv = PersonChecks::verification($request->user());
+        $pv->update($data['consent']
+            ? ['clearinghouse_consent_at' => now(), 'clearinghouse_consent_ip' => $request->ip()]
+            : ['clearinghouse_consent_at' => null, 'clearinghouse_consent_ip' => null]);
+        return response()->json(['data' => ['clearinghouse_consent_at' => $pv->clearinghouse_consent_at?->toISOString()]]);
+    }
+
     // ── POST /api/v1/carrier/clearinghouse ───────────────────────────────────
     // Initiate a pre-employment Clearinghouse query for the authenticated carrier.
     // Driver receives a consent notification at their email — they must approve

@@ -43,7 +43,7 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    'exposed_headers' => ['Content-Disposition'],   // so PDF downloads keep their file name
 
     'max_age' => 0,
 

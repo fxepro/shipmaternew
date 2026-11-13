@@ -56,10 +56,11 @@ class AdminPeopleController extends Controller
                 'company'           => $m['org'] ? ['id' => $m['org']->id, 'name' => PersonChecks::companyName($m['org'])] : null,
                 'company_type'      => $m['type'],
                 'role'              => $m['role'],
+                'drives'            => (bool) ($m['drives'] ?? false),
                 'account_status'    => $u->status ?? 'active',
                 'approval_required' => $checklist['approval_required'],
                 'identity'          => $this->item($checklist, 'identity'),
-                'background'        => $checklist['approval_required'] && $m['role'] === 'driver' ? ($pv?->background_check_status ?? 'not_started') : null,
+                'background'        => $checklist['approval_required'] && ($m['drives'] ?? false) ? ($pv?->background_check_status ?? 'not_started') : null,
                 'credentials'       => [
                     'required_met'   => count(array_filter($credItems, fn ($i) => $i['required'] && $i['state'] === 'met')),
                     'required_total' => count(array_filter($credItems, fn ($i) => $i['required'])),
@@ -74,7 +75,7 @@ class AdminPeopleController extends Controller
 
         $people = $people
             ->when(($data['type'] ?? 'all') !== 'all', fn ($c) => $c->where('company_type', $data['type']))
-            ->when(!empty($data['role']) && $data['role'] !== 'all', fn ($c) => $c->where('role', $data['role']))
+            ->when(!empty($data['role']) && $data['role'] !== 'all', fn ($c) => $data['role'] === 'driver' ? $c->filter(fn ($p) => $p['role'] === 'driver' || $p['drives']) : $c->where('role', $data['role']))
             ->when(!empty($data['status']) && $data['status'] !== 'all', fn ($c) => $c->where('status', $data['status']))
             ->values();
 
@@ -130,7 +131,7 @@ class AdminPeopleController extends Controller
         ]);
 
         $m = PersonChecks::membership($user);
-        if (!PersonChecks::rules($m['type'], $m['role'])['background']) {
+        if (!PersonChecks::rules($m['type'], $m['role'], $m['drives'] ?? false)['background']) {
             return response()->json(['error' => 'Only drivers need a person-level background check.', 'code' => 'background_not_required'], 422);
         }
 

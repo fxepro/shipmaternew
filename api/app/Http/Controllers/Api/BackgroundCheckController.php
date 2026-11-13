@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BackgroundCheck;
 use App\Models\User;
 use App\Services\Background\BackgroundChecks;
+use App\Services\Background\CheckReports;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Stripe\StripeClient;
@@ -162,6 +163,41 @@ class BackgroundCheckController extends Controller
         BackgroundChecks::handle('fake', ['event' => 'invitation_completed', 'invitation_id' => $check->invitation_id]);
         BackgroundChecks::handle('fake', ['event' => 'report_completed', 'invitation_id' => $check->invitation_id, 'report_id' => "fake_rep_{$check->id}", 'result' => $result]);
         return redirect(config('app.frontend_url') . '/carrier/profile?tab=background');
+    }
+
+    // GET /api/v1/background/checks/{check}/pdf/{type}   type: summary | report
+    public function pdf(Request $request, BackgroundCheck $check, string $type)
+    {
+        abort_unless(in_array($type, ['summary', 'report'], true), 404);
+        abort_unless(CheckReports::canDownload($request->user(), $check), 403);
+        abort_unless($check->isFinished(), 422, 'PDFs are available once the check is finished.');
+
+        $bytes = $type === 'summary' ? CheckReports::summaryPdf($check) : CheckReports::reportPdf($check);
+        abort_if($bytes === null, 404, "The screening company hasn't made the full report available yet. Try again later.");
+
+        CheckReports::log($request->user(), $check, "check_{$type}", $request->ip());
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . CheckReports::filename($check, $type) . '"',
+            'Cache-Control'       => 'no-store',
+        ]);
+    }
+
+    // POST /api/v1/background/checks/{check}/email   Emails the summary to the signed-in person's own address
+    public function email(Request $request, BackgroundCheck $check): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless(CheckReports::canDownload($actor, $check), 403);
+        abort_unless($check->isFinished(), 422, 'PDFs are available once the check is finished.');
+
+        try {
+            $actor->notify(new \App\Notifications\CheckReportNotification($check));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[CheckReports] Email failed', ['check' => $check->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'The email could not be sent right now. Download the PDF instead, or try again later.'], 503);
+        }
+        CheckReports::log($actor, $check, 'check_email', $request->ip());
+        return response()->json(['message' => "Sent to {$actor->email}."]);
     }
 
     // ── Admin → Settings → Background checks ─────────────────────────────────

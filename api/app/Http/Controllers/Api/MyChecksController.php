@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PersonCredential;
+use App\Services\Checks\CredentialReader;
 use App\Services\PersonChecks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,9 +29,12 @@ class MyChecksController extends Controller
         $detail = app(AdminPeopleController::class)->detail($user, $m, $pv);
         unset($detail['verification']['background_reference'], $detail['verification']['background_notes']);
 
-        $rules = PersonChecks::rules($m['type'], $m['role']);
+        $rules = PersonChecks::rules($m['type'], $m['role'], $m['drives'] ?? false);
         $detail['credential_types'] = collect(array_merge($rules['required'], $rules['recorded'], ['other']))
             ->unique()->map(fn ($t) => ['value' => $t, 'label' => PersonChecks::CREDENTIAL_LABELS[$t]])->values();
+        // Profile → Certifications: certifications anyone can keep, apart from driving credentials and checks
+        $detail['cert_types'] = collect(PersonChecks::CERT_TYPES)->map(fn ($t) => ['value' => $t, 'label' => PersonChecks::CREDENTIAL_LABELS[$t]])->values();
+        $detail['document_ai'] = CredentialReader::configured();
         $detail['background_required'] = $rules['background'];
         $detail['identity_required']   = $rules['identity'];
         $detail['min_age']             = $rules['min_age'];
@@ -117,6 +121,7 @@ class MyChecksController extends Controller
         $cred = new PersonCredential(['user_id' => $request->user()->id, 'source' => 'self']);
         $people->fillCredential($cred, $data, $request);
         $cred->save();
+        $this->readDocument($request, $cred);
 
         PersonChecks::refresh($request->user());
 
@@ -135,13 +140,31 @@ class MyChecksController extends Controller
         $people->fillCredential($credential, $data, $request);
         // Any change goes back to an admin for verification
         if ($credential->isDirty()) {
-            $credential->fill(['verified_at' => null, 'verified_by' => null]);
+            $credential->fill(['verified_at' => null, 'verified_by' => null, 'verification_method' => null]);
         }
         $credential->save();
+        $this->readDocument($request, $credential);
 
         PersonChecks::refresh($request->user());
 
         return response()->json(['data' => PersonChecks::credentialSummary($credential)]);
+    }
+
+    /** A new document is read by document AI after the response (App\Services\Checks\CredentialReader) */
+    private function readDocument(Request $request, PersonCredential $cred): void
+    {
+        if (!$request->hasFile('document')) return;
+        $cred->forceFill(['ai_status' => CredentialReader::configured() ? 'reading' : null, 'ai_fields' => null, 'ai_name_score' => null, 'ai_reason' => null, 'ai_checked_at' => null])->saveQuietly();
+        if (CredentialReader::configured()) {
+            dispatch(fn () => CredentialReader::read($cred->fresh()))->afterResponse();
+        }
+    }
+
+    // GET /api/v1/me/credentials/{credential}/file   The person's own uploaded document
+    public function credentialFile(Request $request, PersonCredential $credential)
+    {
+        abort_unless($credential->user_id === $request->user()->id, 404);
+        return PersonChecks::fileResponse($credential->document_path);
     }
 
     // DELETE /api/v1/me/credentials/{credential}   (unverified only)

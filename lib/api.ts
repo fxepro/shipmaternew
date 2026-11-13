@@ -454,6 +454,7 @@ export const verificationApi = {
   identitySession:       () => api.post('/api/v1/stripe/identity/session'),
   clearinghouseInitiate:   () => api.post('/api/v1/carrier/clearinghouse'),
   clearinghouseStatus:     () => api.get('/api/v1/carrier/clearinghouse/status'),
+  clearinghouseConsent:    (consent: boolean) => api.put('/api/v1/carrier/clearinghouse/consent', { consent }),
 };
 
 // ── Background checks: basic and complete levels, owners and drivers ─────
@@ -462,6 +463,8 @@ export interface BackgroundForm {
   status: 'paid' | 'invitation_sent' | 'pending' | 'clear' | 'consider' | 'suspended' | 'expired';
   paid_by: 'carrier' | 'shipper'; payer: string | null;
   invitation_url: string | null; check_id: number | null; completed_at: string | null;
+  /** The order's id, and which PDFs exist once the check has a result */
+  id: number; downloads: { summary: boolean; report: boolean } | null;
 }
 export interface BackgroundSummary {
   user_id: number; name: string; role: string | null;
@@ -474,6 +477,9 @@ export const backgroundApi = {
   get:   (userId?: number) => api.get('/api/v1/background', { params: userId ? { user_id: userId } : {} }),
   pay:   (level: CheckLevel, userId?: number) => api.post('/api/v1/background/pay', { level, ...(userId ? { user_id: userId } : {}) }),
   start: (checkId: number) => api.post(`/api/v1/background/checks/${checkId}/start`),
+  /** summary: Shipmater's summary; report: the screening company's full report */
+  pdf:   (checkId: number, type: 'summary' | 'report') => api.get(`/api/v1/background/checks/${checkId}/pdf/${type}`, { responseType: 'blob' }),
+  email: (checkId: number) => api.post(`/api/v1/background/checks/${checkId}/email`),
   // Shippers, for carriers they have an active contract with
   // carrierId is the carrier company (organizations.id)
   shipperGet:   (carrierId: number) => api.get(`/api/v1/shipper/carriers/${carrierId}/background`),

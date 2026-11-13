@@ -29,6 +29,9 @@ interface Provider
      */
     public function parseWebhook(Request $request): ?array;
 
+    /** The provider's full report as PDF bytes, or null when it doesn't offer one (yet) */
+    public function reportPdf(string $reportId, string $mode): ?string;
+
     /** A short line saying the connection works, e.g. "Connected — 4 packages" */
     public function testConnection(string $mode): string;
 }

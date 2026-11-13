@@ -11,9 +11,13 @@ import {
 } from 'lucide-react';
 import ServiceTypeSelector from '@/components/carrier/ServiceTypeSelector';
 import CertificationSelector from '@/components/carrier/CertificationSelector';
+import { CertificationsSection } from '@/components/people/CertificationsSection';
 import { certificationApi, serviceTypeApi } from '@/lib/api';
 import { ProProfileCard } from '@/components/entities/ProProfileCard';
 import { DataCard, SectionHeader, Pill, fmtDate, expiryPill, type DataRow } from '@/components/profile/DataCard';
+import { CompanyProfileCard } from '@/components/entities/CompanyProfileCard';
+import { PerformancePanel } from '@/components/entities/PerformancePanel';
+import { useCan } from '@/components/layout/PermissionsContext';
 import { DriversSection } from '@/components/profile/DriversSection';
 import { CompanyCompliance } from '@/components/compliance/CompanyCompliance';
 import { FmcsaRecord } from '@/components/compliance/FmcsaRecord';
@@ -440,7 +444,7 @@ export default function CarrierProfilePage() {
   /** A section on the other page opens that page */
   const setSection = (s: ProfileSection, edit = false) => {
     if (groupOf(s) !== pageGroup) { router.replace(`/carrier/${groupOf(s) === 'me' ? 'profile' : 'company'}?tab=${s}`); return; }
-    setSectionState(s); setEditing(edit);
+    setSectionState(s); setEditing(edit && (groupOf(s) === 'me' || profile?.can_edit_company !== false));
   };
   /** Old tab ids (banners, links) open the matching section, in edit mode when it has one */
   const goTo = (id: string) => {
@@ -467,6 +471,12 @@ export default function CarrierProfilePage() {
     queryFn: () => api.get('/api/v1/carrier/profile').then(r => r.data?.data),
     retry: false,
   });
+  const canEditCompany = profile?.can_edit_company !== false;
+  const [ownerDrivesSaving, setOwnerDrivesSaving] = useState(false);
+  const can = useCan();
+  /** Company sections a member's role can't see (payouts, the drivers list) are left out */
+  const sectionVisible = (id: ProfileSection) =>
+    id === 'payouts' ? can.see('company.payouts') : id === 'drivers' ? can.see('fleet.drivers') : true;
 
   // Handle Stripe Connect + Stripe Identity returns + tab deep-links
   useEffect(() => {
@@ -844,7 +854,7 @@ export default function CarrierProfilePage() {
 
       {/* This page's sections */}
       <div className="flex flex-wrap gap-2">
-        {PROFILE_SECTIONS[pageGroup].map(d => (
+        {PROFILE_SECTIONS[pageGroup].filter(d => sectionVisible(d.id)).map(d => (
           <button key={d.id} onClick={() => setSection(d.id)}
             className={`rounded-full border px-3.5 py-1.5 text-[length:var(--text-nav)] font-medium transition-colors ${
               section === d.id
@@ -861,10 +871,11 @@ export default function CarrierProfilePage() {
 
         {(() => {
           const def = [...PROFILE_SECTIONS.me, ...PROFILE_SECTIONS.company].find(d => d.id === section)!;
-          return <SectionHeader title={def.label} description={def.description} editable={def.editable} editing={editing} onToggle={() => setEditing(e => !e)} />;
+          return <SectionHeader title={def.label} description={def.description} editable={def.editable && (groupOf(def.id) === 'me' || profile.can_edit_company !== false)} editing={editing} onToggle={() => setEditing(e => !e)} />;
         })()}
 
         {/* ── VIEW CARDS (field name left, value right) ─────────────────── */}
+        {/* Drivers and other members see the company read only; the owner and staff edit it */}
         {section === 'identity' && !editing && (
           <div className="space-y-4">
             <DataCard title="Name and contact" rows={[
@@ -897,6 +908,20 @@ export default function CarrierProfilePage() {
 
         {section === 'driving' && !editing && (
           <div className="space-y-4">
+            {profile.is_owner && (
+              <label className="flex items-center gap-2 rounded-xl border border-[var(--color-cream-dark)] px-4 py-3 text-base text-[var(--color-text)]">
+                <input type="checkbox" checked={!!profile.owner_drives}
+                  disabled={ownerDrivesSaving}
+                  onChange={async (e) => {
+                    setOwnerDrivesSaving(true);
+                    try { await api.put('/api/v1/org/owner-drives', { drives: e.target.checked }); await refetch(); qc.invalidateQueries({ queryKey: ['org-members'] }); }
+                    catch { toast.error('Could not save. Try again.'); }
+                    finally { setOwnerDrivesSaving(false); }
+                  }}
+                  className="h-4 w-4 accent-[var(--color-teal)]" />
+                I&apos;m also a driver/operator
+              </label>
+            )}
             <DataCard title="Commercial driver's license (CDL)" rows={[
               ['CDL number', mask(profile.cdl_number)],
               ['Class', profile.cdl_number && profile.cdl_class ? `Class ${profile.cdl_class}` : null],
@@ -949,12 +974,16 @@ export default function CarrierProfilePage() {
           </div>
         )}
 
+        {section === 'certifications' && <CertificationsSection />}
+
         {section === 'pro' && <ProProfileCard />}
+
+        {section === 'performance' && <PerformancePanel />}
 
         {section === 'team' && <TeamManager type="carrier" />}
 
         {section === 'drivers' && (
-          <DriversSection isOwnerOperator={profile.carrier_type === 'sole_proprietor'} onGoToDriving={() => setSection('driving', true)} />
+          <DriversSection />
         )}
 
         {/* ── SERVICES ──────────────────────────────────────────────────── */}
@@ -1580,13 +1609,14 @@ export default function CarrierProfilePage() {
         {/* ── FINANCIAL ─────────────────────────────────────────────────── */}
         {section === 'business' && (
           <div className="space-y-6">
-            <CategoriesEditor value={profile.categories ?? []} saveUrl="/api/v1/org/categories"
+            <CompanyProfileCard />
+            <CategoriesEditor canEdit={canEditCompany} value={profile.categories ?? []} saveUrl="/api/v1/org/categories"
               onSaved={() => qc.invalidateQueries({ queryKey: ['carrier-profile'] })} />
             <BusinessTab profile={profile} />
           </div>
         )}
 
-        {section === 'payouts' && (
+        {section === 'payouts' && canEditCompany && (
           <FinancialTabComponent onGoTo={(tab) => goTo(tab)} />
         )}
 
@@ -1601,30 +1631,6 @@ export default function CarrierProfilePage() {
                 county records, your driving record and the <strong className="text-[var(--color-text)]">FMCSA Drug &amp; Alcohol Clearinghouse</strong>; you can
                 add it yourself, or a shipper you have a contract with can pay for it.
               </p>
-            </div>
-
-            {/* ── What each level covers ──────────────────────────────── */}
-            <div>
-              <p className="text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)] mb-2">What is checked</p>
-              <div className="rounded-xl border border-[var(--color-cream-dark)] divide-y divide-[var(--color-cream-dark)]">
-                {[
-                  { label: 'Criminal record search', detail: 'National and federal criminal records', level: 'Basic' },
-                  { label: 'Sex offender registry', detail: 'National sex offender registry', level: 'Basic' },
-                  { label: 'OFAC / Watchlist', detail: 'Terrorist watchlist, sanctions, global watchlists', level: 'Basic' },
-                  { label: 'Identity and carrier verification', detail: 'Photo ID with a selfie, and your FMCSA operating authority', level: 'Basic' },
-                  { label: 'County criminal records', detail: 'Court records in the counties where you have lived', level: 'Complete' },
-                  { label: 'Motor Vehicle Record', detail: 'Driving history, violations, suspensions, DUI', level: 'Complete' },
-                  { label: 'Drug & Alcohol Clearinghouse', detail: 'FMCSA federal database of CDL drug and alcohol violations', level: 'Complete' },
-                ].map((c) => (
-                  <div key={c.label} className="flex items-center gap-4 px-4 py-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-base font-medium text-[var(--color-text)]">{c.label}</p>
-                      <p className="text-[13px] text-[var(--color-text-muted)] truncate">{c.detail}</p>
-                    </div>
-                    <span className={`text-[13px] shrink-0 ${c.level === 'Basic' ? 'text-[var(--color-text-faint)]' : 'text-[var(--color-teal)]'}`}>{c.level}</span>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* ── Prerequisites ───────────────────────────────────────── */}
@@ -1671,165 +1677,34 @@ export default function CarrierProfilePage() {
               </div>
             )}
 
-            {/* ── FMCSA Clearinghouse ──────────────────────────────────── */}
+            {/* ── Background check: Basic and Complete side by side. The Clearinghouse is one row of it ── */}
             {(() => {
-              const chStatus = profile.clearinghouse_query_status ?? 'not_run';
-              const isClear      = chStatus === 'clear';
-              const isViolations = chStatus === 'violations_found';
-              const isPendingConsent = chStatus === 'pending_consent';
-              const isQuerying   = chStatus === 'querying';
-              const isError      = chStatus === 'error';
-              const canInitiate  = ['not_run', 'error'].includes(chStatus);
-
-              const statusConfig: Record<string, { label: string; bg: string; border: string; text: string }> = {
-                not_run:         { label: 'Not started',        bg: 'bg-yellow-50',  border: 'border-yellow-200', text: 'text-yellow-800' },
-                pending_consent: { label: 'Awaiting consent',   bg: 'bg-blue-50',    border: 'border-blue-200',   text: 'text-blue-800'   },
-                querying:        { label: 'Processing',          bg: 'bg-blue-50',    border: 'border-blue-200',   text: 'text-blue-800'   },
-                clear:           { label: 'No violations',       bg: 'bg-emerald-50', border: 'border-emerald-200','text': 'text-emerald-800' },
-                violations_found:{ label: 'Violations found',   bg: 'bg-red-50',     border: 'border-red-200',    text: 'text-red-800'    },
-                error:           { label: 'Error — retry',       bg: 'bg-orange-50',  border: 'border-orange-200', text: 'text-orange-800' },
+              const ch = profile.clearinghouse_query_status ?? 'not_run';
+              // Consent is given here. Shipmater sends the query to FMCSA once the integration is live.
+              const consentAt = profile.clearinghouse_consent_at as string | null | undefined;
+              const setConsent = async (on: boolean) => {
+                setClearinghouseLoading(true);
+                try { await verificationApi.clearinghouseConsent(on); await refetch(); }
+                catch { toast.error('Could not save your consent. Try again.'); }
+                finally { setClearinghouseLoading(false); }
               };
-              const cfg = statusConfig[chStatus] ?? statusConfig['not_run'];
-
-              return (
-                <div className={`rounded-xl border ${cfg.border} ${cfg.bg} p-5 space-y-3`}>
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <p className="text-base font-semibold text-[var(--color-text)] flex items-center gap-2 flex-wrap">
-                        FMCSA Drug &amp; Alcohol Clearinghouse
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-200 text-yellow-800 uppercase tracking-wide">Federal Law · 49 CFR §382</span>
-                      </p>
-                      <p className="text-[13px] text-[var(--color-text-muted)] mt-0.5">
-                        Required for all CDL drivers. Checks federal drug &amp; alcohol violations across every prior employer.
-                        Part of the Complete check; required for CDL holders at that level.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Manual refresh when pending */}
-                      {['pending_consent', 'querying'].includes(chStatus) && (
-                        <button
-                          onClick={async () => {
-                            setClearinghouseRefreshing(true);
-                            try {
-                              await verificationApi.clearinghouseStatus();
-                              await refetch();
-                            } finally {
-                              setClearinghouseRefreshing(false);
-                            }
-                          }}
-                          disabled={clearinghouseRefreshing}
-                          className="p-1.5 rounded-lg hover:bg-white/60 text-[var(--color-text-muted)] transition-colors"
-                          title="Refresh status"
-                        >
-                          <RefreshCw size={13} className={clearinghouseRefreshing ? 'animate-spin' : ''} />
-                        </button>
-                      )}
-                      <span className={`px-2.5 py-1 rounded-full text-[13px] font-medium border ${cfg.border} ${cfg.text} ${cfg.bg}`}>
-                        {isClear && <CheckCircle size={11} className="inline mr-1" />}
-                        {isViolations && <AlertCircle size={11} className="inline mr-1" />}
-                        {(isPendingConsent || isQuerying) && <Loader2 size={11} className="inline mr-1 animate-spin" />}
-                        {cfg.label}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Clear result */}
-                  {isClear && (
-                    <div className="flex items-center gap-2 text-emerald-700 text-base font-medium">
-                      <CheckCircle size={15} />
-                      No drug or alcohol violations found
-                      {profile.clearinghouse_completed_at && (
-                        <span className="text-[13px] font-normal text-emerald-600 ml-1">
-                          · Verified {new Date(profile.clearinghouse_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Violations found */}
-                  {isViolations && (
-                    <div className="rounded-lg bg-white border border-red-200 p-3 text-[13px] text-red-800 space-y-1">
-                      <p className="font-semibold">Violations found on your Clearinghouse record</p>
-                      <p>Our team will review your record and contact you within 2 business days. You may dispute records directly at <a href="https://clearinghouse.fmcsa.dot.gov" target="_blank" rel="noopener noreferrer" className="underline">clearinghouse.fmcsa.dot.gov</a>.</p>
-                    </div>
-                  )}
-
-                  {/* Awaiting consent */}
-                  {isPendingConsent && (
-                    <div className="rounded-lg bg-white border border-blue-200 p-3 space-y-2 text-[13px] text-blue-900">
-                      <p className="font-semibold">Action required — grant consent on the FMCSA portal</p>
-                      <p>You should have received an email from FMCSA. Log in at the link below, find the pending consent request from Shipmater, and approve it.</p>
-                      <a
-                        href="https://clearinghouse.fmcsa.dot.gov"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 text-white px-4 py-2 font-semibold hover:bg-blue-700 transition-colors"
-                      >
-                        <ExternalLink size={11} /> Open FMCSA Clearinghouse Portal
-                      </a>
-                    </div>
-                  )}
-
-                  {/* Processing */}
-                  {isQuerying && (
-                    <div className="flex items-center gap-2 text-blue-700 text-base">
-                      <Loader2 size={14} className="animate-spin" />
-                      Consent received — FMCSA is processing your report. Typically 1–3 business days.
-                    </div>
-                  )}
-
-                  {/* Error */}
-                  {isError && (
-                    <p className="text-[13px] text-orange-800">Query encountered an error. Click &quot;Run Query&quot; below to retry.</p>
-                  )}
-
-                  {/* How it works (when not yet run) */}
-                  {chStatus === 'not_run' && (
-                    <div className="rounded-lg bg-white border border-yellow-200 p-3 space-y-1.5 text-[13px] text-[var(--color-text-muted)]">
-                      <p className="font-semibold text-[var(--color-text)] mb-1">How it works:</p>
-                      <div className="flex items-start gap-2"><span className="text-yellow-600 shrink-0">1.</span> We submit a query to FMCSA using your CDL number</div>
-                      <div className="flex items-start gap-2"><span className="text-yellow-600 shrink-0">2.</span> FMCSA emails you a consent request — you approve at clearinghouse.fmcsa.dot.gov</div>
-                      <div className="flex items-start gap-2"><span className="text-yellow-600 shrink-0">3.</span> FMCSA returns "no violations" or your violation history (1–3 days)</div>
-                      <div className="flex items-start gap-2"><span className="text-yellow-600 shrink-0">4.</span> Annual limited queries run automatically (free)</div>
-                    </div>
-                  )}
-
-                  {/* Initiate button */}
-                  {canInitiate && (
-                    <button
-                      disabled={clearinghouseLoading || !profile.cdl_number || !profile.cdl_issuing_state}
-                      title={!profile.cdl_number || !profile.cdl_issuing_state ? 'Add CDL number and state in the Commercial tab first' : ''}
-                      onClick={async () => {
-                        setClearinghouseLoading(true);
-                        try {
-                          const res = await verificationApi.clearinghouseInitiate();
-                          await refetch();
-                          toast.success(res.data.message ?? 'Clearinghouse query submitted — check your email for a consent request.');
-                        } catch (err: unknown) {
-                          const e = err as { response?: { data?: { error?: string; pending?: boolean } } };
-                          if (e?.response?.data?.pending) {
-                            toast.info('Clearinghouse integration is being finalised — you will be notified when it\'s ready.');
-                          } else {
-                            toast.error(e?.response?.data?.error ?? 'Failed to submit Clearinghouse query. Try again.');
-                          }
-                        } finally {
-                          setClearinghouseLoading(false);
-                        }
-                      }}
-                      className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-5 py-2.5 text-base font-semibold hover:bg-[var(--color-teal-light)] disabled:opacity-40 transition-colors"
-                    >
-                      {clearinghouseLoading
-                        ? <><Loader2 size={13} className="animate-spin" /> Submitting…</>
-                        : isError ? 'Retry Query' : 'Run Clearinghouse Query'}
-                    </button>
+              const status = (
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                  {ch === 'clear' && <span className="inline-flex items-center gap-1 font-semibold text-[var(--color-success)]"><CheckCircle size={12} /> No violations{profile.clearinghouse_completed_at ? ` · ${new Date(profile.clearinghouse_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</span>}
+                  {ch === 'violations_found' && <span className="inline-flex items-center gap-1 font-semibold text-[var(--color-danger)]"><AlertCircle size={12} /> Violations found</span>}
+                  {['querying', 'pending_consent'].includes(ch) && <span className="inline-flex items-center gap-1 text-[var(--color-text-muted)]"><Loader2 size={12} className="animate-spin" /> Processing</span>}
+                  {!['clear', 'violations_found'].includes(ch) && (
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[var(--color-text)]">
+                      <input type="checkbox" checked={!!consentAt} disabled={clearinghouseLoading} onChange={(e) => setConsent(e.target.checked)}
+                        className="h-4 w-4 accent-[var(--color-teal)]" />
+                      I consent to the Clearinghouse query
+                      {consentAt && <span className="text-xs text-[var(--color-text-faint)]">· {new Date(consentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                    </label>
                   )}
                 </div>
               );
+              return <BackgroundCheckPanel onChange={() => refetch()} clearinghouse={status} />;
             })()}
-
-            {/* ── Background check levels and payment: last, once everything else is filled in ── */}
-            <BackgroundCheckPanel onChange={() => refetch()} />
           </div>
         )}
 
@@ -1924,12 +1799,12 @@ export default function CarrierProfilePage() {
                 <SectionTitle>Your Fleet</SectionTitle>
                 <p className="text-[13px] text-[var(--color-text-faint)] -mt-3">{vehiclesData.length} vehicle{vehiclesData.length !== 1 ? 's' : ''} registered</p>
               </div>
-              <button
+              {canEditCompany && <button
                 onClick={() => { setVehicleForm(newVehicle(vehiclesData.length === 0)); setShowAddVehicle(true); }}
                 className="flex items-center gap-2 rounded-lg bg-[var(--color-teal)] text-white px-4 py-2 text-base font-medium hover:bg-[var(--color-teal-light)]"
               >
                 <Plus size={15} /> Add Vehicle
-              </button>
+              </button>}
             </div>
 
             {vehiclesData.length === 0 && !showAddVehicle && (
@@ -1958,7 +1833,7 @@ export default function CarrierProfilePage() {
                       {v.owner_user_id && v.owner_name && <> · Owned by {v.owner_name}</>}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                    {canEditCompany && <div className="flex items-center gap-2">
                     {!v.is_primary && (
                       <button
                         onClick={() => setPrimaryMutation.mutate(String(v.id))}
@@ -1975,7 +1850,7 @@ export default function CarrierProfilePage() {
                     >
                       {deleteVehicleMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                     </button>
-                  </div>
+                  </div>}
                 </div>
                 <div className="grid grid-cols-4 gap-3 text-[13px] text-[var(--color-text-muted)]">
                   <div><span className="text-[var(--color-text-faint)]">GVWR</span><br />{v.gvwr ? `${Number(v.gvwr).toLocaleString()} lbs` : '—'}</div>

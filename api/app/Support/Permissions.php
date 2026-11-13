@@ -38,7 +38,7 @@ class Permissions
      */
     public const CATALOG = [
         'carrier' => [
-            'company.profile'    => ['Company', 'Company profile, DOT and MC, documents', self::AREA, ['full', 'full', 'view', 'none', 'view']],
+            'company.profile'    => ['Company', 'Company profile, DOT and MC, documents', self::AREA, ['full', 'full', 'view', 'view', 'view']],
             'company.payouts'    => ['Company', 'Bank account, payouts and Stripe setup', self::AREA, ['full', 'view', 'none', 'none', 'none']],
             'team.manage'        => ['Company', 'Team: invite, change role, remove', self::DO, ['full', 'full', 'none', 'none', 'none']],
             'loads.board'        => ['Loads', 'Load board: find loads and freight jobs', self::AREA, ['full', 'full', 'full', 'none', 'view']],

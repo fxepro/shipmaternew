@@ -132,7 +132,7 @@ class BackgroundChecks
     /** Everyone at a carrier who needs a background check: the owner and every driver */
     public static function people(Organization $org): \Illuminate\Support\Collection
     {
-        $ids = OrgMember::where('org_id', $org->id)->where('role', 'driver')->pluck('user_id')
+        $ids = OrgMember::where('org_id', $org->id)->drivers()->pluck('user_id')
             ->prepend($org->owner_id)->filter()->unique();
         return User::whereIn('id', $ids)->get()->sortBy(fn ($u) => $u->id === $org->owner_id ? 0 : 1)->values();
     }
@@ -288,6 +288,11 @@ class BackgroundChecks
         ])->save();
 
         self::apply($check);
+
+        // Keep the provider's report and email the person their summary
+        if ($event['event'] === 'report_completed') {
+            dispatch(fn () => CheckReports::finished($check->fresh()))->afterResponse();
+        }
     }
 
     private static function findCheck(string $provider, array $event): ?BackgroundCheck
@@ -372,7 +377,7 @@ class BackgroundChecks
             ->where('status', 'clear')->latest('completed_at')->first();
         $expires = $completeCheck?->completed_at?->copy()->addMonths(self::COMPLETE_VALID_MONTHS);
 
-        $needsClearinghouse = PersonChecks::membership($user)['role'] === 'driver' || (bool) PersonChecks::credential($user->id, 'cdl')?->number;
+        $needsClearinghouse = (PersonChecks::membership($user)['drives'] ?? false) || (bool) PersonChecks::credential($user->id, 'cdl')?->number;
         $clearinghouse = !$needsClearinghouse
             || PersonChecks::credentialState(PersonCredential::where('user_id', $user->id)->where('type', 'clearinghouse')->latest('id')->first()) === 'met';
         $authority = !$carrier || ($carrier->carrier_operating_country ?? 'US') !== 'US' || $carrier->carrier_dot_verified;
@@ -415,6 +420,9 @@ class BackgroundChecks
             'invitation_url' => $withForms && $c->status === 'invitation_sent' ? $c->invitation_url : null,
             'check_id'       => $withForms && in_array($c->status, ['paid', 'expired'], true) ? $c->id : null,
             'completed_at'   => $c->completed_at?->toDateString(),
+            // PDFs, once the check has a result (CheckReports decides who may download)
+            'id'             => $c->id,
+            'downloads'      => $c->isFinished() ? ['summary' => true, 'report' => CheckReports::hasReport($c)] : null,
         ] : null;
 
         return [

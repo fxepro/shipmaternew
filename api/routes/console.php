@@ -21,6 +21,16 @@ Artisan::command('people:refresh-checks', function () {
 })->purpose('Send approved people with expired or failed required items back to review');
 
 Schedule::command('people:refresh-checks')->dailyAt('06:00');
+
+// Performance metrics for every company (org_metrics), shown on the Performance tab and the public profile
+Artisan::command('metrics:refresh', function () {
+    $n = 0;
+    \App\Models\Organization::whereIn('type', array_keys(\App\Services\OrgMetrics::DEFINITIONS))->each(function ($o) use (&$n) {
+        \App\Services\OrgMetrics::compute($o); $n++;
+    });
+    $this->info("Metrics refreshed for {$n} companies.");
+})->purpose('Recalculate company performance metrics');
+Schedule::command('metrics:refresh')->dailyAt('04:30');
 Schedule::command('compliance:enforce-deadlines')->dailyAt('06:15');
 // FMCSA and SAM.gov looked up again so a lapsed authority, bond or registration shows (demo/compliance-checks.html)
 Schedule::command('compliance:refresh-checks')->dailyAt('05:30');

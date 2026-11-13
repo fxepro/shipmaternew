@@ -15,11 +15,12 @@ class BackgroundCheck extends Model
         'user_id', 'org_id', 'provider', 'mode', 'kind', 'package', 'status',
         'candidate_id', 'invitation_id', 'invitation_url', 'report_id',
         'paid_by', 'payer_user_id', 'payer_id', 'amount_cents', 'payment_intent_id', 'completed_at',
+        'report_pdf_path', 'report_pdf_at',
     ];
 
     protected function casts(): array
     {
-        return ['completed_at' => 'datetime'];
+        return ['completed_at' => 'datetime', 'report_pdf_at' => 'datetime'];
     }
 
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
@@ -28,5 +29,7 @@ class BackgroundCheck extends Model
     /** basic and full checks give the person the basic level; full and upgrade give the complete level */
     public function coversBasic(): bool { return in_array($this->kind, ['basic', 'full'], true); }
     public function coversComplete(): bool { return in_array($this->kind, ['full', 'upgrade'], true); }
+    /** The check has a result, so its PDFs can be downloaded */
+    public function isFinished(): bool { return in_array($this->status, self::FINISHED, true); }
     public function isOpen(): bool { return in_array($this->status, self::OPEN, true); }
 }

@@ -9,7 +9,7 @@ import {
   Briefcase, PlusCircle, Radio, ClipboardList, BookOpen, Warehouse, Palette,
   TrendingUp, Shield, Plus, Minus, CreditCard, Receipt, FileSignature, Plug,
   Settings, UserCog, Repeat,
-  Gauge,
+  Gauge, Navigation,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { canOpen, type Permissions } from '@/lib/permissions';
@@ -40,6 +40,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       items: [
         { label: 'Shipments',     href: '/shipper/shipments',     icon: Package },
         { label: 'Live tracking', href: '/shipper/tracking',      icon: MapPin  },
+        { label: 'Vehicle Tracker', href: '/shipper/vehicle-tracker', icon: Navigation },
         { label: 'Route planner', href: '/shipper/route-planner', icon: Route   },
       ],
     },
@@ -95,6 +96,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
         { label: 'Marketplace', href: '/carrier/jobs',    icon: Briefcase     },
         { label: 'Loads',       href: '/carrier/my-jobs', icon: ClipboardList },
         { label: 'My offers',   href: '/carrier/offers',  icon: Radio         },
+        { label: 'Vehicle Tracker', href: '/carrier/vehicle-tracker', icon: Navigation },
       ],
     },
     {
@@ -167,6 +169,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       items: [
         { label: 'Loads',            href: '/admin/shipments',           icon: Package       },
         { label: 'Live tracking',    href: '/admin/ops/tracking',        icon: MapPin        },
+        { label: 'Vehicle Tracker',  href: '/admin/ops/vehicle-tracker', icon: Navigation    },
         { label: 'Route planner',    href: '/admin/ops/route-planner',   icon: Route         },
         { label: 'Offers',           href: '/admin/ops/jobs/offers',     icon: Radio         },
         { label: 'Contract freight', href: '/admin/ops/jobs/contracted', icon: Briefcase     },
