@@ -162,7 +162,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
   // Law enforcement: the admin search pages, read only (App\Support\LawEnforcement), and the officer's own pages
   agency: [
     {
-      section: 'Law enforcement',
+      section: 'Agency',
       items: [
         { label: 'Companies',        href: '/admin/companies',    icon: Building2     },
         { label: 'People',           href: '/admin/people',       icon: Users         },

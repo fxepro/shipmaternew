@@ -22,7 +22,7 @@ interface Change {
 }
 
 const TYPES: { id: CompanyType; label: string }[] = [
-  { id: 'carrier', label: 'Carrier' }, { id: 'shipper', label: 'Shipper' }, { id: 'factor', label: 'Factor' }, { id: 'receiver', label: 'Receiver' }, { id: 'agency', label: 'Law enforcement' },
+  { id: 'carrier', label: 'Carrier' }, { id: 'shipper', label: 'Shipper' }, { id: 'factor', label: 'Factor' }, { id: 'receiver', label: 'Receiver' }, { id: 'agency', label: 'Agency' },
 ];
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer', supervisor: 'Supervisor', officer: 'Officer' };
 const LEVEL: Record<Level, { label: string; icon: typeof Check | null; cls: string }> = {

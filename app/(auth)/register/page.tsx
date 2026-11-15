@@ -81,7 +81,7 @@ const ROLES = [
   },
   {
     value:       'agency' as const,
-    label:       'Law enforcement',
+    label:       'Agency',
     icon:        Siren,
     description: 'Look up carriers, drivers and loads at the roadside. Agencies are approved by Shipmater.',
   },
