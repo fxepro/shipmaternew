@@ -338,6 +338,7 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     // People at carrier/shipper companies: identity, background (drivers), credentials, approval (owners + drivers)
     Route::get('/admin/people',                                  [AdminPeopleController::class, 'index']);
     Route::get('/admin/people/{user}',                           [AdminPeopleController::class, 'show']);
+    Route::get('/admin/people/{user}/profile',                   [CarrierController::class, 'adminPerson']);
     Route::get('/admin/people/{user}/pro-profile',               [\App\Http\Controllers\Api\ProProfileController::class, 'adminShow']);
     Route::post('/admin/people/{user}/identity',                 [AdminPeopleController::class, 'recordIdentity']);
     Route::post('/admin/people/{user}/background',               [AdminPeopleController::class, 'recordBackground']);

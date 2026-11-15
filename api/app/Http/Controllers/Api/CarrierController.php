@@ -245,6 +245,13 @@ class CarrierController extends Controller
 
     // ── GET /api/v1/carrier/profile ──────────────────────────────────────────
 
+    // GET /api/v1/admin/people/{user}/profile   The same profile the person sees, for Shipmater staff
+    public function adminPerson(Request $request, User $user): JsonResponse
+    {
+        abort_unless($request->user()->isPlatformAdmin(), 403);
+        return response()->json(['data' => $this->shape($user)]);
+    }
+
     public function show(Request $request): JsonResponse
     {
         abort_unless($request->user()->isCarrier(), 403);
@@ -792,7 +799,7 @@ class CarrierController extends Controller
             $v['owner_org_id'] = $org->id;
             $v['owner_user_id'] = null;
         } elseif ($owner === 'driver' || (!$owner && !empty($v['owner_user_id']))) {
-            abort_unless(!empty($v['owner_user_id']) && \Illuminate\Support\Facades\DB::table('org_members')->where('org_id', $org->id)->where('user_id', $v['owner_user_id'])->exists(),
+            abort_unless(!empty($v['owner_user_id']) && \Illuminate\Support\Facades\DB::table('org_members')->where('org_id', $org->id)->where('user_id', $v['owner_user_id'])->whereNull('left_at')->exists(),
                 422, 'The owner must be a person in your company.');
             $v['owner_org_id'] = null;
         } elseif ($owner === 'other_company' || (!$owner && !empty($v['owner_org_id']))) {

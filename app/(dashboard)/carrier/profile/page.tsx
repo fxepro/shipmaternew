@@ -15,6 +15,7 @@ import { CertificationsSection } from '@/components/people/CertificationsSection
 import { certificationApi, serviceTypeApi } from '@/lib/api';
 import { ProProfileCard } from '@/components/entities/ProProfileCard';
 import { DataCard, SectionHeader, Pill, fmtDate, expiryPill, type DataRow } from '@/components/profile/DataCard';
+import { PersonalCards, DrivingCards } from '@/components/profile/PersonCards';
 import { CompanyProfileCard } from '@/components/entities/CompanyProfileCard';
 import { PerformancePanel } from '@/components/entities/PerformancePanel';
 import { useCan } from '@/components/layout/PermissionsContext';
@@ -877,33 +878,10 @@ export default function CarrierProfilePage() {
         {/* ── VIEW CARDS (field name left, value right) ─────────────────── */}
         {/* Drivers and other members see the company read only; the owner and staff edit it */}
         {section === 'identity' && !editing && (
-          <div className="space-y-4">
-            <DataCard title="Name and contact" rows={[
-              ['Legal name', profile.name],
-              ['Email', profile.email],
-              ['Phone', profile.phone ? `${getCountry(profile.phone_country_code || 'US').dialCode} ${profile.phone}` : null],
-              ['WhatsApp', profile.whatsapp ? `${getCountry(profile.whatsapp_country_code || profile.phone_country_code || 'US').dialCode} ${profile.whatsapp}` : null],
-              ['Company / DBA name', profile.company_name],
-              ['Date of birth', fmtDate(profile.date_of_birth)],
-            ]} />
-            <DataCard title="Home address" rows={[
-              ['Street', profile.street], ['City', profile.city], ['State', profile.state], ['ZIP code', profile.zip],
-            ]} />
-            <DataCard title="Government ID" rows={[
-              ['ID type', profile.id_type === 'passport' ? 'Passport' : profile.id_type === 'cdl' ? 'CDL (the same card as Driving credentials)' : "Driver's license"],
-              ...(profile.id_type !== 'passport' ? [
-                ['Number', mask(profile.id_type === 'cdl' ? profile.cdl_number : profile.dl_number)],
-                ['Issuing state', profile.id_type === 'cdl' ? profile.cdl_issuing_state : profile.dl_state],
-                ['Expires', expiryPill(profile.id_type === 'cdl' ? profile.cdl_expiry_date : profile.dl_expiry)],
-              ] as DataRow[] : []),
-              ['SSN (last 4)', profile.has_ssn_last_4 ? 'On file (encrypted)' : null],
-              ['Identity verification', profile.identity_verified
-                ? <Pill tone="good">Verified{profile.identity_verified_at ? ` ${fmtDate(profile.identity_verified_at)}` : ''}</Pill>
-                : <button onClick={startIdentityVerification} disabled={identityLoading} className="text-base font-medium text-[var(--color-teal)] hover:underline disabled:opacity-50">
-                    {identityLoading ? 'Opening Stripe…' : 'Not verified. Verify with Stripe'}
-                  </button>],
-            ]} />
-          </div>
+          <PersonalCards profile={profile} verify={
+            <button onClick={startIdentityVerification} disabled={identityLoading} className="text-base font-medium text-[var(--color-teal)] hover:underline disabled:opacity-50">
+              {identityLoading ? 'Opening Stripe…' : 'Not verified. Verify with Stripe'}
+            </button>} />
         )}
 
         {section === 'driving' && !editing && (
@@ -922,27 +900,7 @@ export default function CarrierProfilePage() {
                 I&apos;m also a driver/operator
               </label>
             )}
-            <DataCard title="Commercial driver's license (CDL)" rows={[
-              ['CDL number', mask(profile.cdl_number)],
-              ['Class', profile.cdl_number && profile.cdl_class ? `Class ${profile.cdl_class}` : null],
-              ['Issuing state', profile.cdl_issuing_state],
-              ['Expires', expiryPill(profile.cdl_expiry_date)],
-              ['Also my government ID', profile.id_type === 'cdl' ? 'Yes' : 'No'],
-            ]} />
-            <DataCard title="Endorsements" subtitle="Used to match loads. H and N together count as X (tank + hazmat)." rows={[
-              ['H — Hazardous materials', profile.hazmat_endorsement
-                ? <span className="inline-flex items-center gap-2">Yes{profile.hazmat_expiry_date && <> · expires {expiryPill(profile.hazmat_expiry_date)}</>}</span> : 'No'],
-              ['N — Tank vehicle', profile.tanker_endorsement ? 'Yes' : 'No'],
-              ['P — Passenger', profile.passenger_endorsement ? 'Yes' : 'No'],
-              ['T — Double / triple trailers', profile.doubles_triples_endorsement ? 'Yes' : 'No'],
-              ['S — School bus', profile.school_bus_endorsement ? 'Yes' : 'No'],
-            ]} />
-            <DataCard title="DOT medical card and drug testing" rows={[
-              ['Medical examiner', profile.medical_examiner_name],
-              ['Medical card expires', expiryPill(profile.dot_medical_expiry)],
-              ['Last drug test', fmtDate(profile.drug_test_date)],
-              ['Result', profile.drug_test_date && profile.drug_test_result ? profile.drug_test_result.charAt(0).toUpperCase() + profile.drug_test_result.slice(1) : null],
-            ]} />
+            <DrivingCards profile={profile} />
           </div>
         )}
 

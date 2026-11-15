@@ -157,6 +157,7 @@ class Organization extends Model
     {
         return $this->belongsToMany(User::class, 'org_members')
                     ->withPivot('role', 'status', 'joined_at')
+                    ->wherePivotNull('left_at')
                     ->withTimestamps();
     }
 

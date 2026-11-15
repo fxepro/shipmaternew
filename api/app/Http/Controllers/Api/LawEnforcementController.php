@@ -195,7 +195,7 @@ class LawEnforcementController extends Controller
     {
         return DB::table('org_members as m')->join('users as u', 'u.id', '=', 'm.user_id')->join('organizations as o', 'o.id', '=', 'm.org_id')
             ->leftJoin('officer_profiles as p', 'p.user_id', '=', 'u.id')
-            ->where('o.type', 'agency')
+            ->where('o.type', 'agency')->whereNull('m.left_at')
             ->when($orgId, fn ($q) => $q->where('m.org_id', $orgId))
             ->when($userId, fn ($q) => $q->where('u.id', $userId))
             ->orderBy('u.name')

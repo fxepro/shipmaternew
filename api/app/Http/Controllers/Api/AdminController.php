@@ -369,8 +369,9 @@ class AdminController extends Controller
                 'organizations' => DB::table('org_members')
                     ->join('organizations', 'organizations.id', '=', 'org_members.org_id')
                     ->where('org_members.user_id', $user->id)
+                    ->orderByRaw('org_members.left_at IS NOT NULL')->orderByDesc('org_members.joined_at')
                     ->get(['organizations.id', 'organizations.name', 'organizations.type',
-                           'org_members.role', 'org_members.status', 'org_members.joined_at']),
+                           'org_members.role', 'org_members.status', 'org_members.joined_at', 'org_members.left_at']),
                 'profile_type' => $profileType,
                 'profile'      => $profileData,
                 'documents'    => $documents,

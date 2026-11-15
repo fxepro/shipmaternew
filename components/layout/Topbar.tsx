@@ -12,7 +12,7 @@ const ROLE_TITLE: Record<UserRole, string> = {
   receiver: 'My Deliveries',
   admin:    'Admin Console',
   factor:   'Factor Portal',
-  agency:   'Law Enforcement',
+  agency:   'Agency',
 };
 
 interface TopbarProps {

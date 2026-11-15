@@ -62,6 +62,17 @@ class PersonChecks
     /** Certifications a person keeps on their profile (Profile → Certifications), apart from driving credentials and checks */
     public const CERT_TYPES = ['twic', 'hazmat_shipper_training', 'dispatcher_certification', 'training', 'other'];
 
+    /** Certifications that fit each company type and role. Everyone can also add a course certificate or another one. */
+    public const ROLE_CERTS = [
+        'carrier.driver'     => ['twic', 'hazmat_shipper_training'],
+        'carrier.owner'      => ['twic'],
+        'carrier.dispatcher' => ['dispatcher_certification'],
+        'broker.agent'       => ['dispatcher_certification'],
+        'shipper.owner'      => ['hazmat_shipper_training'],
+        'shipper.staff'      => ['hazmat_shipper_training'],
+        'receiver.staff'     => ['twic'],
+    ];
+
     private const NONE = ['approval' => false, 'auto_approve' => false, 'identity' => false, 'background' => false, 'min_age' => null, 'required' => [], 'recorded' => []];
 
     /** Requirements by company type and role */
@@ -180,7 +191,55 @@ class PersonChecks
     {
         $membership ??= self::membership($user);
         $rules = self::rules($membership['type'], $membership['role'], $membership['drives'] ?? false);
+        $items = self::items($user, $rules);
+        $required = array_filter($items, fn ($i) => $i['required']);
 
+        return [
+            'company_type'      => $membership['type'],
+            'role'              => $membership['role'],
+            'approval_required' => $rules['approval'],
+            'auto_approve'      => $rules['auto_approve'] ?? false,
+            'items'             => $items,
+            'required_total'    => count($required),
+            'required_met'      => count(array_filter($required, fn ($i) => $i['state'] === 'met')),
+            'ready'             => count(array_filter($required, fn ($i) => $i['state'] !== 'met')) === 0,
+        ];
+    }
+
+    /**
+     * Every check and certification that applies to the person, across all their current companies
+     * (a carrier driver who is also shipper staff gets both lists). group: required | recorded | certification.
+     */
+    public static function allChecks(User $user): array
+    {
+        $roles = OrgMember::where('user_id', $user->id)->with('org')->get()->filter(fn ($m) => $m->org)
+            ->map(fn ($m) => [$m->org->type, $m->user_id === $m->org->owner_id ? 'owner' : $m->role, $m->isDriving()])->values()->all();
+        if (!$roles) {
+            $m = self::membership($user);
+            $roles = [[$m['type'], $m['role'], $m['drives'] ?? false]];
+        }
+
+        $rules = self::NONE;
+        $certs = [];
+        foreach ($roles as [$type, $role, $drives]) {
+            $r = self::rules($type, $role, $drives);
+            $rules['identity']   = $rules['identity'] || $r['identity'];
+            $rules['background'] = $rules['background'] || $r['background'];
+            $rules['min_age']    = max($rules['min_age'] ?? 0, $r['min_age'] ?? 0) ?: null;
+            $rules['required']   = [...$rules['required'], ...$r['required']];
+            $rules['recorded']   = [...$rules['recorded'], ...$r['recorded']];
+            $certs = [...$certs, ...(self::ROLE_CERTS["{$type}.{$role}"] ?? []), ...($drives ? self::ROLE_CERTS['carrier.driver'] : [])];
+        }
+        $rules['required'] = array_values(array_unique($rules['required']));
+        $rules['recorded'] = array_values(array_diff(array_unique($rules['recorded']), $rules['required']));
+        $certs = array_values(array_diff(array_unique([...$certs, 'training', 'other']), $rules['required'], $rules['recorded']));
+
+        return self::items($user, $rules, $certs);
+    }
+
+    /** Checklist items for a set of rules, plus optional certifications */
+    private static function items(User $user, array $rules, array $certs = []): array
+    {
         $pv       = PersonVerification::where('user_id', $user->id)->first();
         $identity = PersonIdentity::where('user_id', $user->id)->first();
         $creds    = self::credentials($user)->groupBy('type');
@@ -201,14 +260,14 @@ class PersonChecks
                 $detail = "Must be {$rules['min_age']} or older (age {$age}).";
             }
 
-            $items[] = ['key' => 'identity', 'label' => 'Identity', 'required' => $rules['identity'], 'state' => $state, 'detail' => $detail,
+            $items[] = ['key' => 'identity', 'label' => 'Identity', 'required' => $rules['identity'], 'group' => $rules['identity'] ? 'required' : 'recorded', 'state' => $state, 'detail' => $detail,
                 'checked_at' => ($identity?->verified_at ?? $identity?->submitted_at)?->toISOString()];
         }
 
         if ($rules['background']) {
             $bg = $pv?->background_check_status ?? 'not_started';
             $items[] = [
-                'key' => 'background', 'label' => 'Background check', 'required' => true,
+                'key' => 'background', 'label' => 'Background check', 'required' => true, 'group' => 'required',
                 'state' => match (true) {
                     in_array($bg, PersonVerification::BACKGROUND_PASSED, true)        => 'met',
                     $bg === 'failed'                                                  => 'failed',
@@ -220,13 +279,14 @@ class PersonChecks
             ];
         }
 
-        foreach ([[$rules['required'], true], [$rules['recorded'], false]] as [$types, $required]) {
+        foreach ([[$rules['required'], 'required'], [$rules['recorded'], 'recorded'], [$certs, 'certification']] as [$types, $group]) {
             foreach ($types as $type) {
                 $c = $creds->get($type)?->first();
                 $items[] = [
                     'key'      => "credential:{$type}",
                     'label'    => self::CREDENTIAL_LABELS[$type],
-                    'required' => $required,
+                    'required' => $group === 'required',
+                    'group'    => $group,
                     'state'    => self::credentialState($c),
                     'detail'   => $c?->expires_at ? 'Expires ' . $c->expires_at->toDateString() : null,
                     'credential_id' => $c?->id,
@@ -234,18 +294,7 @@ class PersonChecks
             }
         }
 
-        $required = array_filter($items, fn ($i) => $i['required']);
-
-        return [
-            'company_type'      => $membership['type'],
-            'role'              => $membership['role'],
-            'approval_required' => $rules['approval'],
-            'auto_approve'      => $rules['auto_approve'] ?? false,
-            'items'             => $items,
-            'required_total'    => count($required),
-            'required_met'      => count(array_filter($required, fn ($i) => $i['state'] === 'met')),
-            'ready'             => count(array_filter($required, fn ($i) => $i['state'] !== 'met')) === 0,
-        ];
+        return $items;
     }
 
     /**

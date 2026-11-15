@@ -8,13 +8,13 @@ const TYPE_LABEL: Record<string, string> = {
   shipper: 'Shipper', broker: 'Broker', carrier: 'Carrier', factor: 'Factor', receiver: 'Receiver',
 };
 
-const initialsOf = (name?: string | null) =>
+export const initialsOf = (name?: string | null) =>
   (name ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?';
 
-const memberSince = (d?: string | null) =>
+export const memberSince = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : null;
 
-function HeaderCard({ initials, logo, title, lines, aside }: {
+export function HeaderCard({ initials, logo, title, lines, aside }: {
   initials: string; logo?: string | null; title: string; lines: (string | null)[]; aside?: React.ReactNode;
 }) {
   return (

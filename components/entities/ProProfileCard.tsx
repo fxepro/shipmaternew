@@ -42,10 +42,15 @@ const errText = (e: any, f: string): string => (Object.values(e?.response?.data?
  * The public page is /p/{slug}; who can open it is set by visibility.
  */
 /** driving: the CDL, equipment and haul-type fields, for people at a carrier. Off for shippers, brokers, factors and receivers. */
-export function ProProfileCard({ driving = true }: { driving?: boolean }) {
+/** userId: Shipmater staff viewing someone's profile, read only */
+export function ProProfileCard({ driving = true, userId }: { driving?: boolean; userId?: number }) {
   const catalog = useCatalog();
   const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ['pro-profile'], queryFn: () => api.get('/api/v1/me/pro-profile').then((r) => r.data.data as Pro) });
+  const readOnly = userId !== undefined;
+  const { data } = useQuery({
+    queryKey: readOnly ? ['admin-pro-profile', userId] : ['pro-profile'],
+    queryFn: () => api.get(readOnly ? `/api/v1/admin/people/${userId}/pro-profile` : '/api/v1/me/pro-profile').then((r) => r.data.data as Pro),
+  });
   const [p, setP] = useState<Pro | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -101,12 +106,15 @@ export function ProProfileCard({ driving = true }: { driving?: boolean }) {
     </DataCard>
   );
 
-  if (!editing) {
+  if (!editing || readOnly) {
+    const edit = readOnly ? undefined : <button onClick={() => setEditing(true)} className="text-base font-medium text-[var(--color-teal)] hover:underline">Edit</button>;
     return (
       <div className="space-y-4">
-        {shareCard}
+        {readOnly
+          ? <DataCard title="Profile link" rows={[['Link', data.slug ? <a href={`/p/${data.slug}`} target="_blank" rel="noopener" className="text-[var(--color-teal)] hover:underline">/p/{data.slug}</a> : null], ['Who can open it', VISIBILITY[data.visibility]?.label]]} />
+          : shareCard}
         <DataCard title="Professional profile"
-          action={<button onClick={() => setEditing(true)} className="text-base font-medium text-[var(--color-teal)] hover:underline">Edit</button>}
+          action={edit}
           rows={[
             ['Headline', data.headline],
             ...(driving ? [
@@ -123,13 +131,12 @@ export function ProProfileCard({ driving = true }: { driving?: boolean }) {
             ['Home base', [data.home_city, data.home_state].filter(Boolean).join(', ') || null],
             ['Open to work', data.open_to_work ? `Yes${data.available_from ? `, from ${fmtDate(data.available_from)}` : ''}` : 'No'],
           ]} />
-        <DataCard title="About"
-          action={<button onClick={() => setEditing(true)} className="text-base font-medium text-[var(--color-teal)] hover:underline">Edit</button>}>
+        <DataCard title="About" action={edit}>
           <div className="px-4 py-3 text-base text-[var(--color-text)] whitespace-pre-line">
             {data.bio || <span className="text-[var(--color-text-faint)]">—</span>}
           </div>
         </DataCard>
-        <WorkHistory driving={driving} items={data.experiences} catalog={catalog} onChange={() => qc.invalidateQueries({ queryKey: ['pro-profile'] })} />
+        <WorkHistory driving={driving} readOnly={readOnly} items={data.experiences} catalog={catalog} onChange={() => qc.invalidateQueries({ queryKey: ['pro-profile'] })} />
       </div>
     );
   }
@@ -183,14 +190,14 @@ export function ProProfileCard({ driving = true }: { driving?: boolean }) {
 const EMPTY_JOB = { title: '', company_name: '', org_id: '', employment_type: '', location: '', start_date: '', end_date: '', current: true, description: '', equipment: [] as string[] };
 
 /** Work history, newest first. A job at a Shipmater company you belong to shows as verified. */
-function WorkHistory({ items, catalog, onChange, driving }: { items: Experience[]; catalog: ReturnType<typeof useCatalog>; onChange: () => void; driving: boolean }) {
+function WorkHistory({ items, catalog, onChange, driving, readOnly = false }: { items: Experience[]; catalog: ReturnType<typeof useCatalog>; onChange: () => void; driving: boolean; readOnly?: boolean }) {
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [f, setF] = useState(EMPTY_JOB);
   const [busy, setBusy] = useState(false);
   const { data: companies = [] } = useQuery({
     queryKey: ['my-experience-companies'],
     queryFn: () => api.get('/api/v1/me/experiences/companies').then((r) => r.data.data as { id: number; name: string }[]),
-    enabled: editing !== null,
+    enabled: editing !== null && !readOnly,
   });
 
   const open = (e?: Experience) => {
@@ -231,7 +238,7 @@ function WorkHistory({ items, catalog, onChange, driving }: { items: Experience[
 
   return (
     <DataCard title="Work history"
-      action={editing === null && <button onClick={() => open()} className="inline-flex items-center gap-1 text-base font-medium text-[var(--color-teal)] hover:underline"><Plus size={14} /> Add job</button>}>
+      action={editing === null && !readOnly && <button onClick={() => open()} className="inline-flex items-center gap-1 text-base font-medium text-[var(--color-teal)] hover:underline"><Plus size={14} /> Add job</button>}>
       {items.length === 0 && editing === null && <p className="px-4 py-3 text-sm text-[var(--color-text-muted)]">No jobs yet.</p>}
       {items.length > 0 && (
         <ul className="divide-y divide-[var(--color-cream-dark)]">
@@ -252,8 +259,8 @@ function WorkHistory({ items, catalog, onChange, driving }: { items: Experience[
                 </div>
                 {editing === null && (
                   <div className="flex shrink-0 items-center gap-2">
-                    <button onClick={() => open(e)} title="Edit" className="text-[var(--color-text-faint)] hover:text-[var(--color-teal)]"><Pencil size={14} /></button>
-                    <button onClick={() => remove(e)} title="Remove" className="text-[var(--color-text-faint)] hover:text-[var(--color-danger)]"><Trash2 size={14} /></button>
+{!readOnly && <>                    <button onClick={() => open(e)} title="Edit" className="text-[var(--color-text-faint)] hover:text-[var(--color-teal)]"><Pencil size={14} /></button>
+                    <button onClick={() => remove(e)} title="Remove" className="text-[var(--color-text-faint)] hover:text-[var(--color-danger)]"><Trash2 size={14} /></button></>}
                   </div>
                 )}
               </div>

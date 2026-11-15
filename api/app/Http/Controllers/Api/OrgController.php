@@ -178,7 +178,8 @@ class OrgController extends Controller
         abort_if($member->user_id === $user->currentOrg->owner_id, 403, 'Cannot remove org owner.');
         abort_if($member->user_id === $user->id, 403, 'Cannot remove yourself.');
 
-        $member->delete();
+        // Kept as history (worked here from joined_at to left_at)
+        $member->end();
 
         // They can no longer act for this company: switch them to another company they belong to, or none
         $removed = $member->user;

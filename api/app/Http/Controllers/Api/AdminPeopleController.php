@@ -143,6 +143,9 @@ class AdminPeopleController extends Controller
     private function forOfficer(array $d): array
     {
         $d['person']['email'] = null;
+        $d['person']['phone'] = null;
+        $d['person']['last_sign_in_at'] = null;
+        $d['invitations'] = [];
         $d['verification'] = [
             'status' => $d['verification']['status'], 'notes' => null, 'reviewed_at' => $d['verification']['reviewed_at'], 'reviewed_by' => null,
             'background_status' => $d['verification']['background_checked_at'] ? 'done' : 'not_started',
@@ -156,6 +159,7 @@ class AdminPeopleController extends Controller
         }
         $d['credentials'] = collect($d['credentials'])->map(fn ($c) => array_merge($c, ['notes' => null, 'ai' => null, 'has_document' => false, 'verified_by' => null]))->values();
         $d['checklist']['items'] = collect($d['checklist']['items'])->map(fn ($i) => array_merge($i, ['detail' => null]))->values()->all();
+        $d['all_checks'] = collect($d['all_checks'])->map(fn ($i) => array_merge($i, ['detail' => null]))->values()->all();
         $d['officer'] = true;
         return $d;
     }
@@ -359,14 +363,17 @@ class AdminPeopleController extends Controller
 
         return [
             'person' => [
-                'id' => $user->id, 'name' => $user->name, 'email' => $user->email,
+                'id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'user_role' => $user->role,
+                'phone' => PersonIdentity::where('user_id', $user->id)->value('phone') ?? $user->phone ?? null,
                 'account_status' => $user->status ?? 'active', 'created_at' => $user->created_at?->toISOString(),
+                'last_sign_in_at' => $user->tokens()->max('created_at'),
             ],
             'company'      => $m['org'] ? ['id' => $m['org']->id, 'name' => PersonChecks::companyName($m['org']), 'type' => $m['org']->type,
                                 'verification_status' => $m['org']->verification_status] : null,
             'company_type' => $m['type'],
             'role'         => $m['role'],
             'checklist'    => $checklist,
+            'all_checks'   => PersonChecks::allChecks($user),
             'verification' => [
                 'status'               => $checklist['approval_required'] ? $pv->status : 'not_required',
                 'notes'                => $pv->notes,
@@ -379,7 +386,25 @@ class AdminPeopleController extends Controller
             ],
             'identity'    => PersonChecks::identitySummary(PersonIdentity::where('user_id', $user->id)->first()),
             'credentials' => PersonChecks::credentials($user)->map(fn ($c) => PersonChecks::credentialSummary($c))->values(),
-            'pro_profile' => \App\Models\ProProfile::firstOrNew(['user_id' => $user->id])->toCard(),
+            'pro_profile' => \App\Models\ProProfile::firstOrNew(['user_id' => $user->id])->toCard() + [
+                'experiences' => \App\Models\ProExperience::where('user_id', $user->id)
+                    ->orderByRaw('end_date IS NOT NULL')->orderByDesc('end_date')->orderByDesc('start_date')->get()->map->toCard()->values()->all(),
+            ],
+            'cert_types'  => PersonChecks::CERT_TYPES,
+            // Every company they work for now, and worked for before (org_members keeps the rows with left_at)
+            'companies'   => OrgMember::history()->where('user_id', $user->id)->with('org')
+                ->orderByRaw('left_at IS NOT NULL')->orderByDesc('joined_at')->get()
+                ->filter(fn ($m) => $m->org)
+                ->map(fn ($m) => [
+                    'id' => $m->id, 'org_id' => $m->org_id, 'name' => $m->org->name, 'type' => $m->org->type,
+                    'role' => $m->user_id === $m->org->owner_id && !$m->left_at ? 'owner' : $m->role, 'drives' => $m->isDriving(),
+                    'status' => $m->left_at ? 'left' : $m->status, 'joined_at' => $m->joined_at?->toISOString(), 'left_at' => $m->left_at?->toISOString(),
+                    'company_status' => $m->org->verification_status,
+                ])->values(),
+            // Invited and not yet joined
+            'invitations' => \Illuminate\Support\Facades\DB::table('org_invitations as i')->join('organizations as o', 'o.id', '=', 'i.org_id')
+                ->whereRaw('lower(i.email) = ?', [strtolower((string) $user->email)])->whereNull('i.accepted_at')->where('i.expires_at', '>', now())
+                ->orderByDesc('i.created_at')->get(['i.id', 'o.id as org_id', 'o.name', 'o.type', 'i.role', 'i.created_at', 'i.expires_at']),
         ];
     }
 

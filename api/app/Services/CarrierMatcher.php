@@ -34,7 +34,7 @@ class CarrierMatcher
         $features = DB::table('vehicle_capabilities')->whereIn('vehicle_id', $vehicles->pluck('id'))->get()
             ->groupBy('vehicle_id')->map(fn ($rows) => $rows->pluck('capability_key')->all());
         // Endorsements held by anyone at the carrier (the owner-operator included), from their CDL credentials
-        $driverIds = DB::table('org_members')->where('org_id', $org->id)->where('status', 'active')->pluck('user_id');
+        $driverIds = DB::table('org_members')->where('org_id', $org->id)->whereNull('left_at')->where('status', 'active')->pluck('user_id');
         $endorsements = collect(\App\Support\Endorsements::forUsers($driverIds))->flatten()->unique()->values()->all();
 
         return [

@@ -180,7 +180,10 @@ class ProProfileController extends Controller
                 'haul_types'   => collect($card['haul_types'])->map(fn ($h) => ProProfile::HAUL_TYPES[$h] ?? null)->filter()->values(),
                 'team_ok'      => $card['team_ok'],
             ],
-            'experiences'    => collect($this->experiences($user->id))->map(fn ($e) => collect($e)->except(['org_id'])->all())->values(),
+            // A job verified on Shipmater shows the membership's dates, not the typed ones
+            'experiences'    => collect($this->experiences($user->id))->map(fn ($e) => collect($e['verified'] && $e['verified_from']
+                ? array_merge($e, ['start_date' => $e['verified_from'], 'end_date' => $e['verified_to'], 'current' => $e['verified_to'] === null]) : $e)
+                ->except(['org_id', 'verified_from', 'verified_to'])->all())->values(),
             'certifications' => $this->publicCertifications($user->id),
             'verification'   => $this->publicVerification($user, $identity),
             'contact'        => $canContact ? ['email' => $user->email, 'phone' => $identity?->phone ?? $user->phone ?? null] : null,
