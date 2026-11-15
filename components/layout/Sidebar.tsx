@@ -9,7 +9,7 @@ import {
   Briefcase, PlusCircle, Radio, ClipboardList, BookOpen, Warehouse, Palette,
   TrendingUp, Shield, Plus, Minus, CreditCard, Receipt, FileSignature, Plug,
   Settings, UserCog, Repeat,
-  Gauge, Navigation,
+  Gauge, Navigation, History, Siren,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { canOpen, type Permissions } from '@/lib/permissions';
@@ -159,6 +159,34 @@ export const NAV: Record<UserRole, NavSection[]> = {
       ],
     },
   ],
+  // Law enforcement: the admin search pages, read only (App\Support\LawEnforcement), and the officer's own pages
+  agency: [
+    {
+      section: 'Law enforcement',
+      items: [
+        { label: 'Companies',        href: '/admin/companies',    icon: Building2     },
+        { label: 'People',           href: '/admin/people',       icon: Users         },
+        { label: 'Loads',            href: '/admin/shipments',    icon: Package       },
+        { label: 'Live tracking',    href: '/admin/ops/tracking', icon: MapPin        },
+        { label: 'Records requests', href: '/agency/records',     icon: FileSignature },
+        { label: 'History',          href: '/agency/history',     icon: History       },
+      ],
+    },
+    {
+      section: 'Reports',
+      items: [
+        { label: 'Business reports', href: '/agency/reports', icon: FileText   },
+        { label: 'Billing',          href: '/agency/billing', icon: CreditCard },
+      ],
+    },
+    {
+      section: 'Account',
+      items: [
+        { label: 'Profile', href: '/agency/profile', icon: User   },
+        { label: 'Agency',  href: '/agency/company', icon: Shield },
+      ],
+    },
+  ],
   admin: [
     {
       section: 'Console',
@@ -187,6 +215,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
         { label: 'People',           href: '/admin/people',    icon: Users         },
         { label: 'NOAs / Factoring', href: '/admin/noas',      icon: FileSignature },
         { label: 'Compliance',       href: '/admin/compliance', icon: ShieldCheck   },
+        { label: 'Agency',           href: '/admin/agencies',        icon: Siren   },
       ],
     },
     {

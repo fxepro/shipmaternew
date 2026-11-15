@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Package } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusPill } from '@/components/shipments/StatusPill';
 import { Card, Fields, Table, display, type Row } from '@/components/admin/DetailParts';
 import type { ShipmentStatus } from '@/types/shipment';
+import { useCurrentUser } from '@/components/layout/PermissionsContext';
+import { ReasonGate } from '@/components/lawenforcement/OfficerSearch';
 
 interface ShipmentDetail {
   shipment: Row;
@@ -79,20 +81,31 @@ const PARTY_FIELDS: [string, string][] = [
 export default function AdminShipmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [showAll, setShowAll] = useState(false);
+  // Law enforcement (Tier 2): a reason and case number before the load opens; both go in the access log
+  const officer = useCurrentUser()?.role === 'agency';
+  const tracking = useSearchParams().get('view') === 'tracking';
+  const [gate, setGate] = useState<{ reason: string; case_number: string } | null>(null);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['admin-shipment', id],
-    queryFn: () => api.get(`/api/v1/admin/shipments/${id}`).then((r) => r.data.data as ShipmentDetail),
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['admin-shipment', id, gate],
+    queryFn: () => api.get(`/api/v1/admin/shipments/${id}`, { params: officer ? { ...gate, page: tracking ? 'tracking' : 'loads' } : undefined })
+      .then((r) => r.data.data as ShipmentDetail),
+    enabled: !officer || !!gate,
+    retry: false,
   });
 
   const back = (
-    <Link href="/admin/shipments" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-      <ArrowLeft size={14} /> All loads
+    <Link href={officer && tracking ? '/admin/ops/tracking' : '/admin/shipments'} className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+      <ArrowLeft size={14} /> {officer ? 'Search' : 'All loads'}
     </Link>
   );
 
+  if (officer && !gate) return <div className="space-y-4">{back}<ReasonGate title={`Load #${id}`} onSubmit={(reason, case_number) => setGate({ reason, case_number })} /></div>;
   if (isLoading) return <div className="space-y-4">{back}<div className="skeleton h-96 rounded-xl" /></div>;
-  if (isError || !data) return <div className="space-y-4">{back}<EmptyState icon={Package} title="Load not found" /></div>;
+  if (isError || !data) {
+    const msg = (error as { response?: { data?: { message?: string } } } | null)?.response?.data?.message;
+    return <div className="space-y-4">{back}<EmptyState icon={Package} title={officer && msg ? msg : 'Load not found'} /></div>;
+  }
 
   const s = data.shipment;
   const stops = (s.stops as Row[] | undefined) ?? [];
@@ -111,13 +124,13 @@ export default function AdminShipmentDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {SECTIONS.map((sec) => (
+        {SECTIONS.filter((sec) => !officer || sec.title !== 'Payment').map((sec) => (
           <Card key={sec.title} title={sec.title}>
-            <Fields data={s} fields={sec.fields} />
+            <Fields data={s} fields={officer ? sec.fields.filter(([k]) => k !== 'tracking_token') : sec.fields} />
           </Card>
         ))}
 
-        <Card title="Contract">
+        {!officer && <Card title="Contract">
           {data.contract ? (
             <Fields
               data={data.contract}
@@ -131,7 +144,7 @@ export default function AdminShipmentDetailPage() {
           ) : (
             <p className="text-sm text-[var(--color-text-muted)]">Not under a contract.</p>
           )}
-        </Card>
+        </Card>}
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -156,6 +169,7 @@ export default function AdminShipmentDetailPage() {
         />
       </Card>
 
+      {!officer && <>
       <Card title={`Offers (${data.bids.length})`}>
         <Table
           rows={data.bids}
@@ -177,6 +191,7 @@ export default function AdminShipmentDetailPage() {
           ]}
         />
       </Card>
+      </>}
 
       <Card title={`GPS pings (${data.gps.count}${data.gps.count > 50 ? ', latest 50 shown' : ''})`}>
         <Table
@@ -186,7 +201,7 @@ export default function AdminShipmentDetailPage() {
         />
       </Card>
 
-      <Card title="All fields">
+      {!officer && <Card title="All fields">
         <button onClick={() => setShowAll((v) => !v)} className="text-sm font-medium text-[var(--color-teal)]">
           {showAll ? 'Hide' : `Show all ${Object.keys(s).length} shipment fields`}
         </button>
@@ -200,7 +215,7 @@ export default function AdminShipmentDetailPage() {
             ))}
           </dl>
         )}
-      </Card>
+      </Card>}
     </div>
   );
 }

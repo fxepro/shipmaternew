@@ -41,7 +41,7 @@ class Organization extends Model
     }
 
     protected $fillable = [
-        'name', 'slug', 'profile_slug', 'about', 'type', 'plan', 'status', 'owner_id', 'listed_by_org_id', 'listed_by_user_id', 'claimed_at',
+        'name', 'slug', 'profile_slug', 'about', 'type', 'agency_kind', 'ori_number', 'jurisdiction', 'plan', 'status', 'owner_id', 'listed_by_org_id', 'listed_by_user_id', 'claimed_at',
         'phone', 'email', 'website',
         'street', 'city', 'state', 'zip', 'country', 'currency',
         'tax_id', 'tax_id_type',
@@ -249,7 +249,7 @@ class Organization extends Model
 
     // ── Directory: locations, contacts, saved partners, listing and claiming ───
 
-    public const TYPES = ['shipper', 'carrier', 'factor', 'receiver', 'broker'];
+    public const TYPES = ['shipper', 'carrier', 'factor', 'receiver', 'broker', 'agency'];
     /** Types a company can list on someone else's behalf */
     public const LISTABLE = ['receiver', 'broker'];
 

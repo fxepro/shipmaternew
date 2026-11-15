@@ -17,12 +17,13 @@ interface Invitation { id: number; email: string; role: string; expires_at: stri
 /** A role this company can give; the list comes from the API (PersonChecks::ROLES) for the company's type */
 interface RoleOption { value: string; label: string; help: string }
 
-export type TeamType = 'carrier' | 'shipper' | 'broker' | 'factor' | 'receiver';
+export type TeamType = 'carrier' | 'shipper' | 'broker' | 'factor' | 'receiver' | 'agency';
 
 /** What the team page says about who joins, by company type */
 const INTRO: Partial<Record<TeamType, string>> = {
   carrier: 'Drivers sign up with their own login from your invite, then add their licence, medical card and ID. Shipmater approves each driver before they can be assigned a load.',
   broker:  'Agents post loads for your customers, book carriers and manage carrier contracts. Staff also manage the team, payments and contracts.',
+  agency:  'Each officer signs up with their own login from your invite and verifies their identity. Supervisors see every search the agency runs.',
 };
 
 const ROLE_COLORS: Record<string, string> = {

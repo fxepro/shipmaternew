@@ -778,6 +778,8 @@ class DatabaseSeeder extends Seeder
         $this->call(RoleDemoSeeder::class);
         // Morgan Freight is a broker; Front Range Foods is a shipper
         $this->call(BrokerDemoSeeder::class);
+        // A law enforcement agency with an officer and a supervisor
+        $this->call(AgencyDemoSeeder::class);
 
         // Demo logins have verified emails (sign-up requires it)
         User::where('email', 'like', '%@demo.com')->whereNull('email_verified_at')->update(['email_verified_at' => now()]);

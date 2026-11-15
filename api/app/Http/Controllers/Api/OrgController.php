@@ -41,6 +41,10 @@ class OrgController extends Controller
                 'zip'      => $org->zip,
                 'country'  => $org->country,
                 'tax_id'   => $org->tax_id,
+                'verification_status' => $org->verification_status,
+                'agency_kind'  => $org->agency_kind,
+                'ori_number'   => $org->ori_number,
+                'jurisdiction' => $org->jurisdiction,
             ],
         ]);
     }
@@ -65,7 +69,12 @@ class OrgController extends Controller
             'zip'      => ['sometimes', 'nullable', 'string', 'max:20'],
             'country'  => ['sometimes', 'nullable', 'string', 'size:2', fn ($a, $v, $fail) => \App\Support\KybCountries::isEnabled($v) || $fail('Companies in this country cannot be verified on Shipmater yet.')],
             'tax_id'   => ['sometimes', 'nullable', 'string', 'max:20'],
+            // Law enforcement agencies
+            'agency_kind'  => ['sometimes', 'nullable', 'in:state_police,highway_patrol,sheriff,police,federal,port,dot_enforcement,other'],
+            'ori_number'   => ['sometimes', 'nullable', 'string', 'max:20'],
+            'jurisdiction' => ['sometimes', 'nullable', 'string', 'max:120'],
         ]);
+        if ($org->type !== 'agency') unset($validated['agency_kind'], $validated['ori_number'], $validated['jurisdiction']);
 
         $org->update($validated);
 

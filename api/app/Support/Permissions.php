@@ -25,6 +25,7 @@ class Permissions
         'broker'  => ['owner', 'staff', 'agent', 'viewer'],
         'factor'  => ['owner', 'staff', 'viewer'],
         'receiver' => ['owner', 'staff', 'viewer'],
+        'agency'   => ['owner', 'supervisor', 'officer'],
     ];
 
     private const DO   = ['full', 'none'];
@@ -32,6 +33,8 @@ class Permissions
     private const LOAD = ['full', 'view', 'assigned', 'none'];
     private const RUN  = ['full', 'assigned', 'none'];
     private const SELF = ['self'];
+    private const LOOK = ['view', 'none'];
+    private const LOG  = ['full', 'self', 'none'];
 
     /**
      * type => [action => [group, label, allowed levels, defaults by role (in ROLES order)]]
@@ -114,6 +117,20 @@ class Permissions
             'locations.manage'   => ['Company', 'Locations: add, edit, remove', self::AREA, ['full', 'full', 'view']],
             'contacts.manage'    => ['Company', 'Contacts and their load updates', self::AREA, ['full', 'full', 'view']],
             'loads.view'         => ['Deliveries', 'Loads coming to our locations, tracking', self::AREA, ['full', 'full', 'view']],
+            'self.checks'        => ['Other', 'Own identity', self::SELF, ['self', 'self', 'self']],
+        ],
+        // Law enforcement (demo/law-enforcement.html): the admin Companies, People, Loads and Live tracking pages, read only
+        'agency' => [
+            'company.profile'    => ['Agency', 'Agency details', self::AREA, ['full', 'view', 'view']],
+            'team.manage'        => ['Agency', 'Team: invite, change role, remove', self::DO, ['full', 'full', 'none']],
+            'le.companies'       => ['Search', 'Companies: search, authority, insurance, drivers, vehicles', self::LOOK, ['view', 'view', 'view']],
+            'le.people'          => ['Search', 'People: search, identity verified, CDL, credentials', self::LOOK, ['view', 'view', 'view']],
+            'le.loads'           => ['Search', 'Loads: open with a reason and case number (Tier 2)', self::LOOK, ['view', 'view', 'view']],
+            'le.tracking'        => ['Search', 'Live tracking: open with a reason and case number (Tier 2)', self::LOOK, ['view', 'view', 'view']],
+            'le.records'         => ['Requests', 'Records requests: submit (Tier 3)', self::DO, ['full', 'full', 'full']],
+            'le.history'         => ['Requests', 'History: the agency’s searches (full) or their own (self)', self::LOG, ['full', 'full', 'self']],
+            'le.reports'         => ['Reports', 'Business reports: run (paid)', self::DO, ['full', 'full', 'full']],
+            'le.billing'         => ['Reports', 'Billing: payment method and statements', self::AREA, ['full', 'view', 'none']],
             'self.checks'        => ['Other', 'Own identity', self::SELF, ['self', 'self', 'self']],
         ],
     ];

@@ -175,7 +175,7 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
 
     // Org / Team management
     Route::get('/org',                             [OrgController::class, 'show']);
-    Route::put('/org',                             [OrgController::class, 'update'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
+    Route::put('/org',                             [OrgController::class, 'update'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile,agency:company.profile');
     // Compliance uploads (W-9, licence, COI...) for the types that keep them as files
     // Operating authorities (DOT / MC / broker) and directory categories of your company
     Route::get('/org/authorities',                 [\App\Http\Controllers\Api\AuthorityController::class, 'index'])->middleware('perm:carrier:company.profile=view,shipper:company.profile=view,factor:company.profile=view');
@@ -183,8 +183,26 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::put('/org/authorities/{authority}',     [\App\Http\Controllers\Api\AuthorityController::class, 'update'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
     Route::delete('/org/authorities/{authority}',  [\App\Http\Controllers\Api\AuthorityController::class, 'destroy'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile');
     Route::put('/org/categories',                  [\App\Http\Controllers\Api\CapabilityController::class, 'updateOwnCategories'])->middleware('perm:carrier:company.profile,shipper:company.profile,factor:company.profile,receiver:company.profile');
-    Route::get('/org/compliance',                  [\App\Http\Controllers\Api\OrgComplianceController::class, 'index'])->middleware('perm:factor:company.profile=view,receiver:company.profile=view');
-    Route::post('/org/compliance/{key}',           [\App\Http\Controllers\Api\OrgComplianceController::class, 'upload'])->middleware('perm:factor:company.profile,receiver:company.profile');
+    Route::get('/org/compliance',                  [\App\Http\Controllers\Api\OrgComplianceController::class, 'index'])->middleware('perm:factor:company.profile=view,receiver:company.profile=view,agency:company.profile=view');
+    Route::post('/org/compliance/{key}',           [\App\Http\Controllers\Api\OrgComplianceController::class, 'upload'])->middleware('perm:factor:company.profile,receiver:company.profile,agency:company.profile');
+
+    // Law enforcement: the officer's own pages (demo/law-enforcement.html); searches are on the shared admin pages
+    Route::get('/agency/officer',             [\App\Http\Controllers\Api\LawEnforcementController::class, 'officer']);
+    Route::put('/agency/officer',             [\App\Http\Controllers\Api\LawEnforcementController::class, 'updateOfficer']);
+    Route::get('/agency/records',             [\App\Http\Controllers\Api\LawEnforcementController::class, 'records']);
+    Route::post('/agency/records',            [\App\Http\Controllers\Api\LawEnforcementController::class, 'storeRecord'])->middleware('throttle:10,1');
+    Route::get('/agency/records/{id}/file',   [\App\Http\Controllers\Api\LawEnforcementController::class, 'requestFile']);
+    Route::get('/agency/history',             [\App\Http\Controllers\Api\LawEnforcementController::class, 'history']);
+    Route::get('/agency/reports',             [\App\Http\Controllers\Api\LawEnforcementController::class, 'reports']);
+    Route::post('/agency/reports',            [\App\Http\Controllers\Api\LawEnforcementController::class, 'runReport'])->middleware('throttle:20,1');
+    Route::get('/agency/reports/{id}',        [\App\Http\Controllers\Api\LawEnforcementController::class, 'report']);
+    Route::get('/agency/reports/{id}/pdf',    [\App\Http\Controllers\Api\LawEnforcementController::class, 'reportPdf']);
+    Route::get('/agency/billing',             [\App\Http\Controllers\Api\LawEnforcementController::class, 'billing']);
+    Route::get('/admin/agencies',                            [\App\Http\Controllers\Api\LawEnforcementController::class, 'adminAgencies']);
+    Route::get('/admin/agencies/{id}',                       [\App\Http\Controllers\Api\LawEnforcementController::class, 'adminAgency'])->whereNumber('id');
+    Route::get('/admin/law-enforcement',                     [\App\Http\Controllers\Api\LawEnforcementController::class, 'adminLog']);
+    Route::put('/admin/law-enforcement/requests/{id}',       [\App\Http\Controllers\Api\LawEnforcementController::class, 'decideRequest']);
+    Route::get('/admin/law-enforcement/requests/{id}/file',  [\App\Http\Controllers\Api\LawEnforcementController::class, 'requestFile']);
     Route::get('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'show'])->middleware('perm:carrier:company.payouts=view,factor:company.payouts=view');
     Route::put('/org/remittance',                  [\App\Http\Controllers\Api\OrgRemittanceController::class, 'update'])->middleware('perm:carrier:company.payouts,factor:company.payouts');
     Route::get('/org/members',                     [OrgController::class, 'members']);
@@ -289,11 +307,11 @@ Route::middleware(['auth:sanctum', 'account.status', 'email.verified', 'view.as'
     Route::post('/shipper/verify/business/submit', [ShipperVerificationController::class, 'submitBusiness'])->middleware('perm:shipper:company.profile');
 
     // Payment methods
-    Route::get('/payment-methods',                          [PaymentMethodController::class, 'index'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view');
-    Route::post('/payment-methods/setup-intent',            [PaymentMethodController::class, 'setupIntent'])->middleware('perm:carrier:money.payments,shipper:money.methods');
-    Route::post('/payment-methods',                         [PaymentMethodController::class, 'store'])->middleware('perm:carrier:money.payments,shipper:money.methods');
-    Route::delete('/payment-methods/{paymentMethod}',       [PaymentMethodController::class, 'destroy'])->middleware('perm:carrier:money.payments,shipper:money.methods');
-    Route::post('/payment-methods/{paymentMethod}/default', [PaymentMethodController::class, 'setDefault'])->middleware('perm:carrier:money.payments,shipper:money.methods');
+    Route::get('/payment-methods',                          [PaymentMethodController::class, 'index'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view,agency:le.billing=view');
+    Route::post('/payment-methods/setup-intent',            [PaymentMethodController::class, 'setupIntent'])->middleware('perm:carrier:money.payments,shipper:money.methods,agency:le.billing');
+    Route::post('/payment-methods',                         [PaymentMethodController::class, 'store'])->middleware('perm:carrier:money.payments,shipper:money.methods,agency:le.billing');
+    Route::delete('/payment-methods/{paymentMethod}',       [PaymentMethodController::class, 'destroy'])->middleware('perm:carrier:money.payments,shipper:money.methods,agency:le.billing');
+    Route::post('/payment-methods/{paymentMethod}/default', [PaymentMethodController::class, 'setDefault'])->middleware('perm:carrier:money.payments,shipper:money.methods,agency:le.billing');
 
     // Transactions
     Route::get('/transactions', [TransactionController::class, 'index'])->middleware('perm:carrier:money.payments=view,shipper:money.payments=view');

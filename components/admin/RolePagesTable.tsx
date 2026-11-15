@@ -5,7 +5,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { NAV } from '@/components/layout/Sidebar';
 import { BUTTON_PERMISSION, PAGE_PERMISSION, canDo, canSee, type Permissions } from '@/lib/permissions';
 
-type CompanyType = 'carrier' | 'shipper' | 'factor' | 'receiver';
+type CompanyType = 'carrier' | 'shipper' | 'factor' | 'receiver' | 'agency';
 
 interface Props {
   type: CompanyType;

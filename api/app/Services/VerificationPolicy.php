@@ -58,7 +58,7 @@ class VerificationPolicy
     {
         $x = [['owner_email', 'Owner email verified', 'Account', true, true]];
         if ($type === 'shipper') $x[] = ['phone_verified', 'Business phone verified', 'Business', false, true];
-        if (in_array($type, ['carrier', 'factor'], true)) $x[] = ['owner_identity', 'Owner identity', 'People', true, false];
+        if (in_array($type, ['carrier', 'factor', 'agency'], true)) $x[] = ['owner_identity', 'Owner identity', 'People', true, false];
         if ($type === 'carrier') {
             $x[] = ['owner_background', 'Owner background check', 'People', true, false];
             $x[] = ['drivers_approved', 'Drivers approved', 'People', false, false];

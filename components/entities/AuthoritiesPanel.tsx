@@ -125,8 +125,10 @@ function Line({ label, children }: { label: string; children: React.ReactNode })
  * (a carrier that also brokers) gets one row. Insurance is not repeated: it is synced to the company's
  * insurance items (api Authorities::syncFromOrg).
  */
-export function AuthorityRows({ items, orgType, orgId, onChange }: {
+export function AuthorityRows({ items, orgType, orgId, onChange, readOnly = false }: {
   items: Authority[]; orgType: string; orgId: number; onChange: () => void;
+  /** Law enforcement: shown, not changed */
+  readOnly?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ kind: 'broker', dot_number: '', mc_number: '' });
@@ -143,10 +145,10 @@ export function AuthorityRows({ items, orgType, orgId, onChange }: {
   };
   const status = (a: Authority) => (
     <span className="inline-flex flex-wrap items-center gap-2">
-      <select value={a.status} onChange={(e) => update(a, { status: e.target.value })} aria-label="Authority status"
+      {readOnly ? <span className="capitalize">{a.status}</span> : <select value={a.status} onChange={(e) => update(a, { status: e.target.value })} aria-label="Authority status"
         className="rounded-lg border border-[var(--color-cream-dark)] bg-[var(--color-white)] px-2 py-0.5 text-[13px]">
         {['pending', 'active', 'inactive', 'revoked'].map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
+      </select>}
       {a.status === 'active' && !a.good_standing && <Pill tone="bad">Insurance lapsed</Pill>}
     </span>
   );
@@ -162,7 +164,7 @@ export function AuthorityRows({ items, orgType, orgId, onChange }: {
         {main.kind === 'carrier' && <>
           <Line label="Hazardous materials">
             <label className="inline-flex items-center gap-2">
-              <input type="checkbox" checked={main.hazmat_authorized} onChange={() => update(main, { hazmat_authorized: !main.hazmat_authorized })} className="h-3.5 w-3.5 accent-[var(--color-teal)]" />
+              <input type="checkbox" checked={main.hazmat_authorized} disabled={readOnly} onChange={() => update(main, { hazmat_authorized: !main.hazmat_authorized })} className="h-3.5 w-3.5 accent-[var(--color-teal)]" />
               {main.hazmat_authorized ? 'Authorized' : 'Not authorized'}
             </label>
           </Line>
@@ -177,7 +179,7 @@ export function AuthorityRows({ items, orgType, orgId, onChange }: {
           </span>
         </Line>
       ))}
-      <div className="px-4 py-2.5">
+      {!readOnly && <div className="px-4 py-2.5">
         {adding ? (
           <div className="space-y-2">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -199,7 +201,7 @@ export function AuthorityRows({ items, orgType, orgId, onChange }: {
             <Plus size={13} /> Add another authority
           </button>
         )}
-      </div>
+      </div>}
     </>
   );
 }

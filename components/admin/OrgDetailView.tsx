@@ -26,6 +26,10 @@ import { AdminReviews } from '@/components/admin/AdminReviews';
 import { MetricTiles, type Metric } from '@/components/entities/PerformancePanel';
 import { CategoriesEditor } from '@/components/entities/CategoriesEditor';
 import { useCatalog, nameOf } from '@/components/entities/catalog';
+import { useCurrentUser } from '@/components/layout/PermissionsContext';
+
+/** Law enforcement sees these tabs, read only (App\Support\LawEnforcement) */
+const OFFICER_TABS: Tab[] = ['overview', 'business', 'services', 'compliance', 'vehicles', 'team', 'performance'];
 
 interface CompanyDetail {
   company: Row & { name: string; type: 'carrier' | 'shipper' | 'factor' | 'receiver' | 'broker' };
@@ -228,6 +232,7 @@ export function OrgDetailView({ id }: { id: string }) {
   const [notes, setNotes] = useState('');
   const [override, setOverride] = useState(false);
   const [tab, setTab] = useState<Tab>('overview');
+  const officer = useCurrentUser()?.role === 'agency';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-company', id],
@@ -271,7 +276,7 @@ export function OrgDetailView({ id }: { id: string }) {
   const act = data.activity;
   const ownerApproved = data.members.some((m) => m.role === 'owner' && (m.person_status === 'approved' || m.person_status === 'not_required'));
   const owner = c.owner as Row | null;
-  const tabs = isCarrier ? CARRIER_TABS : SHIPPER_TABS;
+  const tabs = (isCarrier ? CARRIER_TABS : SHIPPER_TABS).filter((x) => !officer || OFFICER_TABS.includes(x.id));
   const current = tabs.some((x) => x.id === tab) ? tab : (tabs[0]?.id ?? 'overview');
   const inputCls = 'w-full bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-teal)]';
   const noProfile = <p className="text-sm italic text-[var(--color-text-faint)]">The owner hasn&apos;t filled in a profile yet.</p>;
@@ -365,17 +370,17 @@ export function OrgDetailView({ id }: { id: string }) {
 
       {/* Overview */}
       {current === 'overview' && (<>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {!officer && <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <Stat label="Shipments" value={act.shipments ?? 0} />
           <Stat label="Active" value={act.active ?? 0} />
           <Stat label="Delivered" value={act.delivered ?? 0} />
           <Stat label={isCarrier ? 'Earned' : 'Spent'} value={formatCurrency(Number(act.value ?? 0))} />
           {isCarrier ? <Stat label="Offers" value={act.bids ?? 0} /> : <Stat label="Contracts" value={t?.contracts.length ?? 0} />}
-        </div>
+        </div>}
 
         {data.checklist.length > 0 && <ChecklistTable rows={data.checklist} />}
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {!officer && <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Panel title="Company approval" action={<CompanyStatusBadge status={v.status} />}
             subtitle={v.updated_at ? `${new Date(v.updated_at).toLocaleString()}${v.updated_by ? ` by ${v.updated_by}` : ''}` : 'Not reviewed yet'}>
             <div className="space-y-3">
@@ -414,7 +419,7 @@ export function OrgDetailView({ id }: { id: string }) {
               </button>
             </div>
           </Panel>
-        </div>
+        </div>}
       </>)}
 
       {/* Business */}
@@ -427,7 +432,7 @@ export function OrgDetailView({ id }: { id: string }) {
             <Details data={c as Row} fields={[['org_name', 'Company name'], ['plan', 'Plan'], ['status', 'Account status'], ['created_at', 'Created']]} />
           </Panel>
           {/* CategoriesEditor draws its own card */}
-          {t && <CategoriesEditor value={t.categories ?? []} saveUrl={`/api/v1/admin/companies/${id}/categories`} onSaved={() => refresh()} />}
+          {t && !officer && <CategoriesEditor value={t.categories ?? []} saveUrl={`/api/v1/admin/companies/${id}/categories`} onSaved={() => refresh()} />}
         </div>
       )}
 
@@ -450,11 +455,11 @@ export function OrgDetailView({ id }: { id: string }) {
       {current === 'compliance' && (<>
         {/* Each item once: the company's data with its status, file and Verify. The authority's status sits under its USDOT / MC. */}
         <ComplianceItems variant="data" items={data.compliance ?? []}
-          uploadUrl={(key) => `/api/v1/admin/companies/${id}/compliance/${key}`}
-          verifyUrl={(key) => `/api/v1/admin/companies/${id}/compliance/${key}/verify`}
+          uploadUrl={officer ? undefined : (key) => `/api/v1/admin/companies/${id}/compliance/${key}`}
+          verifyUrl={officer ? undefined : (key) => `/api/v1/admin/companies/${id}/compliance/${key}/verify`}
           onChange={() => refresh()}
           sectionExtra={(sec) => t && (sec === 'Operating authority' || sec === 'Authority')
-            ? <AuthorityRows items={t.authorities ?? []} orgType={String(c.type)} orgId={Number(id)} onChange={() => refresh()} />
+            ? <AuthorityRows items={t.authorities ?? []} orgType={String(c.type)} orgId={Number(id)} onChange={() => refresh()} readOnly={officer} />
             : null} />
         {/* What FMCSA itself holds, saved daily: filings, BOC-3, authority history, revocations, safety */}
         {(isCarrier || c.type === 'broker') && (
@@ -546,7 +551,7 @@ export function OrgDetailView({ id }: { id: string }) {
       {/* Team */}
       {current === 'team' && (<>
         <Panel flush title="Members" subtitle={`${data.members.length} ${data.members.length === 1 ? 'person' : 'people'} · click a row to review the person`}
-          action={<Link href={`/admin/people?type=${c.type}`} className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-teal)] hover:underline">All people <ExternalLink size={12} /></Link>}>
+          action={officer ? undefined : <Link href={`/admin/people?type=${c.type}`} className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-teal)] hover:underline">All people <ExternalLink size={12} /></Link>}>
           {data.members.length === 0 ? (
             <p className="px-4 py-3 text-sm italic text-[var(--color-text-faint)]">No members.</p>
           ) : (

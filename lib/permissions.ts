@@ -51,10 +51,25 @@ export const PAGE_PERMISSION: Record<string, [string, 'see' | 'do']> = {
   // Factor
   '/factor/factoring':               ['loads.view', 'see'],
   '/factor/payments':                ['loads.view', 'see'],
+  // Law enforcement (admins have no matrix, so these never hide a page from them)
+  '/admin/companies':                ['le.companies', 'see'],
+  '/admin/people':                   ['le.people', 'see'],
+  '/admin/shipments':                ['le.loads', 'see'],
+  '/admin/ops/tracking':             ['le.tracking', 'see'],
+  '/agency/records':                 ['le.records', 'see'],
+  '/agency/history':                 ['le.history', 'see'],
+  '/agency/reports':                 ['le.reports', 'see'],
+  '/agency/billing':                 ['le.billing', 'see'],
 };
 
 /** Buttons hidden by the matrix, by company type: [label, action, 'see' | 'do'] (keep in step with the pages that use useCan) */
-export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'broker' | 'factor' | 'receiver', [string, string, 'see' | 'do'][]> = {
+export const BUTTON_PERMISSION: Record<'carrier' | 'shipper' | 'broker' | 'factor' | 'receiver' | 'agency', [string, string, 'see' | 'do'][]> = {
+  agency: [
+    ['Team: Invite, change role, remove',        'team.manage',  'do'],
+    ['New records request',                      'le.records',   'do'],
+    ['Run business report',                      'le.reports',   'do'],
+    ['History: whole agency',                    'le.history',   'do'],
+  ],
   carrier: [
     ['Browse Jobs (dashboard)',                  'loads.board',  'see'],
     ['Place Bid (load board)',                   'loads.bid',    'do'],

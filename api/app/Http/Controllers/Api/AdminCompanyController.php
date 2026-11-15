@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\FreightJob;
 use App\Models\User;
 use App\Services\PersonChecks;
+use App\Support\LawEnforcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,9 @@ class AdminCompanyController extends Controller
     // GET /api/v1/admin/companies?type=all|carrier|shipper&status=...&q=...
     public function index(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isPlatformAdmin(), 403);
+        // Officers search this page read only (App\Support\LawEnforcement); they never list every company
+        $staff = LawEnforcement::staffOr($request, 'le.companies');
+        if (!$staff) return $this->officerSearch($request);
 
         $data = $request->validate([
             'type'   => ['nullable', 'in:all,carrier,shipper,factor,receiver,broker'],
@@ -40,7 +43,7 @@ class AdminCompanyController extends Controller
         // Receivers, and brokers or anything else a customer only listed, are in Organizations (/admin/orgs).
         $all   = ($data['scope'] ?? 'companies') === 'all';
         $own   = ['shipper', 'broker', 'carrier', 'factor'];
-        $types = ($data['type'] ?? 'all') === 'all' ? ($all ? Organization::TYPES : $own) : [$data['type']];
+        $types = ($data['type'] ?? 'all') === 'all' ? ($all ? array_values(array_diff(Organization::TYPES, ['agency'])) : $own) : [$data['type']];
         if (!$all && !in_array($types[0], $own, true)) {
             return response()->json(['message' => 'Receivers are in Organizations.'], 422);
         }
@@ -94,7 +97,8 @@ class AdminCompanyController extends Controller
     // GET /api/v1/admin/companies/{org}
     public function show(Request $request, Organization $org): JsonResponse
     {
-        abort_unless($request->user()->isPlatformAdmin(), 403);
+        $staff = LawEnforcement::staffOr($request, 'le.companies');
+        abort_if(!$staff && $org->type === 'agency', 404);
 
         $org->load(['owner', 'orgMembers.user.personVerification']);
         $isCarrier = $org->type === 'carrier';
@@ -107,8 +111,7 @@ class AdminCompanyController extends Controller
             ? FreightJob::whereIn('id', \App\Models\JobStop::whereIn('location_id', $org->locations()->select('id'))->select('freight_job_id'))->where('status', '!=', 'draft')
             : FreightJob::where($partyColumn, $org->id)->where('status', '!=', 'draft');
 
-        return response()->json([
-            'data' => [
+        $data = [
                 'company' => [
                     'id'         => $org->id,
                     'name'       => $org->name,
@@ -181,8 +184,62 @@ class AdminCompanyController extends Controller
                         'agreed_cost' => $j->amount(),
                         'created_at'  => $j->created_at?->toISOString(),
                     ]),
-            ],
-        ]);
+        ];
+        if (!$staff) {
+            LawEnforcement::log($request, 'view', 'companies', ['subject_type' => 'company', 'subject_id' => $org->id, 'subject_label' => $org->name]);
+            $data = $this->forOfficer($data);
+        }
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * An officer's search: USDOT, MC or EIN (exact) or part of the name, at least three characters.
+     * Every company type an officer may stop or investigate; never agencies.
+     */
+    private function officerSearch(Request $request): JsonResponse
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < LawEnforcement::MIN_SEARCH) return response()->json(['data' => [], 'search_required' => true]);
+        $digits = preg_replace('/\D/', '', $q);
+        $orgs = Organization::whereIn('type', ['carrier', 'shipper', 'broker', 'factor', 'receiver'])
+            ->where(fn ($w) => $w->where('name', 'ilike', "%{$q}%")->orWhere('legal_name', 'ilike', "%{$q}%")
+                ->when($digits !== '', fn ($w) => $w->orWhere('carrier_dot_number', $digits)->orWhere('carrier_mc_number', $digits)
+                    ->orWhere('fmcsa_broker_mc', $digits)->orWhereRaw("regexp_replace(coalesce(tax_id, ''), '\D', '', 'g') = ?", [$digits])))
+            ->with('owner')->orderBy('name')->limit(25)->get();
+        LawEnforcement::log($request, 'search', 'companies', ['query' => $q, 'results' => $orgs->count()]);
+        return response()->json(['data' => $orgs->map(fn (Organization $o) => [
+            'id' => $o->id, 'name' => $o->name, 'type' => $o->type, 'members' => $o->orgMembers()->count(),
+            'owner' => $o->owner ? ['id' => $o->owner->id, 'name' => $o->owner->name, 'email' => null] : null,
+            'dot_number' => $o->carrier_dot_number, 'mc_number' => $o->carrier_mc_number ?: $o->fmcsa_broker_mc, 'ein' => null,
+            'verification_status' => $o->verification_status, 'status' => $o->status, 'city' => $o->city, 'state' => $o->state,
+            'locations' => null, 'contacts' => null, 'third_party' => $o->status === 'listed' || !$o->owner_id,
+            'joined_promotion' => null, 'created_at' => $o->created_at?->toISOString(),
+        ])]);
+    }
+
+    /** What an officer sees of a company: no money, plan, tax ID, contacts' emails, notes or internal settings */
+    private function forOfficer(array $d): array
+    {
+        $d['company'] = \Illuminate\Support\Arr::except($d['company'], ['plan', 'tax_id', 'stripe_mode', 'commission_rate', 'joined_promotion', 'email']);
+        if (isset($d['company']['owner'])) $d['company']['owner']['email'] = null;
+        $d['company_profile'] = $d['company_profile'] ? \Illuminate\Support\Arr::except($d['company_profile'], [
+            'tax_id', 'ein', 'stripe_account_status', 'bank_institution_name', 'bank_last4', 'bank_connected_at', 'notif_email', 'notif_sms', 'notif_recipients',
+            'preferred_categories', 'internal_ref_format', 'default_pickup_contact_name', 'default_pickup_contact_phone',
+        ]) : null;
+        $d['directory'] = null;
+        $d['verification']['notes'] = null;
+        $d['verification']['updated_by'] = null;
+        $d['members'] = collect($d['members'])->map(fn ($m) => array_merge($m, ['email' => null]))->values();
+        $d['activity'] = array_merge($d['activity'], ['value' => null, 'bids' => null]);
+        $d['recent_shipments'] = [];
+        if ($d['tabs']) {
+            $d['tabs'] = array_merge(\Illuminate\Support\Arr::except($d['tabs'], ['payment', 'payment_methods', 'subscription', 'invitations', 'contracts', 'preferred', 'locations']), [
+                'payment' => [], 'payment_methods' => [], 'subscription' => ['plan' => null, 'history' => []],
+                'invitations' => [], 'contracts' => [], 'preferred' => [], 'locations' => [],
+            ]);
+        }
+        $d['officer'] = true;
+        return $d;
     }
 
     // POST /api/v1/admin/companies/{org}/review   { action: approve|reject, notes?, override? }

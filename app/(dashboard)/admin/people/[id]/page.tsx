@@ -12,6 +12,7 @@ import { UserStatusBadge } from '@/components/admin/UserStatusBadge';
 import { Card, Fields, display, type Row } from '@/components/admin/DetailParts';
 import { CompanyStatusBadge } from '@/components/admin/CompanyBadges';
 import { CheckChip, PersonStatusBadge, ROLE_LABELS } from '@/components/admin/PersonBadges';
+import { useCurrentUser } from '@/components/layout/PermissionsContext';
 
 interface ChecklistItem { key: string; label: string; required: boolean; state: string; detail: string | null; credential_id?: number | null }
 interface Credential {
@@ -104,6 +105,8 @@ export default function AdminPersonPage() {
   const [bg, setBg] = useState({ result: '', reference: '', notes: '' });
   const [cred, setCred] = useState<Record<string, string>>({ type: '' });
   const [credFile, setCredFile] = useState<File | null>(null);
+  // Law enforcement: read only, no documents, no date of birth or address (App\Support\LawEnforcement)
+  const officer = useCurrentUser()?.role === 'agency';
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-person', id],
@@ -176,14 +179,14 @@ export default function AdminPersonPage() {
         <div>
           <h1 className="page-title">{person.name}</h1>
           <p className="mt-1 text-sm text-[var(--color-text-faint)]">
-            {person.email} · {data.role ? ROLE_LABELS[data.role] ?? data.role : 'No role'}
+            {person.email ? `${person.email} · ` : ''}{data.role ? ROLE_LABELS[data.role] ?? data.role : 'No role'}
             {data.company && <> at <Link href={`/admin/companies/${data.company.id}`} className="text-[var(--color-teal)] hover:underline">{data.company.name}</Link></>}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <UserStatusBadge status={person.account_status} />
           <PersonStatusBadge status={v.status} />
-          <Link href={`/admin/users/${person.id}`} className="text-sm font-medium text-[var(--color-teal)] hover:underline">Account →</Link>
+          {!officer && <Link href={`/admin/users/${person.id}`} className="text-sm font-medium text-[var(--color-teal)] hover:underline">Account →</Link>}
         </div>
       </div>
 
@@ -208,6 +211,7 @@ export default function AdminPersonPage() {
               </p>
             )}
             {missing.length > 0 && <p className="text-sm text-amber-700">Still needed: {missing.join(', ')}.</p>}
+            {!officer && <>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional, kept on the record)" rows={2} className={inputCls} />
             <div className="flex gap-2">
               <button
@@ -226,6 +230,7 @@ export default function AdminPersonPage() {
                 <XCircle size={14} /> Reject
               </button>
             </div>
+            </>}
           </div>
         )}
       </Card>
@@ -259,7 +264,8 @@ export default function AdminPersonPage() {
               Status: <span className="font-medium">{display('status', data.identity.status)}</span>
               {data.identity.failure_reason && <span className="text-[var(--color-danger)]">· {data.identity.failure_reason}</span>}
             </div>
-            <Fields data={data.identity} fields={IDENTITY_FIELDS} />
+            <Fields data={data.identity} fields={officer ? IDENTITY_FIELDS.filter(([k]) => k in data.identity!) : IDENTITY_FIELDS} />
+            {!officer && <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {data.identity.has_id_front ? <IdentityImage userId={person.id} kind="id_front" label="ID front" /> : <IdentityPlaceholder label="ID front" />}
               {data.identity.has_id_back ? <IdentityImage userId={person.id} kind="id_back" label="ID back" /> : <IdentityPlaceholder label="ID back" />}
@@ -285,6 +291,7 @@ export default function AdminPersonPage() {
                 Mark failed
               </button>
             </div>
+            </>}
           </div>
         )}
       </Card>
@@ -299,6 +306,7 @@ export default function AdminPersonPage() {
               {v.background_reference && <span className="text-xs text-[var(--color-text-faint)]">· Ref {v.background_reference}</span>}
             </div>
             {v.background_notes && <p className="text-sm text-[var(--color-text-muted)]">{v.background_notes}</p>}
+            {!officer && <>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <select value={bg.result} onChange={(e) => setBg({ ...bg, result: e.target.value })} aria-label="Background result" className={inputCls}>
                 <option value="">Record a result…</option>
@@ -317,6 +325,7 @@ export default function AdminPersonPage() {
             >
               Save background result
             </button>
+            </>}
           </div>
         </Card>
       )}
@@ -355,7 +364,7 @@ export default function AdminPersonPage() {
                         {c.verified_at ? <>{new Date(c.verified_at).toLocaleDateString()}{c.verified_by ? ` · ${c.verified_by}` : ''}</> : 'No'}
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                        {!officer && <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                           {c.has_document && (
                             <button onClick={() => openFile(`/api/v1/admin/people/credentials/${c.id}/file`)} title="Open document"
                               className="text-[var(--color-teal)] hover:underline"><FileText size={14} /></button>
@@ -374,7 +383,7 @@ export default function AdminPersonPage() {
                           )}
                           <button onClick={() => { if (confirm(`Remove ${c.type_label}?`)) deleteCred.mutate(c.id); }} disabled={deleteCred.isPending}
                             title="Remove" className="text-[var(--color-text-faint)] hover:text-[var(--color-danger)]"><Trash2 size={14} /></button>
-                        </div>
+                        </div>}
                       </td>
                     </tr>
                   ))}
@@ -383,7 +392,7 @@ export default function AdminPersonPage() {
             </div>
           )}
 
-          <div className="rounded-lg border border-dashed border-[var(--color-cream-dark)] p-4">
+          {!officer && <div className="rounded-lg border border-dashed border-[var(--color-cream-dark)] p-4">
             <p className="mb-3 text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-text-faint)]">Add a credential (e.g. an MVR you pulled)</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <select value={cred.type} onChange={(e) => setCred({ ...cred, type: e.target.value })} aria-label="Credential type" className={inputCls}>
@@ -421,7 +430,7 @@ export default function AdminPersonPage() {
             >
               Add credential
             </button>
-          </div>
+          </div>}
         </div>
       </Card>
     </div>

@@ -10,6 +10,8 @@ import { UserStatusBadge } from '@/components/admin/UserStatusBadge';
 import {
   CheckChip, PersonStatusBadge, PERSON_STATUSES, ROLE_LABELS, ROLES_BY_TYPE, backgroundState,
 } from '@/components/admin/PersonBadges';
+import { useCurrentUser } from '@/components/layout/PermissionsContext';
+import { OfficerSearch } from '@/components/lawenforcement/OfficerSearch';
 
 interface PersonRow {
   id: number;
@@ -27,6 +29,8 @@ interface PersonRow {
   ready: boolean;
   status: string;
   created_at: string;
+  /** Law enforcement search: CDL number, state and class */
+  cdl?: string | null;
 }
 
 type CompanyType = 'all' | 'carrier' | 'shipper' | 'factor';
@@ -148,10 +152,47 @@ function People() {
   );
 }
 
+/** Law enforcement: search by CDL number or name; read only */
+function OfficerPeople() {
+  const router = useRouter();
+  return (
+    <OfficerSearch<PersonRow> title="People" placeholder="CDL number or name" endpoint="/api/v1/admin/people" icon={Users} empty="No one on Shipmater matches">
+      {(rows) => (
+        <div className="overflow-x-auto rounded-xl border border-[var(--color-cream-dark)]">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-cream-dark)] bg-[var(--color-slate)]">
+                {['Person', 'Company', 'Role', 'CDL', 'Identity', 'Background check', ''].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-sage-light)]">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.id} onClick={() => router.push(`/admin/people/${p.id}`)}
+                  className="cursor-pointer border-b border-[var(--color-cream-dark)] last:border-b-0 bg-[var(--color-white)] hover:bg-[var(--color-cream)] align-top">
+                  <td className="px-4 py-3 font-medium text-[var(--color-text)]">{p.name}</td>
+                  <td className="px-4 py-3 text-[var(--color-text-muted)]">{p.company?.name ?? '—'}</td>
+                  <td className="px-4 py-3">{p.role ? `${ROLE_LABELS[p.role] ?? p.role}${p.drives && p.role !== 'driver' ? ' · Driver' : ''}` : '—'}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--color-text-muted)]">{p.cdl ?? '—'}</td>
+                  <td className="px-4 py-3">{p.identity ? <CheckChip state={p.identity} /> : '—'}</td>
+                  <td className="px-4 py-3 text-xs">{p.background === 'done' ? 'Done' : '—'}</td>
+                  <td className="px-4 py-3 text-right text-sm font-medium text-[var(--color-teal)]">View</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </OfficerSearch>
+  );
+}
+
 export default function AdminPeoplePage() {
+  const officer = useCurrentUser()?.role === 'agency';
   return (
     <Suspense>
-      <People />
+      {officer ? <OfficerPeople /> : <People />}
     </Suspense>
   );
 }

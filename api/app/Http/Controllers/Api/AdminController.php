@@ -8,6 +8,7 @@ use App\Models\FreightJob;
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\PersonChecks;
+use App\Support\LawEnforcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -56,6 +57,8 @@ class AdminController extends Controller
     // GET /api/v1/admin/shipments
     public function shipments(Request $request): JsonResponse
     {
+        // Officers: loads they search for, only those in progress or delivered in the last 72 hours (Tier 2)
+        if (LawEnforcement::isOfficer($request->user())) return $this->officerLoads($request);
         if ($err = $this->requireAdmin($request)) return $err;
 
         $query = FreightJob::with(['stops', 'shipper', 'carrier', 'latestPing'])
@@ -82,14 +85,20 @@ class AdminController extends Controller
     // Full record for the admin detail page: the load (freight job) with its stops, plus related records.
     public function shipment(Request $request, FreightJob $job): JsonResponse
     {
-        if ($err = $this->requireAdmin($request)) return $err;
+        $officer = LawEnforcement::isOfficer($request->user());
+        if ($officer) {
+            $page = $request->query('page') === 'tracking' ? 'tracking' : 'loads';
+            LawEnforcement::requireOfficer($request->user(), $page === 'tracking' ? 'le.tracking' : 'le.loads');
+            [$reason, $case] = LawEnforcement::tier2($request);
+            abort_unless(LawEnforcement::loadInWindow($job), 403, 'This load is outside the 72-hour window. Send a records request for older loads.');
+            LawEnforcement::log($request, 'view', $page, ['subject_type' => 'load', 'subject_id' => $job->id, 'subject_label' => "Load #{$job->id}", 'reason' => $reason, 'case_number' => $case]);
+        } elseif ($err = $this->requireAdmin($request)) return $err;
 
         $shipment = $job->load(['stops', 'shipper', 'carrier', 'contract', 'offers.carrier', 'offers.user', 'people.user', 'latestPing']);
         $pings    = $shipment->gpsPings()->get();
         $receiver = $shipment->people->first(fn ($p) => $p->org_id === null)?->user;
 
-        return response()->json([
-            'data' => [
+        $data = [
                 'shipment'     => (new \App\Http\Resources\ShipmentResource($shipment))->toArray($request),
 
                 'shipper'      => $this->companySummary($shipment->shipper),
@@ -129,8 +138,54 @@ class AdminController extends Controller
                     'latest' => $pings->first()?->only(['lat', 'lng', 'speed', 'eta', 'pinged_at']),
                     'pings'  => $pings->take(50)->map->only(['lat', 'lng', 'speed', 'eta', 'pinged_at'])->values(),
                 ],
-            ],
-        ]);
+        ];
+        if ($officer) $data = $this->loadForOfficer($data);
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * An officer's load search: load number, reference number, or a plate or VIN on a carrier's fleet (that carrier's
+     * current loads). At least three characters; only loads inside the Tier 2 window.
+     */
+    private function officerLoads(Request $request): JsonResponse
+    {
+        $tracking = $request->query('page') === 'tracking';
+        LawEnforcement::requireOfficer($request->user(), $tracking ? 'le.tracking' : 'le.loads');
+        $q = trim((string) $request->query('q', ''));
+        $id = ltrim(preg_replace('/^(load\s*)?#?/i', '', $q), '0');
+        // A load number may be short; anything else needs a real search
+        if (mb_strlen($q) < LawEnforcement::MIN_SEARCH && !(ctype_digit($id) && $id !== '')) return response()->json(['data' => [], 'search_required' => true]);
+        $plate = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $q));
+        $carriers = DB::table('carrier_vehicles')
+            ->whereRaw("upper(regexp_replace(coalesce(license_plate, ''), '[^A-Za-z0-9]', '', 'g')) = ?", [$plate])
+            ->orWhereRaw('upper(coalesce(vin, \'\')) = ?', [$plate])->pluck('carrier_id');
+        $since = now()->subHours(LawEnforcement::LOAD_WINDOW_HOURS);
+        $loads = FreightJob::with(['stops', 'shipper', 'carrier', 'latestPing'])
+            ->where(fn ($w) => $w->where('reference_number', 'ilike', $q)
+                ->when(ctype_digit($id) && $id !== '', fn ($w) => $w->orWhere('id', (int) $id))
+                ->orWhereIn('carrier_id', $carriers))
+            ->where(fn ($w) => $w->where('status', 'in_progress')
+                ->orWhere(fn ($w) => $w->where('status', 'posted')->whereNotNull('carrier_id'))
+                ->when(!$tracking, fn ($w) => $w->orWhere(fn ($w) => $w->where('status', 'completed')->where('completed_at', '>=', $since))))
+            ->latest()->limit(25)->get();
+        LawEnforcement::log($request, 'search', $tracking ? 'tracking' : 'loads', ['query' => $q, 'results' => $loads->count()]);
+        return response()->json(['data' => collect(ShipmentResource::collection($loads)->toArray($request))
+            ->map(fn ($row) => \Illuminate\Support\Arr::except($row, ['agreed_cost', 'payment_status', 'tracking_token']))->values()]);
+    }
+
+    /** What an officer sees on a load: no rates, offers, payments, contract terms, emails or payout status */
+    private function loadForOfficer(array $d): array
+    {
+        $d['shipment'] = \Illuminate\Support\Arr::except($d['shipment'], ['agreed_cost', 'payment_status', 'payment_amount', 'posted_rate', 'market_rate', 'tracking_token']);
+        foreach (['shipper', 'carrier', 'receiver'] as $k) {
+            if ($d[$k]) $d[$k] = \Illuminate\Support\Arr::except($d[$k], ['email', 'stripe_account_status', 'stripe_mode', 'rating']);
+        }
+        $d['people'] = collect($d['people'])->map(fn ($p) => array_merge($p, ['email' => null]))->values();
+        $d['contract'] = null;
+        $d['bids'] = [];
+        $d['transactions'] = [];
+        $d['officer'] = true;
+        return $d;
     }
 
     /** The admin user page's company and person fields (no SSN, ID numbers or tokens) */

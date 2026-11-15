@@ -8,6 +8,8 @@ import { api } from '@/lib/api';
 import { ShipmentTable } from '@/components/shipments/ShipmentTable';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { Shipment, ShipmentStatus } from '@/types/shipment';
+import { useCurrentUser } from '@/components/layout/PermissionsContext';
+import { OfficerLoads } from '@/components/lawenforcement/OfficerLoads';
 
 // The same status tabs as the shipper's Shipments page, plus disputes
 const FILTERS: { label: string; value: string }[] = [
@@ -18,6 +20,11 @@ const FILTERS: { label: string; value: string }[] = [
 const KINDS = [{ label: 'All loads', value: 'all' }, { label: 'Marketplace', value: 'open' }, { label: 'Contract freight', value: 'contracted' }] as const;
 
 export default function AdminShipmentsPage() {
+  const officer = useCurrentUser()?.role === 'agency';
+  return officer ? <OfficerLoads /> : <StaffShipments />;
+}
+
+function StaffShipments() {
   const router = useRouter();
   const [filter, setFilter] = useState('all');
   const [kind, setKind] = useState<(typeof KINDS)[number]['value']>('all');

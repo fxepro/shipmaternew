@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Package, Handshake, Truck, Landmark, PackageCheck, Check } from 'lucide-react';
+import { Package, Handshake, Truck, Landmark, PackageCheck, Check, Siren } from 'lucide-react';
 import { authApi, orgApi, directoryApi } from '@/lib/api';
 import { establishSession, getRolePath } from '@/lib/auth';
 import { getTenantConfigClient, type TenantConfig } from '@/lib/tenant';
@@ -33,7 +33,7 @@ const schema = z.object({
   email:                 z.string().email('Enter a valid email'),
   password:              z.string().min(8, 'At least 8 characters'),
   password_confirmation: z.string(),
-  role:                  z.enum(['shipper', 'broker', 'carrier', 'receiver', 'factor']),
+  role:                  z.enum(['shipper', 'broker', 'carrier', 'receiver', 'factor', 'agency']),
   company_name:          z.string().optional(),
   joining:               z.boolean().optional(),
   claiming:              z.boolean().optional(),
@@ -78,6 +78,12 @@ const ROLES = [
     label:       'Factoring company',
     icon:        Landmark,
     description: 'Confirm NOAs and the loads you fund, and get paid for them directly.',
+  },
+  {
+    value:       'agency' as const,
+    label:       'Law enforcement',
+    icon:        Siren,
+    description: 'Look up carriers, drivers and loads at the roadside. Agencies are approved by Shipmater.',
   },
 ];
 
@@ -142,7 +148,7 @@ function RegisterForm() {
   const [matches, setMatches] = useState<Claimable[]>([]);
   useEffect(() => {
     const q = companyName.trim();
-    if (inviteToken || claimOrg || selectedRole === 'factor' || q.length < 3) { setMatches([]); return; }
+    if (inviteToken || claimOrg || selectedRole === 'factor' || selectedRole === 'agency' || q.length < 3) { setMatches([]); return; }
     const t = setTimeout(() => {
       directoryApi.claimable(q).then(r => setMatches(r.data.data as Claimable[])).catch(() => setMatches([]));
     }, 350);
@@ -246,14 +252,14 @@ function RegisterForm() {
             <p style={{ fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 10 }}>
               I am a…
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5" style={{ gap: 10 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6" style={{ gap: 10 }}>
               {ROLES.map(({ value, label, icon: Icon, description }) => {
                 const active = selectedRole === value;
                 return (
                   <button
                     key={value}
                     type="button"
-                    onClick={() => { setValue('role', value); if (value === 'factor') pickClaim(null); }}
+                    onClick={() => { setValue('role', value); if (value === 'factor' || value === 'agency') pickClaim(null); }}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -315,12 +321,12 @@ function RegisterForm() {
             </div>
             <div style={{ display: inviteUsable ? 'none' : undefined }}>
               <label style={{ display: 'block', fontFamily: BODY, fontSize: 13, fontWeight: 500, color: B.gray70, marginBottom: 6 }}>
-                Legal business name
+                {selectedRole === 'agency' ? 'Agency name' : 'Legal business name'}
               </label>
               <input
                 style={inputStyle}
                 className="outline-none focus:border-[#0096C7]"
-                placeholder="Acme Logistics LLC"
+                placeholder={selectedRole === 'agency' ? 'Ohio State Highway Patrol' : 'Acme Logistics LLC'}
                 readOnly={!!claimOrg}
                 {...register('company_name')}
               />
@@ -332,7 +338,7 @@ function RegisterForm() {
                   It&apos;s yours straight away if your email is one of its listed contacts; otherwise Shipmater confirms it first.{' '}
                   <button type="button" onClick={() => pickClaim(null)} style={{ color: B.tealDark, fontWeight: 600, background: 'none', border: 0, cursor: 'pointer', padding: 0 }}>Not mine</button>
                 </div>
-              ) : matches.length > 0 ? (
+              ) : selectedRole === 'agency' ? null : matches.length > 0 ? (
                 <div style={{ marginTop: 6, border: `1px solid ${B.gray10}`, borderRadius: 6, padding: '8px 10px' }}>
                   <p style={{ fontSize: 12, color: B.gray70, marginBottom: 4 }}>Already listed on {brandName}. Is one of these your company?</p>
                   {matches.map(o => (

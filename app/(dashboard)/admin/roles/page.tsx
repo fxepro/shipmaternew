@@ -8,7 +8,7 @@ import { RolePagesTable } from '@/components/admin/RolePagesTable';
 import { toast } from 'sonner';
 import { adminRoleApi } from '@/lib/api';
 
-type CompanyType = 'carrier' | 'shipper' | 'factor' | 'receiver';
+type CompanyType = 'carrier' | 'shipper' | 'factor' | 'receiver' | 'agency';
 type Level = 'full' | 'view' | 'assigned' | 'self' | 'none';
 
 interface Action {
@@ -22,9 +22,9 @@ interface Change {
 }
 
 const TYPES: { id: CompanyType; label: string }[] = [
-  { id: 'carrier', label: 'Carrier' }, { id: 'shipper', label: 'Shipper' }, { id: 'factor', label: 'Factor' }, { id: 'receiver', label: 'Receiver' },
+  { id: 'carrier', label: 'Carrier' }, { id: 'shipper', label: 'Shipper' }, { id: 'factor', label: 'Factor' }, { id: 'receiver', label: 'Receiver' }, { id: 'agency', label: 'Law enforcement' },
 ];
-const ROLE_LABEL: Record<string, string> = { owner: 'Owner', staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer' };
+const ROLE_LABEL: Record<string, string> = { owner: 'Owner', staff: 'Staff', dispatcher: 'Dispatcher', driver: 'Driver', viewer: 'Viewer', supervisor: 'Supervisor', officer: 'Officer' };
 const LEVEL: Record<Level, { label: string; icon: typeof Check | null; cls: string }> = {
   full:     { label: 'Full',     icon: Check, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   view:     { label: 'View',     icon: Eye,   cls: 'bg-sky-50 text-sky-700 border-sky-200' },

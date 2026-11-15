@@ -23,6 +23,7 @@ class PersonChecks
         'broker'  => ['owner', 'staff', 'agent', 'viewer'],
         'factor'  => ['owner', 'staff', 'viewer'],
         'receiver' => ['owner', 'staff', 'viewer'],
+        'agency'   => ['owner', 'supervisor', 'officer'],
     ];
 
     /** What each role does, shown when inviting someone or changing their role */
@@ -32,10 +33,12 @@ class PersonChecks
         'agent'      => 'Posts loads for customers, books carriers and manages carrier contracts',
         'driver'     => 'Moves the freight; needs Shipmater approval',
         'viewer'     => 'Read-only',
+        'supervisor' => 'Officer who also sees the agency’s search history and manages the team',
+        'officer'    => 'Searches companies, people, loads and tracking; sees their own history',
     ];
 
     public const ROLE_LABELS = [
-        'owner' => 'Owner', 'staff' => 'Staff', 'dispatcher' => 'Dispatcher', 'agent' => 'Agent', 'driver' => 'Driver', 'viewer' => 'Viewer',
+        'owner' => 'Owner', 'staff' => 'Staff', 'dispatcher' => 'Dispatcher', 'agent' => 'Agent', 'driver' => 'Driver', 'viewer' => 'Viewer', 'supervisor' => 'Supervisor', 'officer' => 'Officer',
     ];
 
     public const CREDENTIAL_LABELS = [

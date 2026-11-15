@@ -141,6 +141,10 @@ class ComplianceRules
             'receiver' => [
                 $up('Insurance', 'coi', 'Certificate of insurance', false, null, true),
             ],
+            // Law enforcement agencies: a signed letter on agency letterhead naming the person who signed up
+            'agency' => [
+                $up('Agency', 'agency_letter', 'Authorization letter (agency letterhead, signed by a supervisor)', true),
+            ],
             default => [],
         };
 

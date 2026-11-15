@@ -23,8 +23,8 @@ class FmcsaRecordController extends Controller
     /** GET /api/v1/admin/companies/{org}/fmcsa-record: any carrier or broker, for admins */
     public function adminShow(Request $request, Organization $org, FmcsaOpenData $data): JsonResponse
     {
-        abort_unless($request->user()->isPlatformAdmin(), 403);
+        $staff = \App\Support\LawEnforcement::staffOr($request, 'le.companies');
         abort_unless(in_array($org->type, ['carrier', 'broker'], true), 404, 'Only carriers and brokers have an FMCSA record.');
-        return response()->json($data->forOrg($org, $request->boolean('fresh')));
+        return response()->json($data->forOrg($org, $staff && $request->boolean('fresh')));
     }
 }

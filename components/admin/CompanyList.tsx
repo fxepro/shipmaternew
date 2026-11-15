@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Truck, Landmark, PackageCheck, Handshake } from 'lucide-react';
+import { Building2, Truck, Landmark, PackageCheck, Handshake, Search } from 'lucide-react';
+import { useCurrentUser } from '@/components/layout/PermissionsContext';
 import { api } from '@/lib/api';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { CompanyStatusBadge, COMPANY_STATUSES } from '@/components/admin/CompanyBadges';
@@ -39,7 +40,7 @@ const TABS: { key: Tab; label: string }[] = [
 const ORG_TABS: { key: Tab; label: string }[] = [...TABS, { key: 'receiver', label: 'Receivers' }];
 const TYPE_LABEL: Record<OrgType, string> = { carrier: 'Carrier', shipper: 'Shipper', factor: 'Factor', receiver: 'Receiver', broker: 'Broker' };
 const TYPE_ICON: Record<OrgType, React.ElementType> = { carrier: Truck, shipper: Building2, factor: Landmark, receiver: PackageCheck, broker: Handshake };
-/** Shipmater reviews shippers, brokers, carriers and factors */
+/** Shipmater reviews shippers, brokers, carriers, factors and law enforcement agencies */
 const REVIEWED: OrgType[] = ['carrier', 'shipper', 'broker', 'factor'];
 
 /**
@@ -53,17 +54,68 @@ export function CompanyList({ initialType = 'all', scope = 'companies' }: { init
   const [type, setType] = useState<Tab>(initialType);
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
+  // Officers (law enforcement) search on the server: nothing lists until they search, and each search is logged
+  const officer = useCurrentUser()?.role === 'agency';
+  const [submitted, setSubmitted] = useState('');
 
-  const { data: res, isLoading } = useQuery({
-    queryKey: ['admin-companies', scope, type, status],
-    queryFn: () => api.get('/api/v1/admin/companies', { params: { type, status, scope: orgs ? 'all' : 'companies' } }),
+  const { data: res, isLoading, isFetching } = useQuery({
+    queryKey: officer ? ['admin-companies', 'officer', submitted] : ['admin-companies', scope, type, status],
+    queryFn: () => api.get('/api/v1/admin/companies', { params: officer ? { q: submitted } : { type, status, scope: orgs ? 'all' : 'companies' } }),
+    enabled: !officer || submitted.length >= 3,
   });
 
-  const q = search.trim().toLowerCase();
+  const q = officer ? '' : search.trim().toLowerCase();
   const companies: CompanyRow[] = (res?.data?.data ?? []).filter(
     (c: CompanyRow) => !q || c.name.toLowerCase().includes(q) || c.owner?.name.toLowerCase().includes(q) || (c.city ?? '').toLowerCase().includes(q)
   );
-  const reviewTab = type === 'carrier' || type === 'shipper';
+  const reviewTab = officer || type === 'carrier' || type === 'shipper';
+
+  if (officer) {
+    return (
+      <div className="space-y-5">
+        <h1 className="page-title">Companies</h1>
+        <form onSubmit={(e) => { e.preventDefault(); setSubmitted(search.trim()); }} className="flex max-w-xl gap-2">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} autoFocus placeholder="USDOT, MC, EIN or company name"
+            className="flex-1 bg-[var(--color-white)] border border-[var(--color-cream-dark)] rounded-lg px-3 py-2 text-base focus:outline-none focus:border-[var(--color-teal)]" />
+          <button type="submit" disabled={search.trim().length < 3} className="btn btn-navy flex items-center gap-1.5 disabled:opacity-50"><Search size={14} /> Search</button>
+        </form>
+        {submitted.length < 3 ? null : isLoading || isFetching ? <div className="skeleton h-40 rounded-xl" /> : companies.length === 0 ? (
+          <EmptyState icon={Building2} title="No company on Shipmater matches" />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-[var(--color-cream-dark)]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-cream-dark)] bg-[var(--color-slate)]">
+                  {['Company', 'Type', 'Owner', 'USDOT / MC', 'Status', ''].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.07em] text-[var(--color-sage-light)]">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {companies.map((c) => {
+                  const Icon = TYPE_ICON[c.type] ?? Building2;
+                  return (
+                    <tr key={c.id} onClick={() => router.push(`/admin/companies/${c.id}`)}
+                      className="cursor-pointer border-b border-[var(--color-cream-dark)] last:border-b-0 bg-[var(--color-white)] hover:bg-[var(--color-cream)]">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-[var(--color-text)]">{c.name}</p>
+                        {(c.city || c.state) && <p className="text-xs text-[var(--color-text-muted)]">{[c.city, c.state].filter(Boolean).join(', ')}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--color-text-muted)]"><span className="inline-flex items-center gap-1.5"><Icon size={13} /> {TYPE_LABEL[c.type] ?? c.type}</span></td>
+                      <td className="px-4 py-3">{c.owner?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--color-text-muted)]">{[c.dot_number && `DOT ${c.dot_number}`, c.mc_number && `MC ${c.mc_number}`].filter(Boolean).join(' · ') || '—'}</td>
+                      <td className="px-4 py-3"><CompanyStatusBadge status={c.verification_status} /></td>
+                      <td className="px-4 py-3 text-right text-sm font-medium text-[var(--color-teal)]">View</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const tabCls = (t: Tab) => t === type
     ? 'border-b-2 border-[var(--color-teal)] text-[var(--color-teal)] font-medium'

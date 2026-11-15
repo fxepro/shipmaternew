@@ -21,7 +21,7 @@ function errorMessage(e: unknown): string {
  * A company's saved cards and bank accounts, stored at Stripe. Shippers pay loads with the default one;
  * carriers pay Shipmater's fee on factored loads with it (docs/fees-and-billing.md).
  */
-export function PaymentMethods({ purpose }: { purpose: 'shipper' | 'carrier' }) {
+export function PaymentMethods({ purpose }: { purpose: 'shipper' | 'carrier' | 'agency' }) {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const list = useQuery({ queryKey: ['payment-methods'], queryFn: () => paymentApi.list().then((r) => r.data as { data: Method[]; fake: boolean }) });
@@ -42,13 +42,14 @@ export function PaymentMethods({ purpose }: { purpose: 'shipper' | 'carrier' }) 
         <p className="text-[13px] text-[var(--color-text-muted)]">
           {purpose === 'shipper'
             ? 'Your default method pays your loads: a card is held the day before pickup and charged at delivery; a bank account is charged at delivery.'
+            : purpose === 'agency' ? 'Business reports are added to a monthly statement and charged to your default method.'
             : 'Shipmater charges its fee on factored loads to your default method when your factor marks a load funded.'}
         </p>
 
         {list.isLoading && <div className="skeleton h-14 rounded-lg" />}
         {!list.isLoading && methods.length === 0 && !adding && (
           <p className="rounded-lg border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-base text-amber-800">
-            {purpose === 'shipper' ? 'No payment method yet. Add one before accepting bids or offers.' : 'No payment method yet. Add one so factored-load fees can be paid.'}
+            {purpose === 'shipper' ? 'No payment method yet. Add one before accepting bids or offers.' : purpose === 'agency' ? 'No payment method yet. Add one so business reports can be billed.' : 'No payment method yet. Add one so factored-load fees can be paid.'}
           </p>
         )}
 

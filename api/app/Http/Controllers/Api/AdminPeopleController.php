@@ -9,6 +9,7 @@ use App\Models\PersonIdentity;
 use App\Models\PersonVerification;
 use App\Models\User;
 use App\Services\PersonChecks;
+use App\Support\LawEnforcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -23,7 +24,9 @@ class AdminPeopleController extends Controller
     // GET /api/v1/admin/people?type=carrier|shipper&role=&status=&q=
     public function index(Request $request): JsonResponse
     {
-        abort_unless($request->user()->isPlatformAdmin(), 403);
+        // Officers search this page read only (App\Support\LawEnforcement); they never list everyone
+        $staff = LawEnforcement::staffOr($request, 'le.people');
+        if (!$staff) return $this->officerSearch($request);
 
         $data = $request->validate([
             'type'   => ['nullable', 'in:all,carrier,shipper,factor'],
@@ -85,13 +88,76 @@ class AdminPeopleController extends Controller
     // GET /api/v1/admin/people/{user}
     public function show(Request $request, User $user): JsonResponse
     {
-        abort_unless($request->user()->isPlatformAdmin(), 403);
+        $staff = LawEnforcement::staffOr($request, 'le.people');
+        abort_if(!$staff && in_array($user->role, ['admin', 'agency'], true), 404);
 
-        PersonChecks::refresh($user);
+        if ($staff) PersonChecks::refresh($user);
         $m  = PersonChecks::membership($user);
         $pv = PersonChecks::verification($user);
 
-        return response()->json(['data' => $this->detail($user, $m, $pv)]);
+        if ($staff) return response()->json(['data' => $this->detail($user, $m, $pv)]);
+        LawEnforcement::log($request, 'view', 'people', ['subject_type' => 'person', 'subject_id' => $user->id, 'subject_label' => $user->name]);
+        return response()->json(['data' => $this->forOfficer($this->detail($user, $m, $pv))]);
+    }
+
+    /**
+     * An officer's search: a CDL or other licence number (exact), or part of a name, at least three characters.
+     * People at companies only; never Shipmater staff or other officers.
+     */
+    private function officerSearch(Request $request): JsonResponse
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < LawEnforcement::MIN_SEARCH) return response()->json(['data' => [], 'search_required' => true]);
+        $number = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $q));
+        $byLicence = PersonCredential::whereRaw("upper(regexp_replace(coalesce(number, ''), '[^A-Za-z0-9]', '', 'g')) = ?", [$number])->pluck('user_id');
+        $people = User::whereNotIn('role', ['admin', 'agency'])
+            ->where(fn ($w) => $w->where('name', 'ilike', "%{$q}%")->orWhereIn('id', $byLicence))
+            ->orderBy('name')->limit(25)->get();
+        LawEnforcement::log($request, 'search', 'people', ['query' => $q, 'results' => $people->count()]);
+        return response()->json(['data' => $people->map(function (User $u) {
+            $m = PersonChecks::membership($u);
+            $checklist = PersonChecks::checklist($u, $m);
+            $pv = $u->personVerification;
+            $cdl = PersonCredential::where('user_id', $u->id)->where('type', 'cdl')->latest()->first();
+            return [
+                'id' => $u->id, 'name' => $u->name, 'email' => null,
+                'company' => $m['org'] ? ['id' => $m['org']->id, 'name' => PersonChecks::companyName($m['org'])] : null,
+                'company_type' => $m['type'], 'role' => $m['role'], 'drives' => (bool) ($m['drives'] ?? false),
+                'account_status' => $u->status ?? 'active', 'approval_required' => $checklist['approval_required'],
+                'identity' => $this->item($checklist, 'identity'),
+                'background' => $pv?->background_checked_at ? 'done' : null,
+                'credentials' => ['required_met' => 0, 'required_total' => 0, 'recorded' => 0, 'problems' => 0],
+                'cdl' => $cdl ? trim(implode(' · ', array_filter([$cdl->number, $cdl->issuing_state, $cdl->class ? "Class {$cdl->class}" : null]))) : null,
+                'ready' => $checklist['ready'],
+                'status' => $checklist['approval_required'] ? ($pv?->status ?? 'incomplete') : 'not_required',
+                'created_at' => $u->created_at?->toISOString(),
+            ];
+        })]);
+    }
+
+    /**
+     * What an officer sees of a person: name, company, identity verified (not the documents), licence numbers,
+     * credentials and whether a background check was done. Never date of birth, home address, SSN, ID images,
+     * background results, notes or the document reader's findings.
+     */
+    private function forOfficer(array $d): array
+    {
+        $d['person']['email'] = null;
+        $d['verification'] = [
+            'status' => $d['verification']['status'], 'notes' => null, 'reviewed_at' => $d['verification']['reviewed_at'], 'reviewed_by' => null,
+            'background_status' => $d['verification']['background_checked_at'] ? 'done' : 'not_started',
+            'background_reference' => null, 'background_notes' => null, 'background_checked_at' => $d['verification']['background_checked_at'],
+        ];
+        if ($d['identity']) {
+            $d['identity'] = \Illuminate\Support\Arr::only($d['identity'], [
+                'legal_first_name', 'legal_middle_name', 'legal_last_name', 'suffix', 'city', 'state', 'country',
+                'id_type', 'id_issuing_state', 'id_issuing_country', 'id_expiry_date', 'status', 'verification_method', 'verified_at',
+            ]) + ['has_id_front' => false, 'has_id_back' => false, 'has_selfie' => false, 'failure_reason' => null];
+        }
+        $d['credentials'] = collect($d['credentials'])->map(fn ($c) => array_merge($c, ['notes' => null, 'ai' => null, 'has_document' => false, 'verified_by' => null]))->values();
+        $d['checklist']['items'] = collect($d['checklist']['items'])->map(fn ($i) => array_merge($i, ['detail' => null]))->values()->all();
+        $d['officer'] = true;
+        return $d;
     }
 
     // POST /api/v1/admin/people/{user}/identity   { result: verified|failed, reason? }

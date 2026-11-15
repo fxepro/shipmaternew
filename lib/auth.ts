@@ -88,6 +88,7 @@ export function getRolePath(role: string, orgType?: string): string {
   if (orgType === 'shipper') return '/shipper';
   if (orgType === 'broker')  return '/broker';
   if (orgType === 'factor')  return '/factor';
+  if (orgType === 'agency')  return '/agency';
 
   // Fallback to legacy role
   switch (role) {
@@ -96,6 +97,7 @@ export function getRolePath(role: string, orgType?: string): string {
     case 'broker':   return '/broker';
     case 'receiver': return '/receiver';
     case 'admin':    return '/admin';
+    case 'agency':   return '/agency';
     default:         return '/shipper';
   }
 }
